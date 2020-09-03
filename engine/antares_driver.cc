@@ -101,10 +101,21 @@ static int verbose = -1;
 static void *libaccel = NULL;
 static const char *backend = NULL;
 
-#define LOAD_DLSYM(func)  \
+#define LOAD_DLSYM(fROCm, fCUDA)  \
     static CUresult (*__l)(...); \
-    if (!libaccel) { libaccel = dlopen("/opt/rocm/lib/libamdhip64.so", RTLD_LOCAL | RTLD_LAZY), assert(libaccel != NULL); printf("  >> HIP runtime Loaded successfully for pid = %u.\n", getpid()); } \
-    if (!__l) __l = (decltype(__l))dlsym(libaccel, #func);
+    if (!libaccel) { \
+      if (backend_type == BackendType::C_ROCM) { \
+        libaccel = dlopen("/opt/rocm/lib/libamdhip64.so", RTLD_LOCAL | RTLD_LAZY), assert(libaccel != NULL); \
+        printf("  >> HIP runtime Loaded successfully for pid = %u.\n", getpid()); \
+      } else if (backend_type == BackendType::C_CUDA) { \
+        libaccel = dlopen("/usr/lib/x86_64-linux-gnu/libcuda.so.1", RTLD_LOCAL | RTLD_LAZY); \
+        if (libaccel == NULL) libaccel = dlopen("/usr/local/cuda/compat/libcuda.so.1", RTLD_LOCAL | RTLD_LAZY), assert(libaccel != NULL); \
+        printf("  >> CUDA runtime Loaded successfully for pid = %u.\n", getpid()); \
+      } else { \
+        printf("  >> [Error] No valid drivers found for backend: %s.\n", backend), _exit(1); \
+      } \
+    } \
+    if (!__l) __l = (decltype(__l))dlsym(libaccel, (backend_type == BackendType::C_ROCM) ? #fROCm : #fCUDA);
 
 static int attr[cudaDevAttrMax];
 
@@ -132,14 +143,13 @@ public:
       setenv("HARDWARE_CONFIG", "DX12-HLSL", 0);
     } else if (!strcmp(backend, "c-cuda")) {
       backend_type = BackendType::C_CUDA;
-      setenv("HARDWARE_CONFIG", "NVIDIA-V100", 0);
+      // setenv("HARDWARE_CONFIG", "NVIDIA-V100", 0);
     } else {
       backend_type = BackendType::ANY_BUILTIN;
       auto config = getenv("HARDWARE_CONFIG");
       if (config == nullptr || !*config)
         printf("  >> [Error] HARDWARE_CONFIG is also needed for any unknown backend type: %s\n", backend), _exit(1);
     }
-    // if (getenv("CONFIG")) printf("  >> Enable CUDART Environment for Backend: %s.\n", backend);
     loadAttributeValues();
   }
 
@@ -211,15 +221,25 @@ public:
       read_from_config(config);
       return;
     } else {
-      FILE *fp = fopen("/tmp/propertyDEV.txt", "r");
+      auto on_load_fail = [&]() {
+        if (backend_type == BackendType::C_ROCM)
+          read_from_config("AMD-MI50");
+        else
+          read_from_config("NVIDIA-V100");
+      };
+
+      std::string propertyCache = getenv("ANTARES_DRIVER_PATH") + std::string("/property.cache");
+
+      FILE *fp = fopen(propertyCache.c_str(), "r");
       if (fp == NULL) {
         pid_t pid = fork();
         if (pid == 0) {
-          LOAD_DLSYM(hipDeviceGetAttribute);
-          fp = fopen("/tmp/propertyDEV.txt", "w"), assert(fp != NULL);
+          { LOAD_DLSYM(hipInit, cuInit); if (0 != __l(0)) exit(0); }
+          LOAD_DLSYM(hipDeviceGetAttribute, cuDeviceGetAttribute);
+          fp = fopen(propertyCache.c_str(), "w"), assert(fp != NULL);
           for (int i = 0; i < sizeof(prop_map) / sizeof(*prop_map); ++i) {
             int val = -1;
-            if (0 != __l(&val, prop_map[i][1], 0))
+            if (0 != __l(&val, prop_map[i][backend_type == BackendType::C_ROCM], 0))
               break;
             fprintf(fp, "%d\n", val);
           }
@@ -228,17 +248,19 @@ public:
         }
         int status;
         assert(pid == waitpid(pid, &status, 0));
-        fp = fopen("/tmp/propertyDEV.txt", "rb");
+        fp = fopen(propertyCache.c_str(), "rb");
         if (fp == NULL)
-          _exit(1);
+          on_load_fail();
       }
-      for (int i = 0; i < sizeof(prop_map) / sizeof(*prop_map); ++i) {
-        if (1 != fscanf(fp, "%d", &attr[prop_map[i][0]])) {
-          read_from_config("AMD-MI50");
-          break;
+      if (fp != NULL) {
+        for (int i = 0; i < sizeof(prop_map) / sizeof(*prop_map); ++i) {
+          if (1 != fscanf(fp, "%d", &attr[prop_map[i][0]])) {
+            on_load_fail();
+            break;
+          }
         }
+        fclose(fp);
       }
-      fclose(fp);
     }
 
     if (verbose) {
@@ -295,10 +317,22 @@ cudaError_t CUDARTAPI cudaGetDevice(int *device) {
 cudaError_t CUDARTAPI cudaSetDevice(int device) {
   LOGGING_API();
   assert(device == 0);
-  if (backend_type == BackendType::C_CUDA)
+  if (backend_type == BackendType::C_CUDA) {
+    static bool once = true;
+    if (!once)
+      return cudaSuccess;
+    do {
+      once = false;
+      { LOAD_DLSYM(_, cuInit); if (0 != __l(0)) break; }
+      void *pctx;
+      { LOAD_DLSYM(_, cuDevicePrimaryCtxRetain); if (0 != __l(&pctx, 0)) break; }
+      { LOAD_DLSYM(_, cuCtxSetCurrent); if (0 != __l(pctx)) break; }
+      return cudaSuccess;
+    } while (1);
     printf("  >> No CUDA device available.\n"), _exit(1);
+  }
 
-  LOAD_DLSYM(hipSetDevice);
+  LOAD_DLSYM(hipSetDevice, _);
   if (0 != __l(device))
     printf("  >> No ROCm device available.\n"), _exit(1);
   return cudaSuccess;
@@ -356,12 +390,12 @@ cudaError_t CUDARTAPI cudaMemcpyAsync(void *dst, const void *src, size_t count, 
 
   switch (kind) {
     case cudaMemcpyHostToDevice: {
-      LOAD_DLSYM(hipMemcpyHtoDAsync);
+      LOAD_DLSYM(hipMemcpyHtoDAsync, cuMemcpyHtoDAsync_v2);
       assert(0 == __l(dst, (void*)src, count, stream));
       return cudaSuccess;
     }
     case cudaMemcpyDeviceToHost: {
-      LOAD_DLSYM(hipMemcpyDtoHAsync);
+      LOAD_DLSYM(hipMemcpyDtoHAsync, cuMemcpyDtoHAsync_v2);
       assert(0 == __l(dst, (void*)src, count, stream));
       return cudaSuccess;
     }
@@ -381,35 +415,35 @@ cudaError_t CUDARTAPI cudaMemcpy(void *dst, const void *src, size_t count, enum 
 
 CUresult CUDAAPI cuMemsetD32_v2(CUdeviceptr dstDevice, unsigned int ui, size_t N) {
   LOGGING_API();
-  LOAD_DLSYM(hipMemsetD32);
+  LOAD_DLSYM(hipMemsetD32, cuMemsetD32_v2);
   assert(0 == __l(dstDevice, ui, N));
   return CUDA_SUCCESS;
 }
 
 cudaError_t CUDARTAPI cudaMallocHost(void **hostPtr, size_t size) {
   LOGGING_API();
-  LOAD_DLSYM(hipMallocHost);
+  LOAD_DLSYM(hipMallocHost, cuMemAllocHost_v2);
   assert(0 == __l(hostPtr, size));
   return cudaSuccess;
 }
 
 cudaError_t CUDARTAPI cudaFreeHost(void **hostPtr) {
   LOGGING_API();
-  LOAD_DLSYM(hipFreeHost);
+  LOAD_DLSYM(hipFreeHost, cuMemFreeHost);
   assert(0 == __l(hostPtr));
   return cudaSuccess;
 }
 
 cudaError_t CUDARTAPI cudaMalloc(void **devPtr, size_t size) {
   LOGGING_API();
-  LOAD_DLSYM(hipMalloc);
+  LOAD_DLSYM(hipMalloc, cuMemAlloc_v2);
   assert(0 == __l(devPtr, size));
   return cudaSuccess;
 }
 
 cudaError_t CUDARTAPI cudaFree(void *devPtr) {
   LOGGING_API();
-  LOAD_DLSYM(hipFree);
+  LOAD_DLSYM(hipFree, cuMemFree_v2);
   assert(0 == __l(devPtr));
   return cudaSuccess;
 }
@@ -418,28 +452,28 @@ cudaError_t CUDARTAPI cudaFree(void *devPtr) {
 
 CUresult CUDAAPI cuModuleLoadData(CUmodule *module, const char *image)  {
   LOGGING_API();
-  LOAD_DLSYM(hipModuleLoadData);
+  LOAD_DLSYM(hipModuleLoadData, cuModuleLoadData);
   assert(0 == __l(module, image));
   return CUDA_SUCCESS;
 }
 
 CUresult CUDAAPI cuModuleUnload(CUmodule hmod)  {
   LOGGING_API();
-  LOAD_DLSYM(hipModuleUnload);
+  LOAD_DLSYM(hipModuleUnload, cuModuleUnload);
   assert(0 == __l(hmod));
   return CUDA_SUCCESS;
 }
 
 CUresult CUDAAPI cuModuleGetFunction(CUfunction *hfunc, CUmodule hmod, const char *name) {
   LOGGING_API();
-  LOAD_DLSYM(hipModuleGetFunction);
+  LOAD_DLSYM(hipModuleGetFunction, cuModuleGetFunction);
   assert(0 == __l(hfunc, hmod, name));
   return CUDA_SUCCESS;
 }
 
 cudaError_t CUDARTAPI cudaStreamSynchronize(cudaStream_t stream) {
   LOGGING_API();
-  LOAD_DLSYM(hipStreamSynchronize);
+  LOAD_DLSYM(hipStreamSynchronize, cuStreamSynchronize);
   assert(0 == __l(stream));
   return cudaSuccess;
 }
@@ -451,7 +485,7 @@ CUresult CUDAAPI cuLaunchKernel(CUfunction f, unsigned int gridDimX, unsigned in
 
   assert(blockDimX * blockDimY * blockDimZ <= attr[cudaDevAttrMaxThreadsPerBlock]);
 
-  LOAD_DLSYM(hipModuleLaunchKernel);
+  LOAD_DLSYM(hipModuleLaunchKernel, cuLaunchKernel);
   assert(0 == __l(f, gridDimX, gridDimY, gridDimZ, blockDimX, blockDimY, blockDimZ,
                                     sharedMemBytes, hStream, kernelParams, nullptr));
   return CUDA_SUCCESS;

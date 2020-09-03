@@ -88,12 +88,7 @@ def compile_source(code):
   args = platform_config.get_compile_kernel_args(kernel_src, kernel_out, device_properties())
 
   print('[Build (pid=%d)]' % os.getpid(), ' '.join(args))
-  envs = os.environ.copy()
-  try:
-    envs.pop('LD_PRELOAD')
-  except:
-    pass
-  assert run_process_with_timeout(args, 20, envs=envs), "Compilation failed for: Bad kernel code, or Time limit exceeded?\nFailure command: %s\n" % ' '.join(args)
+  assert run_process_with_timeout(args, 20), "Compilation failed for: Bad kernel code, or Time limit exceeded?\nFailure command: %s\n" % ' '.join(args)
   with open(kernel_out, "rb") as fp:
     return bytearray(fp.read())
 
