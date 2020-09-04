@@ -45,17 +45,7 @@ def fetch_and_compile_antares_kernel(expression, expr_hash, server_addr):
   # Compile Kernel object
   with open(source_path, 'w') as fp:
     fp.write(source)
-
-  is_cuda = False
-  if os.system('ldd %s/lib/libtorch.so 2>/dev/null | grep -e libcudart >/dev/null' % torch.__path__[0]) == 0:
-    is_cuda = True
-
-  if is_cuda == False:
-    assert(os.system('/opt/rocm/bin/hipcc %s -Wno-ignored-attributes --genco -o %s.out' % (source_path, source_path)) == 0)
-  else:
-    assert(os.system('nvcc %s --ptx -O2 -o %s.out' % (source_path, source_path)) == 0)
-
-  return source, '%s.out' % source_path, expr_hash, meta_inputs, meta_outputs
+  return source, source_path, expr_hash, meta_inputs, meta_outputs
 
 '''
 class CustomFunction(Function):
@@ -64,7 +54,6 @@ class CustomFunction(Function):
     outputs = antares_custom_op.forward(inputs, *attributes)
     return outputs
 '''
-
 
 class CustomOp(torch.nn.Module):
   def __init__(self, server_addr='localhost:8880'):
