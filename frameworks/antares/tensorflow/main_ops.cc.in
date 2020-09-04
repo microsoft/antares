@@ -26,6 +26,9 @@
 #define cuModuleLoad hipModuleLoad
 #define cuModuleUnload hipModuleUnload
 #define cuModuleGetFunction hipModuleGetFunction
+#define cuDeviceGetAttribute hipDeviceGetAttribute
+#define CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR hipDeviceAttributeComputeCapabilityMajor
+#define CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR hipDeviceAttributeComputeCapabilityMinor
 
 #define cuLaunchKernel(f, bx, by, bz, tx, ty, tz, shm, stream, args, extra) \
         hipModuleLaunchKernel(f, bx, by, bz, tx, ty, tz, shm, stream, args, extra)
@@ -66,13 +69,30 @@ class MainOpKernel: public AsyncOpKernel {
   explicit MainOpKernel(OpKernelConstruction* c)
       : AsyncOpKernel(c) {
     OP_REQUIRES_OK(c, c->GetAttr("source", &source));
-    OP_REQUIRES_OK(c, c->GetAttr("kernel_path", &kernel_path));
+    OP_REQUIRES_OK(c, c->GetAttr("tf_module_path", &tf_module_path));
     OP_REQUIRES_OK(c, c->GetAttr("antares_ir", &antares_ir));
     OP_REQUIRES_OK(c, c->GetAttr("meta_inputs", &meta_inputs));
     OP_REQUIRES_OK(c, c->GetAttr("meta_outputs", &meta_outputs));
 
     LOG(INFO) << "MainOpKernel(num_in=" << meta_inputs.size() << ", num_out=" << meta_outputs.size() << ", ir=`" << antares_ir << "`..)";
-    LOG(INFO) << "MainOpKernel is compiling the dynamtic kernel..";
+
+    std::string kernel_src_path = tf_module_path + ".kernel.cu", kernel_path = tf_module_path + ".kernel.out";
+    FILE *fp = fopen(kernel_src_path.c_str(), "wb");
+    CHECK_EQ(source.size(), fwrite(source.c_str(), 1, source.size(), fp));
+    fclose(fp);
+
+    int major, minor;
+    CHECK_EQ(cuDeviceGetAttribute(&major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, 0), 0);
+    CHECK_EQ(cuDeviceGetAttribute(&minor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, 0), 0);
+#ifndef __HIP_PLATFORM_HCC__
+    std::string arch = std::to_string(major * 10 + minor);
+    std::string compile_cmd = "nvcc " + kernel_src_path + " -gencode arch=compute_" + arch + ",code=sm_" + arch + " --fatbin -O2 -o " + kernel_path;
+#else
+    std::string arch = std::to_string(major * 100 + minor);
+    std::string compile_cmd = "/opt/rocm/bin/hipcc " + kernel_src_path + " --amdgpu-target=gfx" + arch + " --genco -Wno-ignored-attributes -O2 -o " + kernel_path;
+#endif
+    LOG(INFO) << "MainOpKernel is compiling dynamtic kernel (arch=" << arch << "): " << kernel_path;
+    CHECK_EQ(system(compile_cmd.c_str()), 0);
 
     CHECK_EQ(cuModuleLoad(&hmod, kernel_path.c_str()), 0);
     CHECK_EQ(cuModuleGetFunction(&hfunc, hmod, "template_op_kernel0"), 0);
@@ -143,7 +163,7 @@ class MainOpKernel: public AsyncOpKernel {
   CUmodule hmod = nullptr;
   CUfunction hfunc = nullptr;
 
-  std::string source, antares_ir, kernel_path;
+  std::string source, antares_ir, tf_module_path;
   std::vector<std::string> meta_inputs, meta_outputs;
 
   TF_DISALLOW_COPY_AND_ASSIGN(MainOpKernel);
