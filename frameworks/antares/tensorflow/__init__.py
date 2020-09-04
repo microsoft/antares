@@ -12,7 +12,7 @@ from tensorflow.python.platform import resource_loader
 from http import client as http_client
 import json, os, hashlib, shutil
 
-def get_tensorflow_antares_component(source_path, op_name, kernel):
+def get_tensorflow_antares_component(tf_module_path, op_name):
   dist_path = tf.sysconfig.get_include() + '/..'
   abi_flag = tf.sysconfig.CXX11_ABI_FLAG
   if os.system('ldd %s/libtensorflow_framework.so.1 2>/dev/null | grep -e libamdhip64 >/dev/null' % dist_path) == 0:
@@ -26,19 +26,11 @@ def get_tensorflow_antares_component(source_path, op_name, kernel):
     -o %s.so -std=c++11 -fPIC -O2 -DOP_NAME='"%s"' \
     -I%s/include -L%s/ -l:libtensorflow_framework.so.1 \
     -I/usr/local %s \
-    -pthread -Wl,-rpath -Wl,--enable-new-dtags -D_GLIBCXX_USE_CXX11_ABI=%d''' % (source_path, source_path, op_name, dist_path, dist_path, with_cuda, abi_flag)
+    -pthread -Wl,-rpath -Wl,--enable-new-dtags -D_GLIBCXX_USE_CXX11_ABI=%d''' % (tf_module_path, tf_module_path, op_name, dist_path, dist_path, with_cuda, abi_flag)
 
   if os.system(cmd) != 0:
     raise Exception("Failed to compile the tensorflow plugins: %s" % cmd)
-
-  # Compile Kernel object
-  with open('%s.kernel.cu' % source_path, 'w') as fp:
-    fp.write(kernel)
-  if 'rocm' in with_cuda:
-    assert(os.system('/opt/rocm/bin/hipcc %s.kernel.cu -Wno-ignored-attributes --genco -o %s.kernel.out' % (source_path, source_path)) == 0)
-  else:
-    assert(os.system('nvcc %s.kernel.cu --ptx -O2 -o %s.kernel.out' % (source_path, source_path)) == 0)
-  return '%s.so' % source_path, '%s.kernel.out' % source_path
+  return '%s.so' % tf_module_path
 
 __ops_name__ = __loader__.name.split('.')[-1]
 __default_server_addr__ = 'localhost:8880'
@@ -78,10 +70,10 @@ def make_op(antares_ir, inputs, server_addr=None):
   kwargs['antares_ir'] = antares_ir 
 
   code_name = 'Antares' + hashlib.sha256(COMPUTE_V1.encode()).hexdigest()
-  tmp_path = '/tmp/antares_tf_%s.cc' % code_name
+  tf_module_path = '/tmp/antares_tf_%s.cc' % code_name
 
-  shutil.copyfile(resource_loader.get_path_to_datafile('main_ops.cc.in'), tmp_path)
-  with open(tmp_path, 'a') as fp:
+  shutil.copyfile(resource_loader.get_path_to_datafile('main_ops.cc.in'), tf_module_path)
+  with open(tf_module_path, 'a') as fp:
     fp.write('REGISTER_OP(OP_NAME)')
     for i in range(len(meta_inputs)):
       shape, dtype, name = meta_inputs[i].split('/')
@@ -89,13 +81,13 @@ def make_op(antares_ir, inputs, server_addr=None):
     for i in range(len(meta_outputs)):
       shape, dtype, name = meta_outputs[i].split('/')
       fp.write('\n  .Output("%s: %s") // %s' % (name, dtype, shape.replace('-', ', ')))
-    fp.write('\n  .Attr("source: string").Attr("antares_ir: string").Attr("kernel_path: string").Attr("meta_inputs: list(string)").Attr("meta_outputs: list(string)").SetIsStateful()')
+    fp.write('\n  .Attr("source: string").Attr("antares_ir: string").Attr("tf_module_path: string").Attr("meta_inputs: list(string)").Attr("meta_outputs: list(string)").SetIsStateful()')
     fp.write('\n  .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {')
     for i in range(len(meta_outputs)):
       fp.write('\n    c->set_output(%d, c->MakeShape({%s}));' % (i, meta_outputs[i].split('/')[0].replace('-', ', ')))
     fp.write('\n    return ::tensorflow::Status::OK();\n  });')
 
-  libops_path, kernel_path = get_tensorflow_antares_component(tmp_path, code_name, source)
+  libops_path = get_tensorflow_antares_component(tf_module_path, code_name)
   library = loader.load_op_library(libops_path)
   antares_func = None
   for attr in dir(library):
@@ -105,7 +97,7 @@ def make_op(antares_ir, inputs, server_addr=None):
   if not antares_func:
     raise Exception("Invalid antares component is made.")
 
-  kwargs['kernel_path'] = kernel_path
+  kwargs['tf_module_path'] = tf_module_path
   kwargs['meta_inputs'] = meta_inputs
   kwargs['meta_outputs'] = meta_outputs
   result = antares_func(**kwargs)

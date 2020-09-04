@@ -8,9 +8,8 @@ def get_execution_parallism():
 
 def get_compile_kernel_args(kernel_src, kernel_out, device_props):
   major, minor = device_props.compute_version.split('.')
-  code_arch = '%d%02d' % (int(major), int(minor))
-  return ['/opt/rocm/bin/hipcc', kernel_src, '--amdgpu-target=gfx' + code_arch, '--genco', '-Wno-ignored-attributes', '-o', kernel_out]
-  # return ['/opt/rocm/bin/lpl', kernel_src, '-t=gfx' + code_arch, '-f="-Wno-ignored-attributes -D__HIP_PLATFORM_HCC__=1"', '-o', kernel_out]
+  code_arch = str(int(major) * 100 + int(minor))
+  return ['/opt/rocm/bin/hipcc', kernel_src, '--amdgpu-target=gfx' + code_arch, '--genco', '-Wno-ignored-attributes', '-O2', '-o', kernel_out]
 
 def do_native_translation(code, **kwargs):
   def parse_launch_bounds(code):

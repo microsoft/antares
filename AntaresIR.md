@@ -35,10 +35,10 @@ COMPUTE_V1='- einstein_v2("output0[N] = input0[N].when([input0[N] > 0.0], 0.0)",
 COMPUTE_V1='- einstein_v2("output0[N] = N.cast(\"float32\").call(\"tanh\") where N in 1024", {})' make
 
 # ConvolutionNoPad
-COMPUTE_V1='- einstein_v2("output0[N, F, HO, WO] +=! input0[N, C, HO + KH, WO + KW] * input1[KH, KW, C, F] where HO in 30, WO in 30", input_dict={"input0": {"dtype": "float32", "shape": [32, 3, 32, 32]}, "input1": {"dtype": "float32", "shape": [3, 3, 3, 16]}})' make
+COMPUTE_V1='- _N, _C, _HW, _F, _K, _S = 512, 3, 227, 64, 11, 4; _HWO = (_HW - _K) // _S + 1; einstein_v2("output0[N, F, HO, WO] +=! input0[N, C, HO * %d + KH, WO * %d + KW] * input1[F, C, KH, KW] where HO in %d, WO in %d" % (_S, _S, _HWO, _HWO), { "input0": {"dtype": "float32", "shape": [_N, _C, _HW, _HW]}, "input1": {"dtype": "float32", "shape": [_F, _C, _K, _K]}})' make
 
 # ConvolutionWithPad
-COMPUTE_V1='- einstein_v2("output0[N, F, HO, WO] +=! input0[N, C, -1 + HO + KH, -1 + WO + KW].when([-1 + HO + KH >= 0, -1 + HO + KH < 32, -1 + WO + KW >= 0, -1 + WO + KW < 32], 0.0) * input1[KH, KW, C, F] where HO in 32, WO in 32", input_dict={"input0": {"dtype": "float32", "shape": [32, 3, 32, 32]}, "input1": {"dtype": "float32", "shape": [3, 3, 3, 16]}})' make
+COMPUTE_V1='- _N, _C, _HW, _F, _K, _S, _P = 64, 64, 27, 192, 5, 1, 2; _HWO = (_HW - _K + _P * 2) // _S + 1; einstein_v2("output0[N, F, HO, WO] +=! input0[N, C, HO * %d + KH - %d, WO * %d + KW - %d].when([HO * %d + KH - %d >= 0, HO * %d + KH - %d < %d, WO * %d + KW - %d >= 0, WO * %d + KW - %d < %d], 0.0) * input1[F, C, KH, KW] where HO in %d, WO in %d" % (_S, _P, _S, _P, _S, _P, _S, _P, _HW, _S, _P, _S, _P, _HW, _HWO, _HWO), { "input0": {"dtype": "float32", "shape": [_N, _C, _HW, _HW]}, "input1": {"dtype": "float32", "shape": [_F, _C, _K, _K]}})' make
 
 # DepthToSpace
 COMPUTE_V1='- einstein_v2("output0[N, H, C0, W, C1, C2] = input0[N, H, W, C0, C1, C2]", input_dict={"input0": {"dtype": "float32", "shape": [1, 256, 256, 2, 2, 4]}})' make
