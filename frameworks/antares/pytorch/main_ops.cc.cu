@@ -18,6 +18,9 @@
 #define cuModuleLoad hipModuleLoad
 #define cuModuleUnload hipModuleUnload
 #define cuModuleGetFunction hipModuleGetFunction
+#define cuDeviceGetAttribute hipDeviceGetAttribute
+#define CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR hipDeviceAttributeComputeCapabilityMajor
+#define CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR hipDeviceAttributeComputeCapabilityMinor
 
 #define cuLaunchKernel(f, bx, by, bz, tx, ty, tz, shm, stream, args, extra) \
 	        hipModuleLaunchKernel(f, bx, by, bz, tx, ty, tz, shm, stream, args, extra)
@@ -40,41 +43,45 @@
 
 #endif
 
-struct ModuleItem
-{
-  ModuleItem() {}
-  ModuleItem(CUmodule m, CUfunction f)
-    : hmod(m),
-      hfunc(f) {}
-  CUmodule hmod = nullptr;
-  CUfunction hfunc = nullptr;
-};
-
-static std::map<std::string, ModuleItem> module_manager;
+static std::map<std::string, std::pair<CUmodule, CUfunction>> module_manager;
 
 std::vector<torch::Tensor> custom_op_forward(std::vector<torch::Tensor> inputs,
                                              const std::string& source,
-                                             const std::string& kernel_path,
+                                             const std::string& source_path,
                                              const std::string& hash,
                                              const std::vector<std::string>& meta_inputs,
                                              const std::vector<std::string>& meta_outputs)
 {
-  LOG(INFO) << "MainOpKernel is compiling the dynamtic kernel..";
-
   CUmodule hmod = nullptr;
   CUfunction hfunc = nullptr;
 
-  if (module_manager.count(hash))
+  auto it = module_manager.find(hash);
+  if (it == module_manager.end())
   {
-    hmod = module_manager[hash].hmod;
-    hfunc = module_manager[hash].hfunc;
-  }
-  else
-  {
+    std::string kernel_src_path = source_path, kernel_path = source_path + ".out";
+    FILE *fp = fopen(kernel_src_path.c_str(), "wb");
+    CHECK_EQ(source.size(), fwrite(source.c_str(), 1, source.size(), fp));
+    fclose(fp);
+
+    int major, minor;
+    CHECK_EQ(cuDeviceGetAttribute(&major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, 0), 0);
+    CHECK_EQ(cuDeviceGetAttribute(&minor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, 0), 0);
+#ifndef __HIP_PLATFORM_HCC__
+    std::string arch = std::to_string(major * 10 + minor);
+    std::string compile_cmd = "nvcc " + kernel_src_path + " -gencode arch=compute_" + arch + ",code=sm_" + arch + " --fatbin -O2 -o " + kernel_path;
+#else
+    std::string arch = std::to_string(major * 100 + minor);
+    std::string compile_cmd = "/opt/rocm/bin/hipcc " + kernel_src_path + " --amdgpu-target=gfx" + arch + " --genco -Wno-ignored-attributes -O2 -o " + kernel_path;
+#endif
+    LOG(INFO) << "MainOpKernel is compiling dynamtic kernel (arch=" << arch << "): " << kernel_path;
+    CHECK_EQ(system(compile_cmd.c_str()), 0);
+
     CHECK_EQ(cuModuleLoad(&hmod, kernel_path.c_str()), 0);
     CHECK_EQ(cuModuleGetFunction(&hfunc, hmod, "template_op_kernel0"), 0);
-    module_manager[hash] = ModuleItem(hmod, hfunc);
+    module_manager[hash] = {hmod, hfunc};
   }
+  else
+    hmod = it->second.first, hfunc = it->second.second;
 
   int bx, by, bz, tx, ty, tz;
   int i, pos, next;

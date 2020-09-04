@@ -3,9 +3,13 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-import torch
 import shutil, os, sys
 from setuptools import setup
+
+if len(sys.argv) <= 1:
+  sys.argv += ['install']
+
+import torch
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 
 dist_path = os.path.join(torch.__path__[0], 'contrib/antares')

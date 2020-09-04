@@ -29,7 +29,7 @@ sudo python3 ./frameworks/antares/tensorflow/setup.py
 # (Recommended Tensorflow CUDA Installation Source: pip3 install --upgrade pip && pip3 install tensorflow-gpu==1.15.3)
 
 # If you need Antares to extend/boost Pytorch operators, please also run:
-sudo python3 ./frameworks/antares/pytorch/setup.py install
+sudo python3 ./frameworks/antares/pytorch/setup.py
 # (Recommended Pytorch CUDA Installation Source: pip3 install torch==1.5.0 torchvision==0.6.0 -f https://download.pytorch.org/whl/torch_stable.html)
 ```
 
