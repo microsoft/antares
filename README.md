@@ -3,7 +3,7 @@
 - Antares simplifies most TVM's low-level features, making it easier to use for DNN developers on Microsoft related platforms.
 - Antares follows "_One Language Syntax for All Platforms_" principle to reduce the description complexity on different platforms.
 
-# Functionality of Antares:
+# Antares Functionality:
 - Antares can convert computing operators from your DNN models into low-level source codes of the target device (e.g. kernels, shaders, ..).
 - Antares can also automatically tune and optimize these DNN operators on end-to-end device using efficient mechanisms and algorithms.
 
@@ -20,6 +20,8 @@
 
 ```sh
 sudo apt install docker.io
+
+git clone https://github.com/microsoft/antares
 
 cd antares/
 sudo BACKEND=c-cuda make

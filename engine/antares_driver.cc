@@ -97,7 +97,7 @@ enum class BackendType {
 };
 
 static BackendType backend_type;
-static int verbose = -1;
+static int verbose = -1, no_device = 0;
 static void *libaccel = NULL;
 static const char *backend = NULL;
 
@@ -223,9 +223,9 @@ public:
     } else {
       auto on_load_fail = [&]() {
         if (backend_type == BackendType::C_ROCM)
-          read_from_config("AMD-MI50");
+          read_from_config("AMD-MI50"), no_device = 1;
         else
-          read_from_config("NVIDIA-V100");
+          read_from_config("NVIDIA-V100"), no_device = 1;
       };
 
       std::string propertyCache = getenv("ANTARES_DRIVER_PATH") + std::string("/property.cache");
@@ -317,6 +317,9 @@ cudaError_t CUDARTAPI cudaGetDevice(int *device) {
 cudaError_t CUDARTAPI cudaSetDevice(int device) {
   LOGGING_API();
   assert(device == 0);
+  if (no_device)
+    printf("  >> No %s device available.\n", backend), _exit(1);
+
   if (backend_type == BackendType::C_CUDA) {
     static bool once = true;
     if (!once)
