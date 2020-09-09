@@ -1,0 +1,4 @@
+#!/bin/bash -ex
+
+g++ $(dirname $0)/libcuda.cc -shared -fPIC -std=c++17 -ldl -o $(dirname $0)/libcuda.so.1 -I/usr/local/cuda/include
+LD_LIBRARY_PATH=$(dirname $0):${LD_LIBRARY_PATH} "$@"
