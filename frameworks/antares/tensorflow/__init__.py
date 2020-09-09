@@ -48,12 +48,12 @@ def make_op(antares_ir, inputs, server_addr=None):
     kwargs['input%d' % i] = inputs[i]
 
   input_dict = json.dumps(input_dict)
-  COMPUTE_V1 = '- einstein_v2("%s", input_dict=%s)' % (antares_ir.replace('"', '\\"'), input_dict)
-  print('+ [Antares Op]', COMPUTE_V1)
+  expression = '- einstein_v2("%s", input_dict=%s)' % (antares_ir.replace('"', '\\"'), input_dict)
+  print('+ [Antares Op]', expression)
 
   h = http_client.HTTPConnection(server_addr, timeout=10)
   try:
-    h.request('GET', '/', headers={'COMPUTE_V1': COMPUTE_V1})
+    h.request('GET', '/', headers={'COMPUTE_V1': expression})
   except:
     raise Exception("Failed to contact with Antares server: %s (not started?)" % server_addr)
   res = h.getresponse()
@@ -61,7 +61,10 @@ def make_op(antares_ir, inputs, server_addr=None):
     raise Exception("Fail to get server response, reason: %s" % res.reason)
 
   source = res.read().decode()
-  meta_bgn = source.index('///') + len('///')
+  try:
+    meta_bgn = source.index('///') + len('///')
+  except:
+    raise Exception("Illegal syntax for Antares expression: %s" % expression)
   meta_pos = source.index(':', meta_bgn)
   meta_end = source.index('\n', meta_pos)
   meta_inputs = source[meta_bgn:meta_pos].split(',')
@@ -69,7 +72,7 @@ def make_op(antares_ir, inputs, server_addr=None):
   kwargs['source'] = source
   kwargs['antares_ir'] = antares_ir 
 
-  code_name = 'Antares' + hashlib.sha256(COMPUTE_V1.encode()).hexdigest()
+  code_name = 'Antares' + hashlib.sha256(expression.encode()).hexdigest()
   tf_module_path = '/tmp/antares_tf_%s.cc' % code_name
 
   shutil.copyfile(resource_loader.get_path_to_datafile('main_ops.cc.in'), tf_module_path)
@@ -103,6 +106,6 @@ def make_op(antares_ir, inputs, server_addr=None):
   result = antares_func(**kwargs)
 
   result._antares_props = {
-    'COMPUTE_V1': COMPUTE_V1
+    'COMPUTE_V1': expression
   }
   return result

@@ -33,7 +33,10 @@ def fetch_and_compile_antares_kernel(expression, expr_hash, server_addr):
     raise Exception("Fail to get server response, reason: %s" % res.reason)
 
   source = res.read().decode()
-  meta_bgn = source.index('///') + len('///')
+  try:
+    meta_bgn = source.index('///') + len('///')
+  except:
+    raise Exception("Illegal syntax for Antares expression: %s" % expression)
   meta_pos = source.index(':', meta_bgn)
   meta_end = source.index('\n', meta_pos)
   meta_inputs = source[meta_bgn:meta_pos].split(',')
