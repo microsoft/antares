@@ -12,7 +12,9 @@ fi
 export BACKEND=${BACKEND:-c-rocm}
 export ANTARES_DRIVER_PATH=/tmp/libAntares
 
-mkdir -p ${ANTARES_DRIVER_PATH}
+ln -s /host${ANTARES_DRIVER_PATH} ${ANTARES_DRIVER_PATH}
+
+mkdir -p /host${ANTARES_DRIVER_PATH}
 
 if ! diff engine/antares_driver.cc ${ANTARES_DRIVER_PATH}/.antares_driver.cc >/dev/null 2>&1; then
   cp engine/antares_driver.cc ${ANTARES_DRIVER_PATH}/antares_driver.cc
