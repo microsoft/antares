@@ -12,7 +12,7 @@ fi
 export BACKEND=${BACKEND:-c-rocm}
 export ANTARES_DRIVER_PATH=/tmp/libAntares
 
-ln -s /host${ANTARES_DRIVER_PATH} ${ANTARES_DRIVER_PATH}
+ln -sf /host${ANTARES_DRIVER_PATH} ${ANTARES_DRIVER_PATH}
 
 mkdir -p /host${ANTARES_DRIVER_PATH}
 
