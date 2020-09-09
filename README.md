@@ -40,6 +40,7 @@ sudo python3 ./frameworks/antares/pytorch/setup.py
 ```sh
 cd ${ANTARES_ROOT}/
 sudo BACKEND=c-cuda COMPUTE_V1='- einstein_v2("output0[N, M] +=! input0[N, K] * input1[K, M]", { "input0": {"dtype": "float32", "shape": [1024, 512]}, "input1": {"dtype": "float32", "shape": [512, 512]}})' make
+# Other valid platforms for BACKEND variable could be: c-rocm, c-hlsl, c-gc, c-mcpu, c-ocl, ..
 ```
 
 # Example with Tensorflow-GPU/Pytorch-GPU:
