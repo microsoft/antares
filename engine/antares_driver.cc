@@ -159,7 +159,9 @@ public:
   void read_from_config(const char *config) {
     auto conf = "./hardware/" + std::string(config) + ".cfg";
     FILE *fp = fopen(conf.c_str(), "r");
-    assert(fp != NULL);
+    if (fp == NULL)
+      printf("  >> [Error] HARDWARE_CONFIG file at `%s` is not found.\n", conf.c_str()), _exit(1);
+
     static char line[1024];
     while (fgets(line, sizeof(line), fp)) {
       char *pos = strstr(line, ": ");
@@ -207,8 +209,8 @@ public:
       {cudaDevAttrMaxThreadsPerBlock, hipDeviceAttributeMaxThreadsPerBlock, 1024},
       {cudaDevAttrWarpSize, hipDeviceAttributeWarpSize, 64},
       {cudaDevAttrMaxSharedMemoryPerBlock, hipDeviceAttributeMaxSharedMemoryPerBlock, 64 << 10},
-      {cudaDevAttrComputeCapabilityMajor, hipDeviceAttributeComputeCapabilityMajor, 3},
-      {cudaDevAttrComputeCapabilityMinor, hipDeviceAttributeComputeCapabilityMinor, 0},
+      {cudaDevAttrComputeCapabilityMajor, hipDeviceAttributeComputeCapabilityMajor, 9},
+      {cudaDevAttrComputeCapabilityMinor, hipDeviceAttributeComputeCapabilityMinor, 6},
       {cudaDevAttrClockRate, hipDeviceAttributeClockRate, 1802000}, // 1080Ti: 1835000; Vega20: 1802000;
       {cudaDevAttrMultiProcessorCount, hipDeviceAttributeMultiprocessorCount, 60}, // 1080Ti: 20; Vega20: 60;
       {cudaDevAttrMaxBlockDimX, hipDeviceAttributeMaxBlockDimX, 1024},
