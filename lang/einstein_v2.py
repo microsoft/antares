@@ -116,7 +116,7 @@ class OpTensor:
 
     # Special Ops
     def cast(self, dtype):
-        return OpTensor('cast', {"name": dtype, "inputs": [self]}, dtype, self._flopbase + self.filter_flop(self))
+        return OpTensor('cast', {"name": dtype, "inputs": [self]}, dtype, self._flopbase)
 
     def call(self, func_name, others=[], dtype=None):
         _flopbase = self._flopbase + self.filter_flop(self)
@@ -276,7 +276,7 @@ def emit_tvm_body(node, props):
     else:
       raise Exception('Unrecognized op type: %s[%d]' % (op_name, op_input_size))
   elif node._op == 'cast':
-    return '%s.as_type(cast_dtype("%s"))' % (emit_tvm_body(node._value["inputs"][0], props), node._value['name'])
+    return '%s.astype(cast_dtype("%s"))' % (emit_tvm_body(node._value["inputs"][0], props), node._value['name'])
   elif node._op == 'call':
     return 'tvm.call_pure_extern(cast_dtype("%s"), "%s", %s)' % (node._dtype, node._value['name'], ', '.join([emit_tvm_body(x, props) for x in node._value["inputs"]]))
   elif node._op == 'when':
