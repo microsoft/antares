@@ -27,12 +27,16 @@ def schedule(attrs):
     offset = 8
 
     layout = 'NN'
+    for opt in attrs.options:
+      if opt.startswith('layout/'):
+        layout = opt[len('layout/'):]
+        break
+
     '''
     if dtype == 'int8':
       factor = 32
       offset = 16
     '''
-
     # create cache stages
     AA = s.cache_read(A, "shared", [C])
     if (layout == "NN" or layout == "TN"):
@@ -55,10 +59,11 @@ def schedule(attrs):
     v = cfg['v'].val
 
     # thread tile
-    TX = 8
-    TY = 1
+    TX, TY = 8, 1
+
     # warp tile
-    warp_tile_m = 16 # it could also be 8 or 32 on CUDA version >= 10.0
+    cfg.define_knob("warp_m", [16, 8, 32])
+    warp_tile_m = cfg['warp_m'].val # it could be 8, 16, 32 on CUDA version >= 10.0
     warp_tile_k = 16 # it must be 16
     # block tile
     tile_x = bx * TX
