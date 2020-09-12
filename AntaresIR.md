@@ -112,3 +112,6 @@ BACKEND=c-rocm COMPUTE_V1='- einstein_v2("output0[N, M] +=! input0[N, K].call(\"
 
 # [INTRISIC SPEC] CPU AVX Add (elementwise add using CPU AVX instructions)
 BACKEND=c-mcpu COMPUTE_V1='- einstein_v2("output0[N] = input0[N].call(\"fastadd\", [input1[N]])", input_dict={"input0": {"dtype": "avx256@256", "shape": [16]}, "input1": {"dtype": "avx256@256", "shape": [16]}})  ## @: plan/c-mcpu=blend.avx_add' make
+
+# [INTRISIC SPEC] CUDA FP16 Tensorcore
+BACKEND=c-cuda COMPUTE_V1='- einstein_v2("output0[N, M] +=! input0[N, K].cast(\"float32\") * input1[K, M].cast(\"float32\")", { "input0": {"dtype": "float16", "shape": [1024, 1024]}, "input1": {"dtype": "float16", "shape": [1024, 1024]}})  ## @: plan/c-cuda=blend.matmul_fp16_tensorcore' make
