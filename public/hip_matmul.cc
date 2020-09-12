@@ -171,7 +171,7 @@ int main() {
       assert(0 == MAT_BLAS_FUNC(hCublas, rocblas_operation_transpose, rocblas_operation_transpose, __mat_M, __mat_N, __mat_K, (MAT_DATA_TYPE*)&alpha, (MAT_DATA_TYPE*)d_m[1], __mat_K, (MAT_DATA_TYPE*)d_m[0], __mat_N, (MAT_DATA_TYPE*)&beta, (MAT_DATA_TYPE*)d_m[2], __mat_M));
     } else
       assert(0);
-  }, __half{0}, [](__half val) -> double { return __half2float(val); });
+  }, __half(0.0f), [](__half val) -> double { return __half2float(val); });
 
 #ifdef __HIP_PLATFORM_HCC__
 #undef MAT_DATA_TYPE
