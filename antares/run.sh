@@ -12,14 +12,12 @@ fi
 export BACKEND=${BACKEND:-c-rocm}
 export ANTARES_DRIVER_PATH=/tmp/libAntares
 
-ln -sf /host${ANTARES_DRIVER_PATH} ${ANTARES_DRIVER_PATH}
-
-mkdir -p /host${ANTARES_DRIVER_PATH}
+mkdir -p ${ANTARES_DRIVER_PATH}
 
 if ! diff engine/antares_driver.cc ${ANTARES_DRIVER_PATH}/.antares_driver.cc >/dev/null 2>&1; then
   cp engine/antares_driver.cc ${ANTARES_DRIVER_PATH}/antares_driver.cc
   g++ ${ANTARES_DRIVER_PATH}/antares_driver.cc -std=c++11 -lpthread -ldl -I/opt/rocm/include -D__HIP_PLATFORM_HCC__=1 -O2 -fPIC -shared -o ${ANTARES_DRIVER_PATH}/libcuda.so.1
-  ln -sf libcuda.so.1 ${ANTARES_DRIVER_PATH}/libcudart.so.$(echo /usr/local/cuda-* | awk -F\- '{print $NF}')
+  ln -sf libcuda.so.1 ${ANTARES_DRIVER_PATH}/$(ldd /opt/tvm/build/libtvm.so | grep libcudart.so | awk '{print $1}')
   mv ${ANTARES_DRIVER_PATH}/antares_driver.cc ${ANTARES_DRIVER_PATH}/.antares_driver.cc
 fi
 
