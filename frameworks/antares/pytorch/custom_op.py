@@ -43,7 +43,7 @@ def fetch_and_compile_antares_kernel(expression, expr_hash, server_addr):
   meta_outputs = source[meta_pos + 1:meta_end].split(',')
 
   code_name = 'Antares' + expr_hash
-  source_path = '/tmp/antares_tf_%s.cc.kernel.cu' % code_name
+  source_path = '/tmp/antares_torch_%s.cc.kernel.cu' % code_name
 
   # Compile Kernel object
   with open(source_path, 'w') as fp:

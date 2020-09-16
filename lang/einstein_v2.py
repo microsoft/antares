@@ -21,11 +21,9 @@ class OpTensor:
       raise Exception("Unrecognized const node type: %s" % type(other))
 
     def filter_flop(self, other):
-      if self._op == 'axis' and other._op in ('axis', 'const', 'op'):
-        return 0
-      if other._op == 'axis' and self._op in ('axis', 'const', 'op'):
-        return 0
-      return 1
+      if self._op == 'get_item' or other._op == 'get_item':
+        return 1
+      return 0
 
     def __init__(self, _op, _value, _dtype, _flopbase=0):
         self._op = _op
