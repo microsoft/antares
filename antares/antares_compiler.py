@@ -236,7 +236,7 @@ def main_compute(code_only=False):
     if auto_commit:
       saved_code = codehub_db(os.environ['COMPUTE_V1'])
       if saved_code is not None and auto_commit != 'force':
-        raise Exception("Saved code has existed in codehub.")
+        raise Exception("Saved code has existed in codehub. Please try COMMIT=force to overide it.")
       os.environ.pop('COMMIT')
 
     try:
