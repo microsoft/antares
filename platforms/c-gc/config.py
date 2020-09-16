@@ -21,7 +21,7 @@ def remove_local_cache(code, arg_bufs):
         output_buf = arg_bufs['_out'][0]
         print(line.split()[0], output_buf['dtype'])
         if line.split()[0] != _native_dtype(output_buf['dtype']):
-          raise Exception("c-gc doesn't support injective computation modifying the output type")
+          raise Exception("This backend doesn't support injective computation modifying the output type")
         line = '  ' + line.split('[')[0].strip().replace(' ', ' *') + ' = &' + output_buf['name'] + '[0];'
       result.append(line)
     return '\n'.join(result)
