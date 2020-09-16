@@ -424,7 +424,7 @@ def main_compute(code_only=False):
         fp.write(str(t) + '\n')
         if 'K/0' in result:
           fp.write(str(result['K/0']) + '\n')
-    if os.environ['OP'] == 'auto.generic' and os.environ.get('COMMIT') == '1':
+    if os.environ['OP'] == 'auto.generic' and os.environ.get('COMMIT', ''):
       kernel_path = codehub_db(os.environ['COMPUTE_V1'], source_code=device_source + '\n// Saved Perf = %g sec / run' % t)
       print('  >> Update current code to codehub: %s' % kernel_path)
 
