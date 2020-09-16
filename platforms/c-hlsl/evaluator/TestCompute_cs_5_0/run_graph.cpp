@@ -141,7 +141,10 @@ int main(int argc, char** argv)
 
         t1 = std::chrono::high_resolution_clock::now();
         printf(">> Evalute DxCompute ..\n\n");
-        device.pCommandQueue->ExecuteCommandLists(cmdQueue.size(), cmdQueue.data());
+        for (auto cmdList : cmdQueue)
+        {
+            device.pCommandQueue->ExecuteCommandLists(1, &cmdList);
+        }
         device.AwaitExecution();
         for (int i = 0; i < results.size(); ++i) {
             double ans = results[i].PrintStageBuffer<float>(device);
