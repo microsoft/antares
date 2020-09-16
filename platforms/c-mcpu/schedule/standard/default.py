@@ -18,12 +18,12 @@ def schedule(antares):
   def mcpu_auto_schedule(s, output):
     cfg.define_knob("fuse_axis", [False])
     # fused = s[output].fuse(.. output.op.axis ..)
-    if len(rd_vals) > 0:
-      if output.op in s.outputs:
-        output_local = s.cache_write(output, "local")
-      else:
-        s[output].set_scope('local')
-        output_local, output = output, s.outputs[0].output(0)
+    # if len(rd_vals) > 0:
+    #   if output.op in s.outputs:
+    #     output_local = s.cache_write(output, "local")
+    #   else:
+    #     s[output].set_scope('local')
+    #     output_local, output = output, s.outputs[0].output(0)
 
     cfg.define_knob("pa_axis", np.arange(len(th_vals)).tolist())
     pa_id = cfg['pa_axis'].val
@@ -54,8 +54,8 @@ def schedule(antares):
       ex_ord.append(ax_low[i])
     s[output].reorder(*reversed(ex_ord))
 
-    if len(rd_vals) > 0:
-      s[output_local].compute_at(s[output], ex_ord[0])
+    # if len(rd_vals) > 0:
+    #   s[output_local].compute_at(s[output], ex_ord[0])
     return
 
   return mcpu_auto_schedule(s, output)

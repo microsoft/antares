@@ -128,7 +128,7 @@ Antares can support multi-line statements as long as they are fuse-able, for exa
 | Global schedules | Y | Y | Y | Y | Y |  |
 | Local schedules | Y | Y | Y | Y |  |  |
 | Head fusion | Y | Y | Y | Y | Y |  |
-| Tail fusion | Y | Y | Y | Y | Y |  |
+| Tail fusion | Y | Y |  | Y |  |  |
 | Evaluator | Y | Y | Y | Y |  |  |
 | Tensorflow Plugin | Y | Y |  |  |  |  |
 | Pytorch Plugin | Y | Y |  |  |  |  |

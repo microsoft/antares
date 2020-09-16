@@ -15,13 +15,13 @@ import traceback
 from antares.common import Mock, AntaresGlobal, backend
 
 def einstein_v2(exprss, input_dict, **kwargs):
-  ir = os.environ.get('TVM_IR', '')
+  ir = os.environ.get('LL_IR', '')
   if not ir:
     from lang import einstein_v2
     ir = einstein_v2.emit_tvm_ir(exprss, input_dict)
     assert(len(ir) > 0)
-    os.environ['TVM_IR'] = ir
-    print('\n[TVM-IR]\n%s\n' % ir)
+    os.environ['LL_IR'] = ir
+    print('\n[LL-IR]\n%s\n' % ir)
 
   exec(ir, globals())
 

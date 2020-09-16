@@ -22,12 +22,12 @@ def schedule(antares):
     return
 
   # Local scheduling plan
-  if rd_vals:
-    if output.op in s.outputs:
-      output_local = s.cache_write(output, "local")
-    else:
-      s[output].set_scope('local')
-      output_local, output = output, s.outputs[0].output(0)
+  # if rd_vals:
+  #   if output.op in s.outputs:
+  #     output_local = s.cache_write(output, "local")
+  #   else:
+  #     s[output].set_scope('local')
+  #     output_local, output = output, s.outputs[0].output(0)
 
   loop_axes = []
   for i in range(len(th_vals)):
@@ -41,5 +41,5 @@ def schedule(antares):
 
   s[output].reorder(*(loop_axes))
 
-  if rd_vals:
-    s[output_local].compute_at(s[output], loop_axes[-1])
+  # if rd_vals:
+  #   s[output_local].compute_at(s[output], loop_axes[-1])

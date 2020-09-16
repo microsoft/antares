@@ -202,11 +202,11 @@ def main_compute(code_only=False):
       local_dir_id = '_'
     t = run_config_entity(params_given, local_dir_id)
     gflops = compute_gflops(task.flop, t)
-    print('[TVM-engine] Final entity result is: %g' % gflops)
+    print('[Antares-engine] Final entity result is: %g' % gflops)
     try:
       nni.report_final_result(gflops)
     except:
-      print('[TVM-engine] (not reporting final result to NNI.)')
+      print('[Antares-engine] (not reporting final result to NNI.)')
     exit(0)
 
   elif num_trials > 0:
@@ -469,7 +469,7 @@ if __name__ == '__main__':
           os.environ['COMPUTE_V1'] = compute_exp
           os.environ['OP'] = 'auto.generic'
           os.environ['STEP'] = '0'
-          os.environ['TVM_IR'] = ''
+          os.environ['LL_IR'] = ''
           try:
             code = main_compute(code_only=True)
           except:
