@@ -168,7 +168,7 @@ After you commit the results, the Antares REST Server will detect this record an
 
 ## Remote tunning:
 
-For DirectX12 platformn, you could use remote mode to tune expressions. Compared to local tunning, there are two extra things to do:
+For DirectX12 platform, you could use remote mode to tune expressions. Compared to local tunning, there are two extra things to do:
 
 1) Start remote tuning server on the target machine, reference to [HLSL server](platforms/c-hlsl/evaluator/TestCompute_cs_5_0)
 
