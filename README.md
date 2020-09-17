@@ -139,6 +139,8 @@ Antares can support multi-line statements as long as they are fuse-able, for exa
 
 # How to Tune Expressions:
 
+## Local tuning:
+
 If you want automatic ways to optimize the operator (described in your environmental variable `COMPUTE_V1`), you just need to add one more variable in your first-run examples: `STEP=1000`,
 which means Antares will take 1000 chances to search for a potenially better kernel version. For example,
 
@@ -163,6 +165,17 @@ If you want to auto commit the result together with tuning procedure, you can ju
 ```
 
 After you commit the results, the Antares REST Server will detect this record and response this code version to other frameworks once they newly requests the expression case you saved.
+
+## Remote tunning:
+
+For DirectX12 platformn, you could use remote mode to tune expressions. Compared to local tunning, there are two extra things to do:
+
+1) Start remote tuning server on the target machine, reference to [HLSL server](platforms/c-hlsl/evaluator/TestCompute_cs_5_0)
+
+2) Add server host into the tunning expression
+```sh
+COMMIT=1 AGENT_URL=${Host_IP}:${Host_Port} CONFIG='{"axis_0": [-1, 16, 64, 1], "reorder": [0]}' COMPUTE_V1='- einstein_v2("output0[N] = input0[N] + input1[N]", input_dict={"input0": {"dtype": "float32", "shape": [1024 * 512]}, "input1": {"dtype": "float32", "shape": [1024 * 512]}})' BACKEND=c-hlsl make
+```
 
 # How to run Antares REST Server for different platforms:
 You can add environment variable `HTTP_PORT=<portnum>` to change the listening port, by default, it will be listening on localhost:8880:
