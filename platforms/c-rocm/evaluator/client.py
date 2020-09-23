@@ -4,6 +4,7 @@
 import os, time, math
 import numpy as np
 import tvm
+from tvm.runtime import ndarray as runtime
 from threading import Timer
 
 from antares.common import AntaresGlobal
@@ -32,12 +33,12 @@ def eval(kernel_path, **kwargs):
     for rank, buf in enumerate(arg_bufs['_in']):
       np_dtype, np_shape = parse_buf_array(buf), buf['shape']
       np_val = np.reshape(((np.arange(np.product(np_shape)) + rank + 1) % 71).astype(np_dtype), np_shape)
-      ins.append(tvm.nd.array(np_val, ctx))
+      ins.append(runtime.array(np_val, ctx))
 
     for rank, buf in enumerate(arg_bufs['_out']):
       np_dtype, np_shape = parse_buf_array(buf), buf['shape']
       np_val = np.zeros(np_shape, dtype=np_dtype)
-      outs.append(tvm.nd.array(np_val, ctx))
+      outs.append(runtime.array(np_val, ctx))
 
     def timeout_handler():
       print("Error: Timeout during Kernel warmup")
@@ -49,11 +50,11 @@ def eval(kernel_path, **kwargs):
     # Warmup
     tensors = ins + outs
     func(*tensors)
-    tvm.ndarray.gpu(visible_dev_id).sync()
+    runtime.gpu(visible_dev_id).sync()
     # Estimate
     t_start = time.time()
     func(*tensors)
-    tvm.ndarray.gpu(visible_dev_id).sync()
+    runtime.gpu(visible_dev_id).sync()
     t_diff = time.time() - t_start
     my_timer.cancel()
     del my_timer

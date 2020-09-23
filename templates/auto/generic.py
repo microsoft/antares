@@ -2,13 +2,12 @@
 # Licensed under the MIT license.
 
 import numpy as np
-import tvm
+from tvm import autotvm
+from tvm import te, tir, target
 import logging
 import sys, time, subprocess
-from tvm import autotvm
 import json
 import os
-import topi
 import importlib
 import traceback
 
@@ -54,7 +53,7 @@ def cast_dtype(dtype):
 
   custom_dtypes[typename] = (dtype_code, custom_dtypes["@"], dtype)
   custom_dtypes["@"] += 1
-  tvm.datatype.register(typename, dtype_code)
+  target.datatype.register(typename, dtype_code)
 
   bits = int(dtype[idx + 1:])
   if bits % 32 == 0:
@@ -67,8 +66,8 @@ def common_reduce(name, args=(0,)):
     args = (args, )
   def reduce_op(x, y):
     assert x.dtype == y.dtype , "Reduing elements that don't have same data type: %s v.s. %s" % (x.dtype, y.dtype)
-    return tvm.call_pure_extern(x.dtype, name, x, y, *args[1:])
-  return tvm.comm_reducer(reduce_op, lambda t: tvm.const(args[0], dtype=t), name=name)
+    return tir.call_pure_extern(x.dtype, name, x, y, *args[1:])
+  return te.comm_reducer(reduce_op, lambda t: tir.const(args[0], dtype=t), name=name)
 
 def input(name, shape, dtype="float32"):
   AntaresGlobal.current_arg_bufs['_in'] += [{'name': name, 'dtype': dtype, 'shape': shape}]
@@ -76,11 +75,11 @@ def input(name, shape, dtype="float32"):
   global placeholders
   if len(shape) == 0:
     shape = [1]
-  placeholders[name] = tvm.placeholder(shape, dtype=cast_dtype(dtype), name=name)
+  placeholders[name] = te.placeholder(shape, dtype=cast_dtype(dtype), name=name)
   return placeholders[name]
 
 def loop(length, start=0):
-  return tvm.reduce_axis((start, length))
+  return te.reduce_axis((start, length))
 
 def output(shape, func=None, flops=None, name='output0', topi=None, dtype=None, tag='', final_output=True):
   global output_saver
@@ -89,9 +88,10 @@ def output(shape, func=None, flops=None, name='output0', topi=None, dtype=None, 
   if flops is None:
     flops = np.product(shape)
   if topi is not None:
+    from tvm import topi
     result = tvm.compute(topi.shape, lambda *X: topi[X], name=name, tag=('antares_injective' if topi.op.reduce_axis else ''))
   else:
-    result = tvm.compute(shape, func, name=name, tag=tag)
+    result = te.compute(shape, func, name=name, tag=tag)
   if not final_output:
     return result
 
@@ -116,7 +116,7 @@ def traverse_inline(s, final_op, callback):
             if op not in s.outputs:
                 s[op].compute_inline()
             for tensor in op.input_tensors:
-                if isinstance(tensor.op, tvm.tensor.ComputeOp):
+                if isinstance(tensor.op, te.tensor.ComputeOp):
                     _traverse(tensor.op)
         callback(op)
     _traverse(final_op)
@@ -150,7 +150,7 @@ def do_native_scheduling(attrs):
   return select_plan(plan)
 
 
-@autotvm.template
+@autotvm.template("template_op")
 def get_template_op(**kwargs):
   if 'COMPUTE_V1' not in os.environ:
     raise Exception("Environment variable `COMPUTE_V1` is not set")
@@ -171,7 +171,7 @@ def get_template_op(**kwargs):
     output = output_saver["output"]
     cfg = autotvm.get_config()
     cfg.flop = output_saver["flops"]
-    sch = tvm.create_schedule(output.op)
+    sch = te.create_schedule(output.op)
 
     anno, options = program.find('## @'), []
     if anno >= 0:
@@ -181,7 +181,7 @@ def get_template_op(**kwargs):
       if op.tag != 'antares_injective':
         output_spec = op.output(0)
         for inp in sch[output_spec].op.input_tensors:
-          if isinstance(inp.op, tvm.tensor.ComputeOp) and not inp.op.reduce_axis:
+          if isinstance(inp.op, te.tensor.ComputeOp) and not inp.op.reduce_axis:
             sch[inp].compute_inline()
 
         attrs = Mock()
