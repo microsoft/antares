@@ -2,13 +2,12 @@
 # Licensed under the MIT license.
 
 import numpy as np
-import tvm
+from tvm import te
 import logging
 import sys, time, subprocess
-from tvm import autotvm
-# import topi
+
+
 import json
-# from topi.util import get_const_tuple
 import os
 
 
@@ -39,11 +38,11 @@ def schedule(attrs):
     cfg.define_split('tile_k', cfg.axis(k), num_outputs=3)
     ko, kt, ki = cfg['tile_k'].apply(s, CC, k)
 
-    block_x = tvm.thread_axis('blockIdx.x')
-    block_y = tvm.thread_axis('blockIdx.y')
-    thread_x = tvm.thread_axis('threadIdx.x')
-    thread_y = tvm.thread_axis('threadIdx.y')
-    s[C].bind(b, tvm.thread_axis('blockIdx.z'))
+    block_x = te.thread_axis('blockIdx.x')
+    block_y = te.thread_axis('blockIdx.y')
+    thread_x = te.thread_axis('threadIdx.x')
+    thread_y = te.thread_axis('threadIdx.y')
+    s[C].bind(b, te.thread_axis('blockIdx.z'))
 
     cfg.define_split('tile_y', cfg.axis(y), num_outputs=4)
     cfg.define_split('tile_x', cfg.axis(x), num_outputs=4)
@@ -53,8 +52,8 @@ def schedule(attrs):
 
     s[C].bind(by, block_y)
     s[C].bind(bx, block_x)
-    s[C].bind(tyz, tvm.thread_axis('vthread'))
-    s[C].bind(txz, tvm.thread_axis('vthread'))
+    s[C].bind(tyz, te.thread_axis('vthread'))
+    s[C].bind(txz, te.thread_axis('vthread'))
     s[C].bind(ty, thread_y)
     s[C].bind(tx, thread_x)
     s[C].reorder(by, bx, tyz, txz, ty, tx, yi, xi)

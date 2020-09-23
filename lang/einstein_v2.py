@@ -276,10 +276,10 @@ def emit_tvm_body(node, props):
   elif node._op == 'cast':
     return '%s.astype(cast_dtype("%s"))' % (emit_tvm_body(node._value["inputs"][0], props), node._value['name'])
   elif node._op == 'call':
-    return 'tvm.call_pure_extern(cast_dtype("%s"), "%s", %s)' % (node._dtype, node._value['name'], ', '.join([emit_tvm_body(x, props) for x in node._value["inputs"]]))
+    return 'tir.call_pure_extern(cast_dtype("%s"), "%s", %s)' % (node._dtype, node._value['name'], ', '.join([emit_tvm_body(x, props) for x in node._value["inputs"]]))
   elif node._op == 'when':
     all_conds = [emit_tvm_body(cond, props) for cond in node._value['if']]
-    return 'tvm.if_then_else(tvm.all(' + ', '.join(all_conds) + '), t=' + emit_tvm_body(node._value['true'], props) + ', f=' + emit_tvm_body(node._value['false'], props) + ')'
+    return 'tir.if_then_else(te.all(' + ', '.join(all_conds) + '), t=' + emit_tvm_body(node._value['true'], props) + ', f=' + emit_tvm_body(node._value['false'], props) + ')'
   else:
     raise Exception('Unrecognized node type: %s' % node._op)
 
@@ -433,7 +433,7 @@ def emit_tvm_ir(exprss, input_dict):
         axis_name = warp_axis(x['name'])
         reduce_set.append(axis_name)
         reduce_body += '%s = loop(%d); ' % (axis_name, x['range'])
-      reduce_maps = {'+': 'tvm.sum', '>': 'tvm.max', '<': 'tvm.min'}
+      reduce_maps = {'+': 'te.sum', '>': 'te.max', '<': 'te.min'}
       if props['reduce_type'] in reduce_maps:
         reduce_func = reduce_maps[props['reduce_type']]
       else:

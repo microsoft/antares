@@ -2,7 +2,7 @@
 # Licensed under the MIT license.
 
 import os
-import tvm
+from tvm import te
 
 
 def schedule(antares):
@@ -33,10 +33,10 @@ def schedule(antares):
   for i in range(len(th_vals)):
     lo, li = s[output].split(output.op.axis[i], nparts=1)
     if i == 0:
-      s[output].bind(lo, tvm.thread_axis('threadIdx.x'))
+      s[output].bind(lo, te.thread_axis('threadIdx.x'))
     else:
       li = s[output].fuse(lo, li)
-    s[output].bind(li, tvm.thread_axis('vthread'))
+    s[output].bind(li, te.thread_axis('vthread'))
     loop_axes.append(li)
 
   s[output].reorder(*(loop_axes))
