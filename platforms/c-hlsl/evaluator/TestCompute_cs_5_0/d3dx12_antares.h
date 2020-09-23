@@ -3,12 +3,12 @@
 
 #pragma once
 #define _USE_GPU_TIMER_
+//#define _USE_DXC_
 
 #include <stdio.h>
 #include <stdint.h>
 #include <dxgi1_5.h>
 #include <d3d12.h>
-#include <d3dcompiler.h>
 #include <cassert>
 #include <vector>
 #include <wrl/client.h>
@@ -24,7 +24,14 @@
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
+
+#ifdef _USE_DXC_
+#include <dxcapi.h>
+#pragma comment(lib, "dxcompiler.lib")
+#else
+#include <d3dcompiler.h>
 #pragma comment(lib, "d3dcompiler.lib")
+#endif
 
 using namespace std;
 using namespace Microsoft::WRL;
@@ -917,6 +924,58 @@ namespace antares {
 #endif
     };
 
+#ifdef _USE_DXC_
+    class DXCompiler
+    {
+    public:
+        static DXCompiler* Get()
+        {
+            static DXCompiler sm_compiler;
+            return &sm_compiler;
+
+        }
+
+        ComPtr<IDxcBlob> Compile(LPCVOID pText, UINT32 size, LPCWSTR entryName, LPCWSTR profile)
+        {
+            ComPtr<IDxcBlob> pRet;
+            ComPtr<IDxcBlobEncoding> pSrcBlob;
+            IFE(m_pLibrary->CreateBlobWithEncodingOnHeapCopy(pText, size, CP_UTF8, &pSrcBlob));
+            ComPtr<IDxcOperationResult> pResult;
+            // Just set a random name "ShaderFile"
+            if (FAILED(m_pCompiler->Compile(pSrcBlob.Get(), L"ShaderFile", entryName, profile, NULL, 0, NULL, 0, NULL, &pResult)))
+            {
+                if (pResult)
+                {
+                    ComPtr<IDxcBlobEncoding> pErrorsBlob;
+                    if (SUCCEEDED(pResult->GetErrorBuffer(&pErrorsBlob)))
+                    {
+                        if (pErrorsBlob)
+                        {
+                            printf("Compilation Error:\n%s\n", (const char*)pErrorsBlob->GetBufferPointer());
+                        }
+                    }
+                }
+            }
+            else
+            {
+                pResult->GetResult(&pRet);
+            }
+            return pRet;
+        }
+    private:
+        DXCompiler()
+        {
+            IFE(DxcCreateInstance(CLSID_DxcLibrary, IID_PPV_ARGS(&m_pLibrary)));
+            IFE(DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&m_pCompiler)));
+        }
+        DXCompiler(const DXCompiler&) = delete;
+        DXCompiler& operator=(const DXCompiler&) = delete;
+
+        ComPtr<IDxcLibrary> m_pLibrary;
+        ComPtr<IDxcCompiler> m_pCompiler;
+
+    };
+#endif
 
 	template<class T>
 	std::vector<char> load_data(int rank, size_t num_elements, const T defval = 1) {
@@ -1016,7 +1075,11 @@ namespace antares {
 		ComPtr<ID3D12GraphicsCommandList> m_computeCommandList;
 
 		ComPtr<ID3D12RootSignature> m_computeRootSignature;
+#ifdef _USE_DXC_
+        ComPtr<IDxcBlob> computeShader;
+#else
 		ComPtr<ID3DBlob> computeShader;
+#endif
 		ComPtr<ID3D12PipelineState> m_computeState;
 		ComPtr<ID3D12CommandAllocator> computeCommandAllocator;
 		D3D12_COMPUTE_PIPELINE_STATE_DESC computePsoDesc;
@@ -1126,10 +1189,15 @@ namespace antares {
 			IFE(D3DX12SerializeVersionedRootSignature(&computeRootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1_1, &signature, &error));
 			IFE(device.pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_computeRootSignature)));
 
-			IFE(D3DCompile(hlsl_source, strlen(hlsl_source), NULL, NULL, NULL, "CSMain", "cs_5_1", 0, 0, &computeShader, NULL));
-
-			computePsoDesc.pRootSignature = m_computeRootSignature.Get();
-			computePsoDesc.CS = CD3DX12_SHADER_BYTECODE(computeShader.Get());
+#ifdef _USE_DXC_
+            // Use cs_6_0 since dxc only supports cs_6_0 or higher shader models.
+            computeShader = DXCompiler::Get()->Compile(hlsl_source, strlen(hlsl_source), L"CSMain", L"cs_6_0");
+            computePsoDesc.CS = CD3DX12_SHADER_BYTECODE(computeShader->GetBufferPointer(), computeShader->GetBufferSize());
+#else
+            IFE(D3DCompile(hlsl_source, strlen(hlsl_source), NULL, NULL, NULL, "CSMain", "cs_5_1", 0, 0, &computeShader, NULL));
+            computePsoDesc.CS = CD3DX12_SHADER_BYTECODE(computeShader.Get());
+#endif
+            computePsoDesc.pRootSignature = m_computeRootSignature.Get();
 
 			IFE(device.pDevice->CreateComputePipelineState(&computePsoDesc, IID_PPV_ARGS(&m_computeState)));
 			IFE(device.pDevice->CreateCommandAllocator(device.CommandListType, IID_PPV_ARGS(&computeCommandAllocator)));
