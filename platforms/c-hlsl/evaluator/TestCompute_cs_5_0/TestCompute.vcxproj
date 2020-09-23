@@ -50,6 +50,11 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <PostBuildEvent>
+      <Command>copy /Y "$(TargetDir)$(ProjectName).exe" "$(ProjectDir)$(ProjectName).exe"
+copy /Y "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\$(PlatformTarget)\dxil.dll" "$(ProjectDir)dxil.dll"
+copy /Y "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\$(PlatformTarget)\dxcompiler.dll" "$(ProjectDir)dxcompiler.dll"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="run_graph.cpp" />
