@@ -1,0 +1,138 @@
+diff --git a/python/tvm/autotvm/tuner/tuner.py b/python/tvm/autotvm/tuner/tuner.py
+index 9864ba005..3819bb923 100644
+--- a/python/tvm/autotvm/tuner/tuner.py
++++ b/python/tvm/autotvm/tuner/tuner.py
+@@ -128,7 +128,7 @@ class Tuner(object):
+             configs = self.next_batch(min(n_parallel, n_trial - i))
+ 
+             inputs = [MeasureInput(self.task.target, self.task, config) for config in configs]
+-            results = measure_batch(inputs)
++            results = self.measure_batch(inputs) if hasattr(self, 'measure_batch') else measure_batch(inputs)
+ 
+             # keep best config
+             for k, (inp, res) in enumerate(zip(inputs, results)):
+diff --git a/src/target/source/codegen_c.cc b/src/target/source/codegen_c.cc
+index 2f19d6e12..f966da6fd 100644
+--- a/src/target/source/codegen_c.cc
++++ b/src/target/source/codegen_c.cc
+@@ -159,7 +159,7 @@ std::string CodeGenC::GetBufferRef(DataType t, const VarNode* buffer, PrimExpr i
+   }
+   bool is_vol = IsVolatile(buffer);
+   if (t.lanes() == 1) {
+-    if (!HandleTypeMatch(buffer, t) || is_vol) {
++    if (strcmp(getenv("BACKEND"), "c-hlsl") && (!HandleTypeMatch(buffer, t) || is_vol)) {
+       os << "((";
+       if (is_vol) {
+         os << "volatile ";
+@@ -849,6 +849,9 @@ void CodeGenC::VisitStmt_(const AttrStmtNode* op) {
+     IterVar iv = Downcast<IterVar>(op->node);
+     if (iv->thread_tag.length() != 0) {
+       if (!var_idmap_.count(iv->var.get())) {
++        int nthread = static_cast<int>(op->value.as<IntImmNode>()->value);
++        if (std::string(iv->thread_tag).find("threadIdx.") == 0 || std::string(iv->thread_tag).find("blockIdx.") == 0)
++          this->stream << "  // [thread_extent] " << iv->thread_tag << " = " << nthread << "\n";
+         BindThreadIndex(iv);
+       }
+     }
+diff --git a/src/target/source/codegen_cuda.cc b/src/target/source/codegen_cuda.cc
+index 7dc63d4ac..e4abfddc3 100644
+--- a/src/target/source/codegen_cuda.cc
++++ b/src/target/source/codegen_cuda.cc
+@@ -22,7 +22,7 @@
+  */
+ 
+ #include "codegen_cuda.h"
+-
++#include "../datatype/registry.h"
+ #include <tvm/runtime/registry.h>
+ 
+ #include <cmath>
+@@ -47,6 +47,8 @@ void CodeGenCUDA::Init(bool output_ssa) {
+ void CodeGenCUDA::PrintFuncPrefix() { stream << "extern \"C\" __global__ void"; }
+ 
+ std::string CodeGenCUDA::Finish() {
++  return CodeGenC::Finish();
++
+   if (enable_fp16_) {
+     decl_stream << "#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)\n";
+     decl_stream << "#include <cuda_fp16.h>\n";
+@@ -264,6 +266,9 @@ void CodeGenCUDA::PrintType(DataType t, std::ostream& os) {  // NOLINT(*)
+       return;
+     }
+   }
++  auto name = tvm::datatype::Registry::Global()->GetTypeName(t.code());
++  os << name; return;
++
+   LOG(FATAL) << "Cannot convert type " << t << " to CUDA type";
+ }
+ 
+diff --git a/src/tir/op/op.cc b/src/tir/op/op.cc
+index 6dc485fc4..05a0fd35c 100644
+--- a/src/tir/op/op.cc
++++ b/src/tir/op/op.cc
+@@ -332,9 +332,9 @@ PrimExpr operator/(PrimExpr a, PrimExpr b) { return div(a, b); }
+ PrimExpr operator%(PrimExpr a, PrimExpr b) { return truncmod(a, b); }
+ 
+ // TODO(tqchen): switch to floordiv
+-PrimExpr indexdiv(PrimExpr a, PrimExpr b) { return floordiv(a, b); }
++PrimExpr indexdiv(PrimExpr a, PrimExpr b) { return truncdiv(a, b); }
+ 
+-PrimExpr indexmod(PrimExpr a, PrimExpr b) { return floormod(a, b); }
++PrimExpr indexmod(PrimExpr a, PrimExpr b) { return truncmod(a, b); }
+ 
+ PrimExpr floordiv(PrimExpr a, PrimExpr b) {
+   CHECK(a.dtype().is_int() || a.dtype().is_uint()) << a;
+diff --git a/src/tir/transforms/arg_binder.cc b/src/tir/transforms/arg_binder.cc
+index b88d2980b..d9d8f1212 100644
+--- a/src/tir/transforms/arg_binder.cc
++++ b/src/tir/transforms/arg_binder.cc
+@@ -163,7 +163,9 @@ void ArgBinder::BindDLTensor(const Buffer& buffer, const PrimExpr& device_type,
+   DataType dtype = buffer->dtype;
+   std::ostringstream type_err_msg;
+   type_err_msg << arg_name << ".dtype is expected to be " << dtype;
+-  PrimExpr cond = (TVMArrayGet(DataType::UInt(8), handle, builtin::kArrTypeCode) ==
++
++  PrimExpr cond = IntImm(DataType::UInt(8), dtype.code()) > IntImm(DataType::UInt(8), DataType::kCustomBegin) ||
++                   (TVMArrayGet(DataType::UInt(8), handle, builtin::kArrTypeCode) ==
+                        IntImm(DataType::UInt(8), dtype.code()) &&
+                    TVMArrayGet(DataType::UInt(8), handle, builtin::kArrTypeBits) ==
+                        IntImm(DataType::UInt(8), dtype.bits()) &&
+diff --git a/src/tir/transforms/split_host_device.cc b/src/tir/transforms/split_host_device.cc
+index 5298added..8fd7309ee 100644
+--- a/src/tir/transforms/split_host_device.cc
++++ b/src/tir/transforms/split_host_device.cc
+@@ -94,6 +94,7 @@ class VarUseDefAnalysis : public StmtExprMutator {
+   }
+ 
+   Stmt VisitStmt_(const StoreNode* op) final {
++    this->output_hints.insert(op->buffer_var.get()->name_hint);
+     this->HandleUse(op->buffer_var);
+     return StmtExprMutator::VisitStmt_(op);
+   }
+@@ -178,6 +179,7 @@ class VarUseDefAnalysis : public StmtExprMutator {
+   Array<PrimExpr> thread_extent_;
+   std::unordered_map<const VarNode*, int> use_count_;
+   std::unordered_map<const VarNode*, int> def_count_;
++  std::unordered_set<std::string> output_hints;
+ 
+  private:
+   ExprDeepEqual deep_equal_;
+@@ -233,8 +235,16 @@ class HostDeviceSplitter : public StmtMutator {
+     Array<PrimExpr> arguments;
+     Map<tir::Var, PrimExpr> remap_vars;
+ 
+-    // Strictly order the arguments: Var pointers, positional arguments.
+-    for (Var var : m.undefined_) {
++    // Strictly order the arguments: Var pointers, positional arguments
++    std::vector<Var> ordered_args(m.undefined_.begin(), m.undefined_.end());
++    std::sort(ordered_args.begin(), ordered_args.end(), [&](const Var &x, const Var &y) {
++      int x_access = m.output_hints.count(x.get()->name_hint);
++      int y_access = m.output_hints.count(y.get()->name_hint);
++      if (x_access != y_access)
++        return x_access < y_access;
++      return x.get()->name_hint < y.get()->name_hint;
++    });
++    for (Var var : ordered_args) {
+       if (var.dtype().is_handle()) {
+         // Create a new version of v.
+         auto it = handle_data_type_.find(var.get());

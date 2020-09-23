@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-import tvm
+from tvm import te
 import numpy as np
 
 
@@ -36,14 +36,14 @@ def schedule(antares):
 
       if pa_id == i:
         axo, axm = s[output].split(axm, nparts=plan_threads)
-        s[output].bind(axo, tvm.thread_axis('threadIdx.x'))
+        s[output].bind(axo, te.thread_axis('threadIdx.x'))
 
       ax_high.append(axm)
       ax_low.append(axi)
 
     for i in range(len(ax_high)):
-      s[output].bind(ax_high[i], tvm.thread_axis('vthread'))
-      s[output].bind(ax_low[i], tvm.thread_axis('vthread'))
+      s[output].bind(ax_high[i], te.thread_axis('vthread'))
+      s[output].bind(ax_low[i], te.thread_axis('vthread'))
 
     cfg.define_reorder("reorder", ax_low, "all")
     perm = cfg['reorder'].perm

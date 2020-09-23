@@ -2,10 +2,10 @@
 # Licensed under the MIT license.
 
 import numpy as np
-import tvm
+from tvm import te
 import logging
 import sys, time, subprocess
-from tvm import autotvm
+
 import json
 import os
 import itertools
@@ -58,14 +58,14 @@ def schedule(attrs):
     bx, xo = s[output].split(bx, factor=splits[1])
 
     target_threads = mapping_space[cfg['maps'].perm[rank]]
-    s[output].bind(bx, tvm.thread_axis(target_threads[0]))
+    s[output].bind(bx, te.thread_axis(target_threads[0]))
     if target_threads[1] == 'vthread':
       xi = s[output].fuse(xo, tx, xi)
     else:
-      s[output].bind(xo, tvm.thread_axis('vthread'))
+      s[output].bind(xo, te.thread_axis('vthread'))
       reorder_list.append(xo)
-      s[output].bind(tx, tvm.thread_axis(target_threads[1]))
-    s[output].bind(xi, tvm.thread_axis('vthread'))
+      s[output].bind(tx, te.thread_axis(target_threads[1]))
+    s[output].bind(xi, te.thread_axis('vthread'))
     reorder_list.append(xi)
 
   s[output].reorder(*reorder_list)

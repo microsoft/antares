@@ -76,7 +76,7 @@ def translate_code(code):
   return '%s\n%s%s' % (get_kernel_metadata(), defs, code)
 
 def device_properties():
-  return tvm.ndarray.gpu(0)
+  return tvm.runtime.ndarray.gpu(0)
 
 def compile_source(code):
   if 'HTTP_SERVICE' in os.environ:
@@ -153,7 +153,7 @@ def main_compute(code_only=False):
   default_tune_op = importlib.import_module('templates.' + (os.environ['OP'] if 'OP' in os.environ else 'auto.generic'))
   print('  >> Backend = %s, Python PID = %s, Task = %s;' % (backend, os.getpid(), default_tune_op.__name__))
 
-  task = autotvm.task.create(default_tune_op.get_template_op, args=(), target=tvm_target)
+  task = autotvm.task.create("template_op", args=(), target=tvm_target)
 
   def json_to_config(json_dict, index=-1, code_hash=None):
     if not isinstance(json_dict, list):
@@ -161,13 +161,15 @@ def main_compute(code_only=False):
       for key in json_dict:
         json_list.append([key, 'ot' if type(json_dict[key]) is not list else ('sp' if json_dict[key][0:1] == [-1] else 're'), json_dict[key]])
       json_dict = json_list
-    config = ConfigEntity.from_json_dict({"i": index, "t": "", "c": code_hash, "e": json_dict})
+    config = ConfigEntity.from_json_dict({"index": index, "time": "", "code_hash": code_hash, "entity": json_dict})
+    # config = ConfigEntity.from_json_dict({"i": index, "t": "", "c": code_hash, "e": json_dict})
     return config
 
   def config_to_json(config):
     if config is None:
       return {}
-    jobj = config.to_json_dict()['e']
+    jobj = config.to_json_dict()['entity']
+    # jobj = config.to_json_dict()['e']
     json_dict = dict()
     for i in range(len(jobj)):
       assert(jobj[i][1] in ['sp', 'ot', 're'])
@@ -325,17 +327,17 @@ def main_compute(code_only=False):
     best_config = task.config_space
 
   with ApplyConfig(best_config):
-    with tvm.target.create(tvm_target):
+    with tvm.target.Target(tvm_target):
       s, arg_bufs = default_tune_op.get_template_op()
       lower_source = str(tvm.lower(s, arg_bufs, simple_mode=True))
-
-      # Verify Lower Code Code
-      if len(('\n' + lower_source).split('\nproduce ')) != 2:
-        raise Exception('[Not Support Multi Unfuse-able kernels]\n\n' + lower_source)
 
       lower_file = local_get_dir_file('my_kernel.lower')
       with open(lower_file, 'w') as fp:
         fp.write(lower_source)
+
+      # Verify Lower Code Code
+      if len(('\n' + lower_source).split('\nprimfn(')) != 2:
+        raise Exception('[Not Support Multi Unfuse-able kernels]\n\n' + lower_source)
 
       max_threads_per_block = device_properties().max_threads_per_block
       max_shared_memory_per_block = device_properties().max_shared_memory_per_block
@@ -344,16 +346,14 @@ def main_compute(code_only=False):
       lower_lines = lower_source.split('\n')
       thread_extents, allocate_shared = [], []
       for ll in lower_lines:
-        if ll.strip().startswith('// attr ') and ll.find(' thread_extent = ') >= 0:
-          thread_name = ll.split('[iter_var(')[-1].split(',')[0]
-          thread_val = int(ll.split('thread_extent = ')[-1])
+        if ll.strip().startswith('attr [IterVar(') and ll.find(' "thread_extent" = ') >= 0:
+          thread_name = ll.split('attr [IterVar(')[-1].split(':')[0]
+          thread_val = int(ll.split(' "thread_extent" = ')[-1].split(';')[0].strip().split(' ')[0])
           thread_extents.append((thread_name, thread_val))
-        elif ll.strip().startswith('allocate ') and ll.find('.shared[') >= 0:
-          parts = ll[ll.index('[') + 1:-1]
-          parts = parts.split(' * ')
-          assert(len(parts) == 2)
+        elif ll.strip().startswith('allocate(') and ll.find('.shared, ') >= 0 and ll.endswith(");"):
+          parts = ll[:-2].split(', ')[1:]
           allocate_type = parts[0]
-          allocate_val = int(parts[1])
+          allocate_val = int(np.product(eval(parts[1])))
           allocate_shared.append((allocate_type, allocate_val))
 
       reserved_axes = dict()

@@ -2,13 +2,10 @@
 # Licensed under the MIT license.
 
 import numpy as np
-import tvm
+from tvm import te
 import logging
 import sys, time, subprocess
-from tvm import autotvm
-# import topi
 import json
-# from topi.util import get_const_tuple
 import os
 
 
@@ -48,7 +45,7 @@ def schedule(attrs):
     BL = s.cache_read(BB, "local", [C])
     CL = s.cache_write(C, "local")
 
-    #autotvm search space definition
+    # autotvm search space definition
     cfg.define_knob("bx", [2, 4, 8])
     cfg.define_knob("by", [16, 32, 64])
     cfg.define_knob("step_k", [8, 16, 32])
@@ -78,11 +75,11 @@ def schedule(attrs):
     tz, xi = s[C].split(xi, WX)
     tx, xi = s[C].split(xi, TX)
     s[C].reorder(yo, xo, tz, ty, tx, yi, xi)
-    s[C].bind(yo, tvm.thread_axis("blockIdx.y"))
-    s[C].bind(xo, tvm.thread_axis("blockIdx.x"))
-    s[C].bind(ty, tvm.thread_axis("threadIdx.y"))
-    s[C].bind(tz, tvm.thread_axis("threadIdx.z"))
-    s[C].bind(tx, tvm.thread_axis("threadIdx.x"))
+    s[C].bind(yo, te.thread_axis("blockIdx.y"))
+    s[C].bind(xo, te.thread_axis("blockIdx.x"))
+    s[C].bind(ty, te.thread_axis("threadIdx.y"))
+    s[C].bind(tz, te.thread_axis("threadIdx.z"))
+    s[C].bind(tx, te.thread_axis("threadIdx.x"))
 
     # schedule for CL stage
     ko, ki = s[CL].split(k, step_k * warp_tile_k)
@@ -98,9 +95,9 @@ def schedule(attrs):
     tx, vec = s[AA].split(tx, factor=v)
     fused = s[AA].fuse(s[AA].op.axis[0], xo)
     _, ty = s[AA].split(fused, factor=by)
-    s[AA].bind(ty, tvm.thread_axis("threadIdx.y"))
-    s[AA].bind(tz, tvm.thread_axis("threadIdx.z"))
-    s[AA].bind(tx, tvm.thread_axis("threadIdx.x"))
+    s[AA].bind(ty, te.thread_axis("threadIdx.y"))
+    s[AA].bind(tz, te.thread_axis("threadIdx.z"))
+    s[AA].bind(tx, te.thread_axis("threadIdx.x"))
     # vectorization is very important for float16/int8 inputs
     s[AA].vectorize(vec)
 
@@ -111,9 +108,9 @@ def schedule(attrs):
     tx, vec = s[BB].split(tx, factor=v)
     fused = s[BB].fuse(s[BB].op.axis[0], xo)
     _, ty = s[BB].split(fused, factor=by)
-    s[BB].bind(ty, tvm.thread_axis("threadIdx.y"))
-    s[BB].bind(tz, tvm.thread_axis("threadIdx.z"))
-    s[BB].bind(tx, tvm.thread_axis("threadIdx.x"))
+    s[BB].bind(ty, te.thread_axis("threadIdx.y"))
+    s[BB].bind(tz, te.thread_axis("threadIdx.z"))
+    s[BB].bind(tx, te.thread_axis("threadIdx.x"))
     s[BB].vectorize(vec)
 
     s[AL].compute_at(s[CL], kl)
