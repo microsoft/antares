@@ -80,6 +80,7 @@ enum __device_builtin__ cudaDeviceAttr
     cudaDevAttrMaxBlockDimZ                   = 4,  /**< Maximum block dimension Z */
     cudaDevAttrMaxSharedMemoryPerBlock        = 8,  /**< Maximum shared memory available per block in bytes */
     cudaDevAttrWarpSize                       = 10, /**< Warp size in threads */
+    cudaDevAttrMaxRegistersPerBlock           = 12,
     cudaDevAttrClockRate                      = 13, /**< Peak clock frequency in kilohertz */
     cudaDevAttrMultiProcessorCount            = 16, /**< Number of multiprocessors on device */
     cudaDevAttrComputeCapabilityMajor         = 75, /**< Major compute capability version number */
@@ -197,6 +198,8 @@ public:
         attr[cudaDevAttrComputeCapabilityMajor] = val;
       else if (!strcmp(line, "ComputeCapabilityMinor"))
         attr[cudaDevAttrComputeCapabilityMinor] = val;
+      else if (!strcmp(line, "MaxRegistersPerBlock"))
+        attr[cudaDevAttrMaxRegistersPerBlock] = val;
       else
         assert(0);
     }
@@ -218,6 +221,8 @@ public:
       {cudaDevAttrMaxBlockDimZ, hipDeviceAttributeMaxBlockDimZ, 64},
     };
     memset(attr, -1, sizeof(attr));
+    attr[cudaDevAttrMaxRegistersPerBlock /* hipDeviceAttributeMaxRegistersPerBlock */] = 65536;
+
     auto config = getenv("HARDWARE_CONFIG");
     if (config != nullptr && *config) {
       read_from_config(config);
@@ -278,7 +283,7 @@ extern "C" {
 
 CUresult CUDAAPI cudaDeviceGetAttribute(int *ri, cudaDeviceAttr prop, int device) {
   LOGGING_API();
-  if (attr[prop] == -1) {
+  if (prop >= cudaDevAttrMax || attr[prop] == -1) {
     printf("  >> Unrecognized property value = %u\n", prop);
     abort();
   }
