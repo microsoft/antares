@@ -19,5 +19,6 @@ int main() {
 	Q(cudaDevAttrMaxBlockDimX);
 	Q(cudaDevAttrMaxBlockDimY);
 	Q(cudaDevAttrMaxBlockDimZ);
+	Q(cudaDevAttrMaxRegistersPerBlock);
 	return 0;
 }
