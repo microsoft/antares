@@ -186,12 +186,9 @@ You can add environment variable `HTTP_PORT=<portnum>` to change the listening p
 ```
 
 # How to use custom tuners as searching algorithms:
-Custom tuners can be chosen by adding variable `TUNER=..`, and the value can be selected from any filename under folder `tuner/`:
+Custom tuners can be chosen by adding variable `TUNER=..`, and the value can be selected from any filename under folder `tuner/`, e.g.:
 ```sh
-    STEP=100 BACKEND=c-cuda make
-
-    # Adding `RECORD=<filename>` can help you record the incremental tuning history
-    RECORD=history.log STEP=100 BACKEND=c-cuda make
+    TUNER=AutoTVM2 STEP=100 BACKEND=c-cuda make
 ```
 
 # About Microsft Open Source
