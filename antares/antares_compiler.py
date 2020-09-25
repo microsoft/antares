@@ -108,7 +108,7 @@ def run_config_entity(params_given, dir_sid, expected_timecost='inf', tune_slot_
   if math.isinf(expected_timecost):
     expected_timecost = 60.0
   envs['EXPECTED_TIMEOUT'] = str(expected_timecost)
-  print("  >> [ ] Param_entity on sid = %s: config = %s, slot_id = %d, expected_timecost = %.6f s" % (dir_sid, config_str, tune_slot_id, expected_timecost))
+  print("  >> [ ] Param_entity on sid = %s: config = '%s', slot_id = %d, expected_timecost = %.6f s" % (dir_sid, config_str, tune_slot_id, expected_timecost))
   try:
     assert(True == run_process_with_timeout(["python%d" % sys.version_info.major] + sys.argv, envs=envs))
     with open(result_file, 'r') as fp:
@@ -117,7 +117,7 @@ def run_config_entity(params_given, dir_sid, expected_timecost='inf', tune_slot_
       digest = float(parts[1].strip()) if len(parts) > 1 else float('inf')
   except:
     result = digest = float('inf')
-  print("  >> [*] Param_entity on sid = %s: config = %s, result = `%.6f`, digest = `%g`" % (dir_sid, config_str, result, digest))
+  print("  >> [*] Param_entity on sid = %s: config = '%s', result = `%.6f`, digest = `%g`" % (dir_sid, config_str, result, digest))
   return result
 
 def compute_gflops(flop, t):
@@ -168,6 +168,8 @@ def main_compute(code_only=False):
   def config_to_json(config):
     if config is None:
       return {}
+    if isinstance(config, str):
+      return json.loads(config)
     jobj = config.to_json_dict()['entity']
     # jobj = config.to_json_dict()['e']
     json_dict = dict()
@@ -178,10 +180,14 @@ def main_compute(code_only=False):
 
   num_trials = int(os.environ['STEP']) if 'STEP' in os.environ else 0
 
-  if 'CONFIG' in os.environ and os.environ['CONFIG'].strip() != '':
-    params_given = json.loads(os.environ['CONFIG'].strip())
-    print("====>> [Current Config Option]", os.environ['CONFIG'])
-    best_config = json_to_config(params_given)
+  config = os.environ.get('CONFIG', '').strip()
+  if config != '':
+    if config[0] != '[':
+      params_given = json.loads(config)
+      print("====>> [Current Config Option]", config)
+      best_config = json_to_config(params_given)
+    else:
+      best_config = config
 
   elif 'NNI_TRIAL_JOB_ID' in os.environ:
     if os.environ['NNI_TRIAL_JOB_ID'] == '@':
@@ -212,12 +218,10 @@ def main_compute(code_only=False):
     exit(0)
 
   elif num_trials > 0:
+    dev_num = platform_config.get_execution_parallism()
+    if dev_num <= 0:
+        raise Exception("No valid device found for backend: %s." % backend)
     batch_size = int(os.environ.get('BATCH', '16'))
-
-    task.antares_helper = Mock()
-    task.antares_helper.json_to_config = json_to_config
-    task.antares_helper.config_to_json = config_to_json
-    task.antares_helper.to_json_search_space = get_search_space
 
     from concurrent.futures import ThreadPoolExecutor
     try:
@@ -226,10 +230,12 @@ def main_compute(code_only=False):
       worker_size = 1
     except:
       worker_size = batch_size
-    thread_pool = ThreadPoolExecutor(max_workers=worker_size)   # Compiling Pool Paralism (also restricted by tuner's batch_size)
-    dev_num = platform_config.get_execution_parallism()
-    if dev_num <= 0:
-        raise Exception("No valid device found for backend: %s." % backend)
+    thread_pool = ThreadPoolExecutor(max_workers=worker_size)
+
+    task.antares_helper = Mock()
+    task.antares_helper.json_to_config = json_to_config
+    task.antares_helper.config_to_json = config_to_json
+    task.antares_helper.to_json_search_space = get_search_space
 
     tuner_type = os.environ.get('TUNER', 'XGBoost')
     print('  >> MAKE_PARA = %d/%d, EXEC_PARA = %d, TUNER = %s' % (worker_size, batch_size, dev_num, tuner_type))
@@ -248,10 +254,6 @@ def main_compute(code_only=False):
       raise Exception('>> Cannot import Antares Tuner: %s' % tuner_type)
 
     if tuner is not None:
-      measure_option = autotvm.measure_option(
-          builder=autotvm.LocalBuilder(n_parallel=batch_size),
-          runner=autotvm.LocalRunner(repeat=3, min_repeat_ms=100, timeout=4)
-      )
 
       def measure_batch(inputs):
         results, futures = [], []
@@ -303,15 +305,22 @@ def main_compute(code_only=False):
           print('  >>  Loading incremental history from log file: %s ..' % history_log_for_transfer_learning)
           tuner.load_history(autotvm.record.load_from_file(history_log_for_transfer_learning))
 
-      tuner.tune(n_trial=num_trials, measure_option=measure_option, callbacks=callbacks)
+      tuner.tune(n_trial=num_trials, measure_option=autotvm.measure_option(
+          builder=autotvm.LocalBuilder(n_parallel=batch_size),
+          runner=autotvm.LocalRunner(repeat=3, min_repeat_ms=100, timeout=4)
+      ), callbacks=callbacks)
       assert not math.isinf(tuner.task.best.timecost), "Not valid config found in the whole tuning."
       best_config = tuner.task.best.config
+
       print("\n[Best Config] CONFIG='%s'  ==>  Performance is up to %f Gflops, occurred at step %d / %d; time per run = %g sec." % (
         json.dumps(config_to_json(best_config)),
         compute_gflops(tuner.task.flop, tuner.task.best.timecost),
         tuner.task.best.occur,
         num_trials,
         tuner.task.best.timecost))
+
+      if hasattr(tuner, 'cleanup'):
+        tuner.cleanup()
     else:
       raise Exception('Unrecognized tuner type: `%s`' % tuner_type)
     exit(0)
@@ -326,9 +335,37 @@ def main_compute(code_only=False):
         exit(0)
     best_config = task.config_space
 
-  with ApplyConfig(best_config):
-    with tvm.target.Target(tvm_target):
-      s, arg_bufs = default_tune_op.get_template_op()
+  if isinstance(best_config, str):
+    from tvm import auto_scheduler
+    origin_cfg = json.loads(best_config)
+    origin_cfg = {
+      "i": [['["main_compute.<locals>.auto_template"]', 'cuda -keys=cuda,gpu -max_num_threads=%d -thread_warp_size=%d' % (
+                device_properties().max_threads_per_block, device_properties().warp_size
+             )], origin_cfg],
+      "r": [[0], 0, 0, 0],
+      "v": "v0.2",
+    }
+    origin_cfg_file = local_get_dir_file('my_kernel.cfg')
+    with open(origin_cfg_file, 'w') as fp:
+      fp.write(json.dumps(origin_cfg))
+    origin_cfg = tvm.auto_scheduler.measure_record.load_records(origin_cfg_file)
+ 
+    @auto_scheduler.register_workload
+    def auto_template():
+      _, arg_bufs = default_tune_op.get_template_op()
+      return arg_bufs
+
+    target = tvm.target.Target("cuda")
+    auto_task = auto_scheduler.create_task(auto_template, (), target)
+    for inp, res in origin_cfg:
+      s, arg_bufs = auto_task.compute_dag.apply_steps_from_state(inp.state)
+      break
+  else:
+    with ApplyConfig(best_config):
+      with tvm.target.Target(tvm_target):
+        s, arg_bufs = default_tune_op.get_template_op()
+
+  if s is not None:
       lower_source = str(tvm.lower(s, arg_bufs, simple_mode=True))
 
       lower_file = local_get_dir_file('my_kernel.lower')
