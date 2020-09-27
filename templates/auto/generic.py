@@ -88,8 +88,7 @@ def output(shape, func=None, flops=None, name='output0', topi=None, dtype=None, 
   if flops is None:
     flops = np.product(shape)
   if topi is not None:
-    from tvm import topi
-    result = tvm.compute(topi.shape, lambda *X: topi[X], name=name, tag=('antares_injective' if topi.op.reduce_axis else ''))
+    result = te.compute(topi.shape, lambda *X: topi[X], name=name, tag=('antares_injective' if topi.op.reduce_axis else ''))
   else:
     result = te.compute(shape, func, name=name, tag=tag)
   if not final_output:
@@ -163,7 +162,7 @@ def get_template_op(**kwargs):
 
   program = program[2:].strip()
   if program:
-    exec(program, globals())
+    exec('import tvm; from tvm import topi; ' + program, globals())
     AntaresGlobal.current_arg_bufs['_in'].sort(key=lambda x: x['name'])
     AntaresGlobal.current_arg_bufs['_out'].sort(key=lambda x: x['name'])
 
