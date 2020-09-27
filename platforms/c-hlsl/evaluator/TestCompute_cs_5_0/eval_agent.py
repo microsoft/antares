@@ -41,7 +41,7 @@ class PUTHandler(tornado.web.RequestHandler):
         
         cmd = ["./TestCompute.exe"]
         logging.info("Starting execute: '%s'", ' '.join(cmd))
-        output = subprocess.check_output(cmd, timeout=5)
+        output = subprocess.check_output(cmd, timeout=10)
         self.write(output)
         
 

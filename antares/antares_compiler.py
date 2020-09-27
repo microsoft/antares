@@ -12,7 +12,6 @@ import re
 import json
 import importlib
 import signal
-from threading import Timer
 
 import tvm
 from tvm import autotvm
@@ -419,11 +418,9 @@ def main_compute(code_only=False):
         raise Exception("Invalid kernel code: using shared_memory_in_bytes %d > max_shared_memory_per_block %d" % (shared_memory_in_bytes, max_shared_memory_per_block))
 
       # Compile Source Code
-      my_timer = Timer(30, lambda _: os._exit(1), [None])
-      my_timer.start()
-      func = tvm.build(s, arg_bufs, tvm_target, name='template_op')
-      my_timer.cancel()
-      del my_timer
+      def build_template():
+        return tvm.build(s, arg_bufs, tvm_target, name='template_op')
+      func = wait_for(build_template, 30)
 
   assert(len(func.imported_modules) == 1)
   device_source = translate_code(func.imported_modules[0].get_source())
