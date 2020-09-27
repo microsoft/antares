@@ -5,9 +5,8 @@ import os, time, math
 import numpy as np
 import tvm
 from tvm.runtime import ndarray as runtime
-from threading import Timer
 
-from antares.common import AntaresGlobal
+from antares.common import AntaresGlobal, wait_for
 
 def eval(kernel_path, **kwargs):
     func = kwargs['func']
@@ -33,31 +32,29 @@ def eval(kernel_path, **kwargs):
     for rank, buf in enumerate(arg_bufs['_in']):
       np_dtype, np_shape = parse_buf_array(buf), buf['shape']
       np_val = np.reshape(((np.arange(np.product(np_shape)) + rank + 1) % 71).astype(np_dtype), np_shape)
-      ins.append(runtime.array(np_val, ctx))
+      ins.append(np_val)
 
     for rank, buf in enumerate(arg_bufs['_out']):
       np_dtype, np_shape = parse_buf_array(buf), buf['shape']
       np_val = np.zeros(np_shape, dtype=np_dtype)
-      outs.append(runtime.array(np_val, ctx))
+      outs.append(np_val)
 
-    def timeout_handler():
-      print("Error: Timeout during Kernel warmup")
-      os._exit(1)
 
-    my_timer = Timer(20, timeout_handler, [])
-    my_timer.start()
+    def warmup_estimate(ins, outs):
+      ins = [runtime.array(x, ctx) for x in ins]
+      outs = [runtime.array(x, ctx) for x in outs]
 
-    # Warmup
-    tensors = ins + outs
-    func(*tensors)
-    runtime.gpu(visible_dev_id).sync()
-    # Estimate
-    t_start = time.time()
-    func(*tensors)
-    runtime.gpu(visible_dev_id).sync()
-    t_diff = time.time() - t_start
-    my_timer.cancel()
-    del my_timer
+      tensors = ins + outs
+      func(*tensors)
+      runtime.gpu(visible_dev_id).sync()
+
+      t_start = time.time()
+      func(*tensors)
+      runtime.gpu(visible_dev_id).sync()
+      t_diff = time.time() - t_start
+      return ins, outs, tensors, t_diff
+
+    ins, outs, tensors, t_diff = wait_for(warmup_estimate, 20, [ins, outs])
 
     expected_diff = kwargs['expected_timeout']
 
@@ -72,12 +69,12 @@ def eval(kernel_path, **kwargs):
 
     num_runs = max(3, min(1000000, math.floor(3.0 / t_diff)))
     timeout_seconds = math.ceil((num_runs + 5) * t_diff)
-    # print(" >> Per run is around", t_diff, num_runs, timeout_seconds)
-    my_timer = Timer(timeout_seconds, timeout_handler, [])
-    my_timer.start()
-    timer_f = func.time_evaluator(func.entry_name, ctx, number=num_runs)
-    t = timer_f(*tensors).mean
-    my_timer.cancel()
 
+    def measure_mean(tensors):
+      timer_f = func.time_evaluator(func.entry_name, ctx, number=num_runs)
+      t = timer_f(*tensors).mean
+      return t
+
+    t = wait_for(measure_mean, timeout_seconds, args=[tensors])
     results = {"TPR": t, "K/0": float(digest)}
     return results
