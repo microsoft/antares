@@ -28,7 +28,7 @@ RUN /bin/echo -e "set nocindent\nset noautoindent\nset ts=4" > /root/.vimrc
 RUN pip3 install --upgrade pip tornado psutil xgboost==0.80 numpy decorator attrs cmake pytest typed_ast && rm -rf ~/.cache
 RUN git clone https://github.com/apache/incubator-tvm $TVM_HOME
 
-RUN cd $TVM_HOME && git checkout b8474c8 && git submodule init && git submodule update && \
+RUN cd $TVM_HOME && git checkout -b v0.7.0 && git submodule init && git submodule update && \
     mkdir -p build && cd build && cp ../cmake/config.cmake . && \
     sed -i 's/LLVM OFF/LLVM ON/g' config.cmake && sed -i 's/CUDA OFF/CUDA ON/g' config.cmake && \
     cmake .. && make -j16
