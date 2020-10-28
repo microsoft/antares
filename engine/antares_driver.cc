@@ -29,6 +29,7 @@
 #define LOGGING_API()  if (verbose) fprintf(stdout, "<<%u/%p>> call %s\n", getpid(), (void*)pthread_self(), __func__);
 #define ERROR()        (printf("error in %s..\n", __func__), _exit(1))
 
+#define cudaDeviceAttr int
 #define CUDA_SUCCESS hipSuccess
 #define CUresult hipError_t
 #define CUDAAPI
@@ -72,32 +73,6 @@ enum __device_builtin__ cudaMemcpyKind
     cudaMemcpyDefault             =   4
 };
 
-enum __device_builtin__ cudaDeviceAttr
-{
-    cudaDevAttrMaxThreadsPerBlock             = 1,  /**< Maximum number of threads per block */
-    cudaDevAttrMaxBlockDimX                   = 2,  /**< Maximum block dimension X */
-    cudaDevAttrMaxBlockDimY                   = 3,  /**< Maximum block dimension Y */
-    cudaDevAttrMaxBlockDimZ                   = 4,  /**< Maximum block dimension Z */
-    cudaDevAttrMaxSharedMemoryPerBlock        = 8,  /**< Maximum shared memory available per block in bytes */
-    cudaDevAttrWarpSize                       = 10, /**< Warp size in threads */
-    cudaDevAttrMaxRegistersPerBlock           = 12,
-    cudaDevAttrClockRate                      = 13, /**< Peak clock frequency in kilohertz */
-    cudaDevAttrMultiProcessorCount            = 16, /**< Number of multiprocessors on device */
-    cudaDevAttrComputeCapabilityMajor         = 75, /**< Major compute capability version number */
-    cudaDevAttrComputeCapabilityMinor         = 76, /**< Minor compute capability version number */
-    cudaDevAttrMax
-};
-
-enum class BackendType {
-  C_ROCM,
-  C_CUDA,
-  C_MCPU,
-  C_GC,
-  C_HLSL,
-  ANY_BUILTIN,
-};
-
-static BackendType backend_type;
 static int verbose = -1, no_device = 0;
 static void *libaccel = NULL;
 static const char *backend = NULL;
@@ -105,10 +80,10 @@ static const char *backend = NULL;
 #define LOAD_DLSYM(fROCm, fCUDA)  \
     static CUresult (*__l)(...); \
     if (!libaccel) { \
-      if (backend_type == BackendType::C_ROCM) { \
+      if (0 == strcmp(backend, "c-rocm")) { \
         libaccel = dlopen("/opt/rocm/lib/libamdhip64.so", RTLD_LOCAL | RTLD_LAZY), assert(libaccel != NULL); \
         printf("  >> HIP runtime Loaded successfully for pid = %u.\n", getpid()); \
-      } else if (backend_type == BackendType::C_CUDA) { \
+      } else if (0 == strcmp(backend, "c-cuda")) { \
         libaccel = dlopen("/usr/lib/x86_64-linux-gnu/libcuda.so.1", RTLD_LOCAL | RTLD_LAZY); \
         if (libaccel == NULL) libaccel = dlopen("/usr/local/cuda/compat/libcuda.so.1", RTLD_LOCAL | RTLD_LAZY), assert(libaccel != NULL); \
         printf("  >> CUDA runtime Loaded successfully for pid = %u.\n", getpid()); \
@@ -116,9 +91,8 @@ static const char *backend = NULL;
         printf("  >> [Error] No valid drivers found for backend: %s.\n", backend), _exit(1); \
       } \
     } \
-    if (!__l) __l = (decltype(__l))dlsym(libaccel, (backend_type == BackendType::C_ROCM) ? #fROCm : #fCUDA);
+    if (!__l) __l = (decltype(__l))dlsym(libaccel, (0 == strcmp(backend, "c-rocm")) ? #fROCm : #fCUDA);
 
-static int attr[cudaDevAttrMax];
 
 class CudartInitializor {
 
@@ -126,154 +100,10 @@ public:
   CudartInitializor() {
     verbose = getenv("V") ? atoi(getenv("V")) : 0;
     backend = getenv("BACKEND");
-    auto config = getenv("HARDWARE_CONFIG");
-    if (config && !*config)
-      unsetenv("HARDWARE_CONFIG");
-
-    if (!strcmp(backend, "c-rocm")) {
-      backend_type = BackendType::C_ROCM;
-      // setenv("HARDWARE_CONFIG", "AMD-MI50", 0);
-    } else if (!strcmp(backend, "c-mcpu")) {
-      backend_type = BackendType::C_MCPU;
-      setenv("HARDWARE_CONFIG", "GENERIC-CPU", 0);
-    } else if (!strcmp(backend, "c-gc")) {
-      backend_type = BackendType::C_GC;
-      setenv("HARDWARE_CONFIG", "GRAPH-CORE", 0);
-    } else if (!strcmp(backend, "c-hlsl")) {
-      backend_type = BackendType::C_HLSL;
-      setenv("HARDWARE_CONFIG", "DX12-HLSL", 0);
-    } else if (!strcmp(backend, "c-cuda")) {
-      backend_type = BackendType::C_CUDA;
-      // setenv("HARDWARE_CONFIG", "NVIDIA-V100", 0);
-    } else {
-      backend_type = BackendType::ANY_BUILTIN;
-      auto config = getenv("HARDWARE_CONFIG");
-      if (config == nullptr || !*config)
-        printf("  >> [Error] HARDWARE_CONFIG is also needed for any unknown backend type: %s\n", backend), _exit(1);
-    }
-    loadAttributeValues();
+    assert(strlen(backend) >= 3);
   }
 
   ~CudartInitializor() {
-  }
-
-  void read_from_config(const char *config) {
-    auto conf = "./hardware/" + std::string(config) + ".cfg";
-    FILE *fp = fopen(conf.c_str(), "r");
-    if (fp == NULL)
-      printf("  >> [Error] HARDWARE_CONFIG file at `%s` is not found.\n", conf.c_str()), _exit(1);
-
-    static char line[1024];
-    while (fgets(line, sizeof(line), fp)) {
-      char *pos = strstr(line, ": ");
-      if (!pos)
-        continue;
-      *pos = 0;
-      int val = -1;
-      if (pos[2] == '$') {
-        if (!strcmp(pos + 2, "$CPU_NPROC\n"))
-          val = sysconf(_SC_NPROCESSORS_ONLN);
-        else
-          assert(0);
-      } else
-        val = atoi(pos + 2);
-
-      if (!strcmp(line, "MaxThreadsPerBlock"))
-        attr[cudaDevAttrMaxThreadsPerBlock] = val;
-      else if (!strcmp(line, "MaxBlockDimX"))
-        attr[cudaDevAttrMaxBlockDimX] = val;
-      else if (!strcmp(line, "MaxBlockDimY"))
-        attr[cudaDevAttrMaxBlockDimY] = val;
-      else if (!strcmp(line, "MaxBlockDimZ"))
-        attr[cudaDevAttrMaxBlockDimZ] = val;
-      else if (!strcmp(line, "MaxSharedMemoryPerBlock"))
-        attr[cudaDevAttrMaxSharedMemoryPerBlock] = val;
-      else if (!strcmp(line, "WarpSize"))
-        attr[cudaDevAttrWarpSize] = val;
-      else if (!strcmp(line, "ClockRate"))
-        attr[cudaDevAttrClockRate] = val;
-      else if (!strcmp(line, "MultiProcessorCount"))
-        attr[cudaDevAttrMultiProcessorCount] = val;
-      else if (!strcmp(line, "ComputeCapabilityMajor"))
-        attr[cudaDevAttrComputeCapabilityMajor] = val;
-      else if (!strcmp(line, "ComputeCapabilityMinor"))
-        attr[cudaDevAttrComputeCapabilityMinor] = val;
-      else if (!strcmp(line, "MaxRegistersPerBlock"))
-        attr[cudaDevAttrMaxRegistersPerBlock] = val;
-      else
-        assert(0);
-    }
-    fclose(fp);
-    printf("  >> Using HARDWARE_CONFIG from file: %s;\n", config);
-  }
-
-  void loadAttributeValues() {
-    int prop_map[][3] = {
-      {cudaDevAttrMaxThreadsPerBlock, hipDeviceAttributeMaxThreadsPerBlock, 1024},
-      {cudaDevAttrWarpSize, hipDeviceAttributeWarpSize, 64},
-      {cudaDevAttrMaxSharedMemoryPerBlock, hipDeviceAttributeMaxSharedMemoryPerBlock, 64 << 10},
-      {cudaDevAttrComputeCapabilityMajor, hipDeviceAttributeComputeCapabilityMajor, 9},
-      {cudaDevAttrComputeCapabilityMinor, hipDeviceAttributeComputeCapabilityMinor, 6},
-      {cudaDevAttrClockRate, hipDeviceAttributeClockRate, 1802000}, // 1080Ti: 1835000; Vega20: 1802000;
-      {cudaDevAttrMultiProcessorCount, hipDeviceAttributeMultiprocessorCount, 60}, // 1080Ti: 20; Vega20: 60;
-      {cudaDevAttrMaxBlockDimX, hipDeviceAttributeMaxBlockDimX, 1024},
-      {cudaDevAttrMaxBlockDimY, hipDeviceAttributeMaxBlockDimY, 1024},
-      {cudaDevAttrMaxBlockDimZ, hipDeviceAttributeMaxBlockDimZ, 64},
-    };
-    memset(attr, -1, sizeof(attr));
-    attr[cudaDevAttrMaxRegistersPerBlock /* hipDeviceAttributeMaxRegistersPerBlock */] = 65536;
-
-    auto config = getenv("HARDWARE_CONFIG");
-    if (config != nullptr && *config) {
-      read_from_config(config);
-      return;
-    } else {
-      auto on_load_fail = [&]() {
-        if (backend_type == BackendType::C_ROCM)
-          read_from_config("AMD-MI50"), no_device = 1;
-        else
-          read_from_config("NVIDIA-V100"), no_device = 1;
-      };
-
-      std::string propertyCache = getenv("ANTARES_DRIVER_PATH") + std::string("/property.cache");
-
-      FILE *fp = fopen(propertyCache.c_str(), "r");
-      if (fp == NULL) {
-        pid_t pid = fork();
-        if (pid == 0) {
-          { LOAD_DLSYM(hipInit, cuInit); if (0 != __l(0)) exit(0); }
-          LOAD_DLSYM(hipDeviceGetAttribute, cuDeviceGetAttribute);
-          fp = fopen(propertyCache.c_str(), "w"), assert(fp != NULL);
-          for (int i = 0; i < sizeof(prop_map) / sizeof(*prop_map); ++i) {
-            int val = -1;
-            if (0 != __l(&val, prop_map[i][backend_type == BackendType::C_ROCM], 0))
-              break;
-            fprintf(fp, "%d\n", val);
-          }
-          fclose(fp);
-          exit(0);
-        }
-        int status;
-        assert(pid == waitpid(pid, &status, 0));
-        fp = fopen(propertyCache.c_str(), "rb");
-        if (fp == NULL)
-          on_load_fail();
-      }
-      if (fp != NULL) {
-        for (int i = 0; i < sizeof(prop_map) / sizeof(*prop_map); ++i) {
-          if (1 != fscanf(fp, "%d", &attr[prop_map[i][0]])) {
-            on_load_fail();
-            break;
-          }
-        }
-        fclose(fp);
-      }
-    }
-
-    if (verbose) {
-      for (int i = 0; i < sizeof(prop_map) / sizeof(*prop_map); ++i)
-        printf("  >> Property loaded for type(%u): %d;\n", prop_map[i][0], attr[prop_map[i][0]]);
-    }
   }
 };
 
@@ -283,16 +113,11 @@ extern "C" {
 
 CUresult CUDAAPI cudaDeviceGetAttribute(int *ri, cudaDeviceAttr prop, int device) {
   LOGGING_API();
-  if (prop >= cudaDevAttrMax || attr[prop] == -1) {
-    printf("  >> Unrecognized property value = %u\n", prop);
-    abort();
-  }
-  *ri = attr[prop];
-  return CUDA_SUCCESS;
+  printf("  >> Unrecognized property value = %u\n", prop);
 }
 
 CUresult CUDAAPI cuDeviceGetName(char *name, int len, int dev) {
-  snprintf(name, len, "Device-%u/Typeid-%u", dev, (unsigned)backend_type);
+  snprintf(name, len, "Device:%u/Type:%s", dev, backend);
   return CUDA_SUCCESS;
 }
 
@@ -327,7 +152,7 @@ cudaError_t CUDARTAPI cudaSetDevice(int device) {
   if (no_device)
     printf("  >> No %s device available.\n", backend), _exit(1);
 
-  if (backend_type == BackendType::C_CUDA) {
+  if (backend[2] == 'c') {
     static bool once = true;
     if (!once)
       return cudaSuccess;
@@ -492,9 +317,6 @@ CUresult CUDAAPI cuLaunchKernel(CUfunction f, unsigned int gridDimX, unsigned in
                                 unsigned int blockDimX, unsigned int blockDimY, unsigned int blockDimZ,
                                 unsigned int sharedMemBytes, CUstream hStream, void **kernelParams, void **extra) {
   LOGGING_API();
-
-  assert(blockDimX * blockDimY * blockDimZ <= attr[cudaDevAttrMaxThreadsPerBlock]);
-
   LOAD_DLSYM(hipModuleLaunchKernel, cuLaunchKernel);
   assert(0 == __l(f, gridDimX, gridDimY, gridDimZ, blockDimX, blockDimY, blockDimZ,
                                     sharedMemBytes, hStream, kernelParams, nullptr));
