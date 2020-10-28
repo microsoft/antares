@@ -4,7 +4,7 @@
 import subprocess, os
 
 def get_execution_parallism():
-    return len(subprocess.getoutput('ls /dev/nvidia[0-9]* 2>/dev/null').split())
+  return len(subprocess.getoutput('ls /dev/nvidia[0-9]* 2>/dev/null').split())
 
 def get_compile_kernel_args(kernel_src, kernel_out, device_props):
   code_arch = device_props.compute_version.replace('.', '')
