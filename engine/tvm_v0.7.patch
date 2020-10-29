@@ -11,6 +11,50 @@ index 9864ba005..5e7f1aef5 100644
          n_parallel = getattr(measure_batch, "n_parallel", 1)
          early_stopping = early_stopping or 1e9
          self.n_trial = n_trial
+diff --git a/src/runtime/cuda/cuda_common.h b/src/runtime/cuda/cuda_common.h
+index 25ff28a91..3a6fe8292 100644
+--- a/src/runtime/cuda/cuda_common.h
++++ b/src/runtime/cuda/cuda_common.h
+@@ -64,4 +64,39 @@ class CUDAThreadEntry {
+ };
+ }  // namespace runtime
+ }  // namespace tvm
++
++#include <fstream>
++#define cudaDeviceGetAttribute antaresDeviceGetAttribute
++#define DEF_ATTR(key_attr)  attr2sattr[cudaDevAttr ## key_attr] = # key_attr
++
++inline cudaError_t cudaDeviceGetAttribute(int *value, cudaDeviceAttr attr, int device) {
++  static std::unordered_map<std::string, int> sattr2val;
++  static std::unordered_map<cudaDeviceAttr, std::string> attr2sattr;
++  if (!attr2sattr.size()) {
++    std::ifstream fin(getenv("ANTARES_DRIVER_PATH") + std::string("/device_properties.cfg"));
++    std::string key, val;
++    while (getline(fin, key, ':') && getline(fin, val))
++      sattr2val[key] = std::atoi(val.c_str());
++    DEF_ATTR(MaxThreadsPerBlock);
++    DEF_ATTR(WarpSize);
++    DEF_ATTR(MaxSharedMemoryPerBlock);
++    DEF_ATTR(ComputeCapabilityMajor);
++    DEF_ATTR(ComputeCapabilityMinor);
++    DEF_ATTR(ClockRate);
++    DEF_ATTR(MultiProcessorCount);
++    DEF_ATTR(MaxBlockDimX);
++    DEF_ATTR(MaxBlockDimY);
++    DEF_ATTR(MaxBlockDimZ);
++    DEF_ATTR(MaxRegistersPerBlock);
++    if (!sattr2val["MaxRegistersPerBlock"])
++      sattr2val["MaxRegistersPerBlock"] = 64 << 10;
++  }
++  auto sattr = attr2sattr.find(attr);
++  assert(sattr != attr2sattr.end());
++  auto pvalue = sattr2val.find(sattr->second);
++  assert(pvalue != sattr2val.end());
++  *value = pvalue->second;
++  return cudaSuccess;
++}
++
+ #endif  // TVM_RUNTIME_CUDA_CUDA_COMMON_H_
 diff --git a/src/target/source/codegen_c.cc b/src/target/source/codegen_c.cc
 index 2f19d6e12..f966da6fd 100644
 --- a/src/target/source/codegen_c.cc
