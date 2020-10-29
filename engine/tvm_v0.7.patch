@@ -1,16 +1,16 @@
 diff --git a/python/tvm/autotvm/tuner/tuner.py b/python/tvm/autotvm/tuner/tuner.py
-index 9864ba005..3819bb923 100644
+index 9864ba005..5e7f1aef5 100644
 --- a/python/tvm/autotvm/tuner/tuner.py
 +++ b/python/tvm/autotvm/tuner/tuner.py
-@@ -128,7 +128,7 @@ class Tuner(object):
-             configs = self.next_batch(min(n_parallel, n_trial - i))
- 
-             inputs = [MeasureInput(self.task.target, self.task, config) for config in configs]
--            results = measure_batch(inputs)
-+            results = self.measure_batch(inputs) if hasattr(self, 'measure_batch') else measure_batch(inputs)
- 
-             # keep best config
-             for k, (inp, res) in enumerate(zip(inputs, results)):
+@@ -108,7 +108,7 @@ class Tuner(object):
+         si_prefix: str
+             One of tvm.autotvm.util.SI_PREFIXES. The SI prefix to use when reporting FLOPS.
+         """
+-        measure_batch = create_measure_batch(self.task, measure_option)
++        measure_batch = self.measure_batch if hasattr(self, 'measure_batch') else create_measure_batch(self.task, measure_option)
+         n_parallel = getattr(measure_batch, "n_parallel", 1)
+         early_stopping = early_stopping or 1e9
+         self.n_trial = n_trial
 diff --git a/src/target/source/codegen_c.cc b/src/target/source/codegen_c.cc
 index 2f19d6e12..f966da6fd 100644
 --- a/src/target/source/codegen_c.cc
