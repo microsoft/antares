@@ -114,6 +114,8 @@ extern "C" {
 CUresult CUDAAPI cudaDeviceGetAttribute(int *ri, cudaDeviceAttr prop, int device) {
   LOGGING_API();
   printf("  >> Unrecognized property value = %u\n", prop);
+  assert(0);
+  return CUDA_SUCCESS;
 }
 
 CUresult CUDAAPI cuDeviceGetName(char *name, int len, int dev) {

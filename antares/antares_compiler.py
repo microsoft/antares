@@ -312,6 +312,7 @@ def main_compute(code_only=False):
       tuner.task.best.curr_step = 0
 
       tuner.measure_batch = measure_batch
+      tuner.measure_batch.n_parallel = batch_size
       callbacks = []
 
       history_log_for_transfer_learning = os.environ.get('RECORD', '')
