@@ -75,26 +75,7 @@ def translate_code(code):
   return '%s\n%s%s' % (get_kernel_metadata(), defs, code)
 
 def device_properties():
-  props = Mock()
-  with open('%s/device_properties.cfg' % os.environ['ANTARES_DRIVER_PATH'], 'r') as fp:
-    for line in fp.read().split('\n'):
-      line = line.strip()
-      if not line:
-        continue
-      key, val = line.split(':')
-      key, val = key.strip(), int(val.strip())
-      assert len(key) > 0 and key[0].isupper()
-      c_key = []
-      for c in key:
-        if c.isupper():
-          c_key.append('_')
-          c_key.append(c.lower())
-        else:
-          c_key.append(c)
-      c_key = ''.join(c_key[1:])
-      setattr(props, c_key, val)
-  setattr(props, 'compute_version', '%d.%d' % (props.compute_capability_major, props.compute_capability_minor))
-  return props
+  return tvm.runtime.ndarray.gpu(0)
 
 def compile_source(code):
   if 'HTTP_SERVICE' in os.environ:
