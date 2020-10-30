@@ -40,12 +40,12 @@ def do_native_translation(code, **kwargs):
       if buf['name'].startswith('_'):
         delta_args.append(buf['name'])
         continue
-      func_args += ' Input<Vector<%s>> %s; // local: %s\n' % (_native_dtype(buf['dtype']), buf['name'], buf['shape'])
+      func_args += ' Input<Vector<%s>> %s; // local size: %s\n' % (_native_dtype(buf['dtype']), buf['name'], buf['shape'])
     for buf in arg_bufs['_out']:
-      func_args += ' Output<Vector<%s>> %s; // local: %s\n' % (_native_dtype(buf['dtype']), buf['name'], buf['shape'])
+      func_args += ' Output<Vector<%s>> %s; // local size: %s\n' % (_native_dtype(buf['dtype']), buf['name'], buf['shape'])
 
     for arg in delta_args:
-      code = code.replace(arg + '[0]', arg)
+      code = code.replace(arg + '[(0)]', arg)
       func_args += '\n int %s; // delta scaler' % arg
 
     function_name, codelet_name = 'compute_task', 'Vuid_%s' % hashlib.sha1(code.encode()).hexdigest()

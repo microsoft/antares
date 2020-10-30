@@ -52,15 +52,20 @@ def translate_code(code):
   assert(len(code.split('extern "C"')) == 2)
   def get_kernel_metadata():
     inp_args, outp_args = [], []
-    current_arg_bufs = AntaresGlobal.current_arg_bufs
 
-    for buf in current_arg_bufs['_in']:
+    global_arg_bufs = os.environ.get('GLOBAL_ARG_PROPS', '')
+    if not global_arg_bufs:
+      global_arg_bufs = AntaresGlobal.current_arg_bufs
+    else:
+      global_arg_bufs = json.loads(global_arg_bufs)
+
+    for buf in global_arg_bufs['_in']:
       if buf['name'].startswith('_'):
         # Just for Auto Shard
         assert(buf['dtype'] == 'int32' and buf['shape'] == [1])
         continue
       inp_args.append('-'.join([str(x) for x in buf['shape']]) + '/' + buf['dtype'] + '/' + buf['name'])
-    for buf in current_arg_bufs['_out']:
+    for buf in global_arg_bufs['_out']:
       outp_args.append('-'.join([str(x) for x in buf['shape']]) + '/' + buf['dtype'] + '/' + buf['name'])
 
     header_meta = '///' + ','.join(inp_args) + ':' + ','.join(outp_args) + '\n// backend = %s\n' % backend
