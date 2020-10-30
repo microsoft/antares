@@ -400,6 +400,19 @@ def build_fused_ast(statements, input_dict):
 
 def emit_tvm_ir(exprss, input_dict):
   ast = build_fused_ast(exprss, input_dict)
+  arg_props = {'_in': [], '_out': []}
+  for k in ast['props']['input_dict']:
+    prop = copy.deepcopy(ast['props']['input_dict'][k])
+    prop['name'] = k
+    arg_props['_in'].append(prop)
+  for k in ast['props']['output_dict']:
+    prop = copy.deepcopy(ast['props']['output_dict'][k])
+    prop['name'] = k
+    arg_props['_out'].append(prop)
+  arg_props['_in'].sort(key=lambda x: x['name'])
+  arg_props['_out'].sort(key=lambda x: x['name'])
+  os.environ['GLOBAL_ARG_PROPS'] = json.dumps(arg_props)
+ 
   from lang.auto_shard import auto_shard_on_ast
   auto_shard_on_ast(ast)
   bias_axis_body = ''
