@@ -97,34 +97,6 @@ def compile_source(code):
   with open(kernel_out, "rb") as fp:
     return bytearray(fp.read())
 
-def run_config_entity(params_given, dir_sid, expected_timecost='inf', tune_slot_id=0):
-  dir_sid = str(dir_sid)
-  result_file = local_get_dir_file('result.txt', dir_sid)
-  try:
-    os.remove(result_file)
-  except:
-    pass
-  config_str = json.dumps(params_given)
-  envs = os.environ.copy()
-  envs['CONFIG'] = config_str
-  envs['DIR_SID'] = dir_sid
-  envs[antares_slot_key] = str(tune_slot_id)
-  expected_timecost = float(expected_timecost)
-  if math.isinf(expected_timecost):
-    expected_timecost = 60.0
-  envs['EXPECTED_TIMEOUT'] = str(expected_timecost)
-  print("  >> [ ] Param_entity on sid = %s: config = '%s', slot_id = %d, expected_timecost = %.6f s" % (dir_sid, config_str, tune_slot_id, expected_timecost))
-  try:
-    assert(True == run_process_with_timeout(["python%d" % sys.version_info.major] + sys.argv, envs=envs))
-    with open(result_file, 'r') as fp:
-      parts = fp.read().split()
-      result = float(parts[0].strip())
-      digest = float(parts[1].strip()) if len(parts) > 1 else float('inf')
-  except:
-    result = digest = float('inf')
-  print("  >> [*] Param_entity on sid = %s: config = '%s', result = `%.6f`, digest = `%g`" % (dir_sid, config_str, result, digest))
-  return result
-
 def compute_gflops(flop, t):
   try:
     return flop / (t * 1e3) / 1e6
@@ -210,7 +182,87 @@ def get_target_source(s, arg_bufs, dir_sid=None):
 
   assert(len(func.imported_modules) == 1)
   device_source = translate_code(func.imported_modules[0].get_source())
-  return device_source
+  kernel_path = local_get_dir_file('my_kernel.cc', dir_sid=dir_sid)
+  return device_source, kernel_path
+
+def evaluate_perf(kernel_path, task_flop, slot_id=0):
+  try:
+    eval_client = importlib.import_module('platforms.%s.evaluator.client' % backend)
+  except ModuleNotFoundError:
+    print('>> Evaluator for backend %s not found, skipping evaluation.' % backend)
+    return None
+  except:
+    traceback.print_exc()
+    return None
+
+  def handle_result(result):
+    print('\n[EvalAgent] Results =', json.dumps(result))
+    if 'RESULT' in os.environ:
+      if abs(float(os.environ['RESULT']) / result['K/0'] - 1.0) > 1e-6:
+        result['TPR'] = None
+
+    t = result.get('TPR', None)
+    if t is None:
+      print("\n[Antares] Incorrect compute kernel from evaluator.")
+    else:
+      gflops = compute_gflops(task_flop, t)
+      print("\n[Antares] Average time cost / run = %g sec, %g gflops." % (t, gflops))
+      with open(local_get_dir_file('result.txt'), 'w') as fp:
+        fp.write(str(t) + '\n')
+        if 'K/0' in result:
+          fp.write(str(result['K/0']) + '\n')
+    if os.environ['OP'] == 'auto.generic' and os.environ.get('COMMIT', ''):
+      kernel_path = codehub_db(os.environ['COMPUTE_V1'], source_code=device_source + '\n// Saved Perf = %g sec / run' % t)
+      print('  >> Update current code to codehub: %s' % kernel_path)
+
+  exec_fd, _ = system_lock([slot_id])
+  try:
+    expected_timeout = ''
+    if 'EXPECTED_TIMEOUT' in os.environ and not math.isinf(float(os.environ['EXPECTED_TIMEOUT'])):
+      expected_timeout = float(os.environ['EXPECTED_TIMEOUT'])
+      expected_timeout = max(expected_timeout * 1.1, expected_timeout + 0.1)
+
+    results = eval_client.eval(kernel_path=local_get_dir_file('my_kernel.cc'),
+                expected_timeout=expected_timeout,
+                slot_id=slot_id,
+              )
+  except:
+    traceback.print_exc()
+    exec_fd()
+    return None
+
+  handle_result(results)
+  exec_fd()
+  return results
+
+def run_config_entity(params_given, dir_sid, expected_timecost='inf', tune_slot_id=0):
+  dir_sid = str(dir_sid)
+  result_file = local_get_dir_file('result.txt', dir_sid)
+  try:
+    os.remove(result_file)
+  except:
+    pass
+  config_str = json.dumps(params_given)
+  envs = os.environ.copy()
+  envs['CONFIG'] = config_str
+  envs['DIR_SID'] = dir_sid
+  envs[antares_slot_key] = str(tune_slot_id)
+  expected_timecost = float(expected_timecost)
+  if math.isinf(expected_timecost):
+    expected_timecost = 60.0
+  envs['EXPECTED_TIMEOUT'] = str(expected_timecost)
+  print("  >> [ ] Param_entity on sid = %s: config = '%s', slot_id = %d, expected_timecost = %.6f s" % (dir_sid, config_str, tune_slot_id, expected_timecost))
+  try:
+    assert(True == run_process_with_timeout(["python%d" % sys.version_info.major] + sys.argv, envs=envs))
+    with open(result_file, 'r') as fp:
+      parts = fp.read().split()
+      result = float(parts[0].strip())
+      digest = float(parts[1].strip()) if len(parts) > 1 else float('inf')
+  except:
+    result = digest = float('inf')
+  print("  >> [*] Param_entity on sid = %s: config = '%s', result = `%.6f`, digest = `%g`" % (dir_sid, config_str, result, digest))
+  return result
+
 
 def main_compute(code_only=False):
   tvm.register_func('tvm_callback_cuda_compile', compile_source, override=True)
@@ -249,13 +301,7 @@ def main_compute(code_only=False):
 
   config = os.environ.get('CONFIG', '').strip()
   if config != '':
-    if config[0] != '[':
-      params_given = json.loads(config)
-      print("====>> [Current Config Option]", config)
-      best_config = json_to_config(params_given)
-    else:
-      best_config = config
-
+    best_config = config
   elif 'NNI_TRIAL_JOB_ID' in os.environ:
     if os.environ['NNI_TRIAL_JOB_ID'] == '@':
       search_space = get_search_space(task.config_space)
@@ -378,10 +424,10 @@ def main_compute(code_only=False):
           runner=autotvm.LocalRunner(repeat=3, min_repeat_ms=100, timeout=4)
       ), callbacks=callbacks)
       assert not math.isinf(tuner.task.best.timecost), "Not valid config found in the whole tuning."
-      best_config = tuner.task.best.config
+      best_config = json.dumps(config_to_json(tuner.task.best.config))
 
       print("\n[Best Config] CONFIG='%s'  ==>  Performance is up to %f Gflops, occurred at step %d / %d; time per run = %g sec." % (
-        json.dumps(config_to_json(best_config)),
+        best_config,
         compute_gflops(tuner.task.flop, tuner.task.best.timecost),
         tuner.task.best.occur,
         num_trials,
@@ -401,9 +447,11 @@ def main_compute(code_only=False):
         print(saved_code)
         print("===========================")
         exit(0)
-    best_config = task.config_space
+    best_config = ''
 
-  if isinstance(best_config, str):
+  assert isinstance(best_config, str)
+  print("====>> [Current Config Option]", best_config)
+  if best_config.startswith('['):
     from tvm import auto_scheduler
     origin_cfg = json.loads(best_config)
     origin_cfg = {
@@ -429,11 +477,12 @@ def main_compute(code_only=False):
       s, arg_bufs = auto_task.compute_dag.apply_steps_from_state(inp.state)
       break
   else:
-    with ApplyConfig(best_config):
+    config = json_to_config(json.loads(best_config)) if best_config else task.config_space
+    with ApplyConfig(config):
       with tvm.target.Target(tvm_target):
         s, arg_bufs = default_tune_op.get_template_op()
 
-  device_source = get_target_source(s, arg_bufs)
+  device_source, kernel_path = get_target_source(s, arg_bufs)
 
   if code_only:
     return device_source
@@ -441,58 +490,10 @@ def main_compute(code_only=False):
   print("====================================")
   print(device_source)
   print("====================================")
-
   print()
-  try:
-    eval_client = importlib.import_module('platforms.%s.evaluator.client' % backend)
-  except ModuleNotFoundError:
-    print('>> Evaluator for backend %s not found, skipping evaluation.' % backend)
-    exit(0)
-  except:
-    traceback.print_exc()
-    exit(1)
 
-  def handle_result(result):
-    print('\n[EvalAgent] Results =', json.dumps(result))
-    if 'RESULT' in os.environ:
-      if abs(float(os.environ['RESULT']) / result['K/0'] - 1.0) > 1e-6:
-        result['TPR'] = None
-
-    t = result.get('TPR', None)
-    if t is None:
-      print("\n[Antares] Incorrect compute kernel from evaluator.")
-    else:
-      gflops = compute_gflops(task.flop, t)
-      print("\n[Antares] Average time cost / run = %g sec, %g gflops." % (t, gflops))
-      with open(local_get_dir_file('result.txt'), 'w') as fp:
-        fp.write(str(t) + '\n')
-        if 'K/0' in result:
-          fp.write(str(result['K/0']) + '\n')
-    if os.environ['OP'] == 'auto.generic' and os.environ.get('COMMIT', ''):
-      kernel_path = codehub_db(os.environ['COMPUTE_V1'], source_code=device_source + '\n// Saved Perf = %g sec / run' % t)
-      print('  >> Update current code to codehub: %s' % kernel_path)
-
-  slot_id = int(os.environ.get(antares_slot_key, '0'))
-
-  exec_fd, _ = system_lock([slot_id])
-  try:
-    expected_timeout = ''
-    if 'EXPECTED_TIMEOUT' in os.environ and not math.isinf(float(os.environ['EXPECTED_TIMEOUT'])):
-      expected_timeout = float(os.environ['EXPECTED_TIMEOUT'])
-      expected_timeout = max(expected_timeout * 1.1, expected_timeout + 0.1)
-
-    results = eval_client.eval(kernel_path=local_get_dir_file('my_kernel.cc'),
-                expected_timeout=expected_timeout,
-                slot_id=slot_id,
-              )
-  except:
-    traceback.print_exc()
-    exec_fd()
-    exit(1)
-
-  handle_result(results)
-  exec_fd()
-  exit(0)
+  result = evaluate_perf(kernel_path, task.flop)
+  exit(0 if result is not None else 1)
 
 
 if __name__ == '__main__':
