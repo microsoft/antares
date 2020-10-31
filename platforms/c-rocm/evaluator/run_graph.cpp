@@ -212,11 +212,12 @@ int main(int argc, char** argv)
         throw std::runtime_error(("Time limit exceeded: " + std::to_string(tpr) + " v.s. (expected) " + expected_timeout).c_str());
     }
 
-    tpr = 0.0f;
+    int num_runs = std::max(3, std::min(10000, int(3.0 / tpr)));
     bool flush_global_memory = (getenv("FLUSH_MEM") != nullptr);
 
+    tpr = 0.0f;
     if (flush_global_memory) {
-      const int num_runs = 10;
+      num_runs = 10;
       for (int i = 0; i < num_runs; ++i) {
         for (int j = 0; j < inputs.size(); ++j)
            assert(0 == cuMemcpyHtoDAsync((CUdeviceptr)d_args[j], h_args[j], inputs[j].element_size() * inputs[j].type_size(), nullptr));
@@ -229,7 +230,6 @@ int main(int argc, char** argv)
       }
       tpr /= num_runs;
     } else {
-      const int num_runs = std::max(3, std::min(1000000, int(3.0 / tpr)));
       assert(0 == cudaEventRecord(hStart, nullptr));
       for (int i = 0; i < num_runs; ++i)
         launch_kernel();
