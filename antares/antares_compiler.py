@@ -24,7 +24,8 @@ from templates.auto.generic import custom_dtypes
 
 signal.signal(signal.SIGINT, lambda signum, frame: sys.exit(1))
 
-unified_slot_key = 'CUDA_VISIBLE_DEVICES'
+antares_slot_key = 'ANTARES_SLOT_KEY'
+tvm_target = 'cuda'
 
 try:
   platform_config = importlib.import_module('platforms.%s.config' % backend)
@@ -107,7 +108,7 @@ def run_config_entity(params_given, dir_sid, expected_timecost='inf', tune_slot_
   envs = os.environ.copy()
   envs['CONFIG'] = config_str
   envs['DIR_SID'] = dir_sid
-  envs[unified_slot_key] = str(tune_slot_id)
+  envs[antares_slot_key] = str(tune_slot_id)
   expected_timecost = float(expected_timecost)
   if math.isinf(expected_timecost):
     expected_timecost = 60.0
@@ -148,8 +149,70 @@ def codehub_db(compute_key, source_code=None):
       fp.write(source_code)
     return code_path
 
+def get_target_source(s, arg_bufs, dir_sid=None):
+  if s is not None:
+      lower_source = str(tvm.lower(s, arg_bufs, simple_mode=True))
+
+      lower_file = local_get_dir_file('my_kernel.lower', dir_sid=dir_sid)
+      with open(lower_file, 'w') as fp:
+        fp.write(lower_source)
+
+      # Verify Lower Code Code
+      if len(('\n' + lower_source).split('\nprimfn(')) != 2:
+        raise Exception('[Not Support Multi Unfuse-able kernels]\n\n' + lower_source)
+
+      max_threads_per_block = device_properties().max_threads_per_block
+      max_shared_memory_per_block = device_properties().max_shared_memory_per_block
+      assert max_threads_per_block > 0 and max_shared_memory_per_block >= 0, '[Error] Invalid device properties, maybe device is not detected correctly.'
+
+      lower_lines = lower_source.split('\n')
+      thread_extents, allocate_shared = [], []
+      for ll in lower_lines:
+        if ll.strip().startswith('attr [IterVar(') and ll.find(' "thread_extent" = ') >= 0:
+          thread_name = ll.split('attr [IterVar(')[-1].split(':')[0]
+          thread_val = int(ll.split(' "thread_extent" = ')[-1].split(';')[0].strip().split(' ')[0])
+          thread_extents.append((thread_name, thread_val))
+        elif ll.strip().startswith('allocate(') and ll.find('.shared, ') >= 0 and ll.endswith(");"):
+          parts = ll[:-2].split(', ')[1:]
+          allocate_type = parts[0]
+          allocate_val = int(np.product(eval(parts[1])))
+          allocate_shared.append((allocate_type, allocate_val))
+
+      reserved_axes = dict()
+      for thread_name, thread_val in thread_extents:
+        if thread_name in reserved_axes:
+          assert reserved_axes[thread_name] == thread_val, "Invalid code: Multiple hints for thread extent conflict with each other: %d v.s. %d" % (reserved_axes[thread_name], thread_val)
+        else:
+          reserved_axes[thread_name] = thread_val
+
+      num_threads = 1
+      for thread_name in ['threadIdx.x', 'threadIdx.y', 'threadIdx.z']:
+        num_threads *= reserved_axes.get(thread_name, 1)
+      assert num_threads <= max_threads_per_block, "Invalid kernel code: using num_threads(%d) > max_threads_per_block(%d)" % (num_threads, max_threads_per_block)
+
+      shared_memory_in_bytes = 0
+      for allocate_type, allocate_size in allocate_shared:
+        if allocate_type.startswith('custom['):
+          type_name = allocate_type[7:].split(']')[0]
+          shared_memory_inc = int(custom_dtypes[type_name][-1].split('@')[-1])
+        else:
+          shared_memory_inc = 8 * np.dtype(allocate_type).itemsize
+        assert shared_memory_inc % 8 == 0, "The bits of shared_memory is not aligned with 8-bit bytes."
+        shared_memory_in_bytes += shared_memory_inc // 8 * allocate_size
+
+      if shared_memory_in_bytes > max_shared_memory_per_block:
+        raise Exception("Invalid kernel code: using shared_memory_in_bytes %d > max_shared_memory_per_block %d" % (shared_memory_in_bytes, max_shared_memory_per_block))
+
+      # Compile Source Code
+      def build_template():
+        return tvm.build(s, arg_bufs, tvm_target, name='template_op')
+      func = wait_for(build_template, 30)
+
+  assert(len(func.imported_modules) == 1)
+  device_source = translate_code(func.imported_modules[0].get_source())
+  return device_source
+
 def main_compute(code_only=False):
-  tvm_target = 'cuda'
   tvm.register_func('tvm_callback_cuda_compile', compile_source, override=True)
   logging.getLogger('autotvm').setLevel(logging.DEBUG)
   logging.getLogger('autotvm').addHandler(logging.StreamHandler(sys.stdout))
@@ -370,66 +433,7 @@ def main_compute(code_only=False):
       with tvm.target.Target(tvm_target):
         s, arg_bufs = default_tune_op.get_template_op()
 
-  if s is not None:
-      lower_source = str(tvm.lower(s, arg_bufs, simple_mode=True))
-
-      lower_file = local_get_dir_file('my_kernel.lower')
-      with open(lower_file, 'w') as fp:
-        fp.write(lower_source)
-
-      # Verify Lower Code Code
-      if len(('\n' + lower_source).split('\nprimfn(')) != 2:
-        raise Exception('[Not Support Multi Unfuse-able kernels]\n\n' + lower_source)
-
-      max_threads_per_block = device_properties().max_threads_per_block
-      max_shared_memory_per_block = device_properties().max_shared_memory_per_block
-      assert max_threads_per_block > 0 and max_shared_memory_per_block >= 0, '[Error] Invalid device properties, maybe device is not detected correctly.'
-
-      lower_lines = lower_source.split('\n')
-      thread_extents, allocate_shared = [], []
-      for ll in lower_lines:
-        if ll.strip().startswith('attr [IterVar(') and ll.find(' "thread_extent" = ') >= 0:
-          thread_name = ll.split('attr [IterVar(')[-1].split(':')[0]
-          thread_val = int(ll.split(' "thread_extent" = ')[-1].split(';')[0].strip().split(' ')[0])
-          thread_extents.append((thread_name, thread_val))
-        elif ll.strip().startswith('allocate(') and ll.find('.shared, ') >= 0 and ll.endswith(");"):
-          parts = ll[:-2].split(', ')[1:]
-          allocate_type = parts[0]
-          allocate_val = int(np.product(eval(parts[1])))
-          allocate_shared.append((allocate_type, allocate_val))
-
-      reserved_axes = dict()
-      for thread_name, thread_val in thread_extents:
-        if thread_name in reserved_axes:
-          assert reserved_axes[thread_name] == thread_val, "Invalid code: Multiple hints for thread extent conflict with each other: %d v.s. %d" % (reserved_axes[thread_name], thread_val)
-        else:
-          reserved_axes[thread_name] = thread_val
-
-      num_threads = 1
-      for thread_name in ['threadIdx.x', 'threadIdx.y', 'threadIdx.z']:
-        num_threads *= reserved_axes.get(thread_name, 1)
-      assert num_threads <= max_threads_per_block, "Invalid kernel code: using num_threads(%d) > max_threads_per_block(%d)" % (num_threads, max_threads_per_block)
-
-      shared_memory_in_bytes = 0
-      for allocate_type, allocate_size in allocate_shared:
-        if allocate_type.startswith('custom['):
-          type_name = allocate_type[7:].split(']')[0]
-          shared_memory_inc = int(custom_dtypes[type_name][-1].split('@')[-1])
-        else:
-          shared_memory_inc = 8 * np.dtype(allocate_type).itemsize
-        assert shared_memory_inc % 8 == 0, "The bits of shared_memory is not aligned with 8-bit bytes."
-        shared_memory_in_bytes += shared_memory_inc // 8 * allocate_size
-
-      if shared_memory_in_bytes > max_shared_memory_per_block:
-        raise Exception("Invalid kernel code: using shared_memory_in_bytes %d > max_shared_memory_per_block %d" % (shared_memory_in_bytes, max_shared_memory_per_block))
-
-      # Compile Source Code
-      def build_template():
-        return tvm.build(s, arg_bufs, tvm_target, name='template_op')
-      func = wait_for(build_template, 30)
-
-  assert(len(func.imported_modules) == 1)
-  device_source = translate_code(func.imported_modules[0].get_source())
+  device_source = get_target_source(s, arg_bufs)
 
   if code_only:
     return device_source
@@ -468,21 +472,22 @@ def main_compute(code_only=False):
       kernel_path = codehub_db(os.environ['COMPUTE_V1'], source_code=device_source + '\n// Saved Perf = %g sec / run' % t)
       print('  >> Update current code to codehub: %s' % kernel_path)
 
-  tune_slot_id = int(os.environ.get(unified_slot_key, '0'))
+  slot_id = int(os.environ.get(antares_slot_key, '0'))
 
-  exec_fd, _ = system_lock([tune_slot_id])
+  exec_fd, _ = system_lock([slot_id])
   try:
-    expected_timeout = None
+    expected_timeout = ''
     if 'EXPECTED_TIMEOUT' in os.environ and not math.isinf(float(os.environ['EXPECTED_TIMEOUT'])):
       expected_timeout = float(os.environ['EXPECTED_TIMEOUT'])
       expected_timeout = max(expected_timeout * 1.1, expected_timeout + 0.1)
 
     results = eval_client.eval(kernel_path=local_get_dir_file('my_kernel.cc'),
                 expected_timeout=expected_timeout,
-                func=func,
+                slot_id=slot_id,
               )
   except:
     traceback.print_exc()
+    exec_fd()
     exit(1)
 
   handle_result(results)
