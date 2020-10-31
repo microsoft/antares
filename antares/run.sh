@@ -43,7 +43,6 @@ if ! diff engine/antares_driver.cc ${ANTARES_DRIVER_PATH}/.antares_driver.cc >/d
   mv ${ANTARES_DRIVER_PATH}/antares_driver.cc ${ANTARES_DRIVER_PATH}/.antares_driver.cc
 fi
 
-export LD_LIBRARY_PATH=${ANTARES_DRIVER_PATH}:${LD_LIBRARY_PATH}
 export HIP_PLATFORM=hcc
 export HSA_USERPTR_FOR_PAGED_MEM=0
 
