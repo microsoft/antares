@@ -85,7 +85,7 @@ class OpTensor:
         return OpTensor('op', {"name": "-", "inputs": [other, self]}, self._dtype, self._flopbase + other._flopbase + self.filter_flop(other))
 
     def __neg__(self):
-        return OpTensor('op', {"name": "-", "inputs": [self]}, self._dtype, self._flopbase + self.filter_flop(self))
+        return OpTensor('op', {"name": "-", "inputs": [OpTensor.parse(0), self]}, self._dtype, self._flopbase + self.filter_flop(self))
 
     # Relation Ops
     def __lt__ (self, other):
@@ -205,7 +205,7 @@ def parse_to_ast(expr, input_dict={}):
   for x in explicit_range:
     each_range = explicit_range[x]._value["range"]
     if each_range is None:
-      raise Exception("The range of axis `%s` is undeterminzed, please use `where` clause to set explicitly." % x)
+      raise Exception("The range of axis `%s` is undeterminzed, please use `where` clause to set the range explicitly." % x)
 
   # Collect output inferences & compute flopbase
   props['flopbase'] = max(1, _root._flopbase if props['reduce_type'] is None else _root._flopbase + 1)
@@ -288,6 +288,8 @@ def walk_in_ast(node, func, args, parent, attr_id):
   def _walk(node, parent, attr_id):
     updated_node = func(node, *args)
     if updated_node is not None:
+      if updated_node == '':
+        return
       updated_node = copy.deepcopy(updated_node)
       if isinstance(parent, OpTensor):
         setattr(parent, attr_id, updated_node)
