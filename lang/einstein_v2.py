@@ -243,27 +243,21 @@ def emit_tvm_body(node, props):
     tensor = node._value['tensor']
     index = node._value['index']
     _str = tensor._value['name'] + '['
-    if 'slices' in props:
-      if tensor._value['name'] in [x for x in props['slices'][0][-1]]:
-        for i, it in enumerate(index):
-          _str += emit_tvm_body(it, props) + ', '
-        _str = _str[:-2] + ' - _%s]' % tensor._value['name']
-      else:
-        for i, it in enumerate(index):
-          if it._op != 'axis':
-            raise Exception("Unexpected injective axis type from %s: %s" % (tensor._value['name'], it._op))
-          _str += warp_axis(it._value['name']) + ', '
-        _str = _str[:-2] + ']'
+    if 'shard' in props:
+      book = props['shard']['book'][tensor._value['name']]
+      for i, it in enumerate(index):
+        if book[i][0] < 0:
+          raise Exception("Unhandled book case:", book[i])
+        _offset = '' if book[i][2] == 0 else ' - %d' % book[i][2]
+        _str += emit_tvm_body(it, props) + '%s, ' % _offset
+      _str = _str[:-2] + ']'
     else:
       for i, it in enumerate(index):
         _str += emit_tvm_body(it, props) + ', '
       _str = _str[:-2] + ']'
     return _str
   elif node._op == 'axis':
-    if 'slices' in props and node._value['name'] in [x for x in props['slices'][0][0]]:
-      return '(' + warp_axis(node._value['name']) + ' + _' + warp_axis(node._value['name'])+ ')'
-    else:
-      return warp_axis(node._value['name'])
+    return warp_axis(node._value['name'])
   elif node._op == 'op':
     op_name = node._value["name"]
     op_input_size = len(node._value["inputs"])
@@ -418,20 +412,6 @@ def emit_tvm_ir(exprss, input_dict):
   from lang.auto_shard import auto_shard_on_ast
   auto_shard_on_ast(ast)
   bias_axis_body = ''
-  if 'slices' in ast['props']:
-    axis_dict, tensor_dict = ast['props']['slices'][0]
-    for k in axis_dict:
-      bias_axis_body += '_%s = input("_%s", [1], dtype="int32")[0]; ' % (k , k)
-    for k in tensor_dict:
-      bias_axis_body += '_%s = input("_%s", [1], dtype="int32")[0]; ' % (k , k)
-
-    slices_info = {
-      'data_axes': ast['props']['data_axes'],
-      'slices': ast['props']['slices'],
-    }
-    from antares.common import local_get_dir_file
-    with open(local_get_dir_file('slices.json'), 'w') as fp:
-      json.dump(slices_info, fp)
 
   def emit_input_body(input_dict):
     input_body = ''
