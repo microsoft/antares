@@ -11,6 +11,20 @@ index 9864ba005..5e7f1aef5 100644
          n_parallel = getattr(measure_batch, "n_parallel", 1)
          early_stopping = early_stopping or 1e9
          self.n_trial = n_trial
+diff --git a/src/auto_scheduler/search_policy/utils.h b/src/auto_scheduler/search_policy/utils.h
+index 75bf0d048..993920e69 100644
+--- a/src/auto_scheduler/search_policy/utils.h
++++ b/src/auto_scheduler/search_policy/utils.h
+@@ -523,7 +523,8 @@ inline Iterator GetLastReduceIteratorInOutermostReduceTile(const Stage& stage) {
+         }
+       }
+     }
+-  } else {
++  }
++  if (reduce_axis_size) {
+     // Return the first reduce iterator
+     for (const auto& iter : stage->iters) {
+       if (iter->iter_kind == IteratorKind::kReduction) {
 diff --git a/src/runtime/cuda/cuda_common.h b/src/runtime/cuda/cuda_common.h
 index 25ff28a91..3a6fe8292 100644
 --- a/src/runtime/cuda/cuda_common.h
