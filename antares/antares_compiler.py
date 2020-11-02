@@ -21,11 +21,12 @@ from tvm.autotvm.task import ConfigEntity
 from antares.common import *
 from templates.auto.generic import custom_dtypes
 
-
 signal.signal(signal.SIGINT, lambda signum, frame: sys.exit(1))
 
-antares_slot_key = 'ANTARES_SLOT_KEY'
 tvm_target = 'cuda'
+eval_program_timeout = 30
+krnl_compile_timeout = 20
+verbose = int(os.environ.get('VERBOSE', '1'))
 
 try:
   platform_config = importlib.import_module('platforms.%s.config' % backend)
@@ -92,8 +93,9 @@ def compile_source(code):
     fp.write(translate_code(code))
   args = platform_config.get_compile_kernel_args(kernel_src, kernel_out, device_properties())
 
-  print('[Build (pid=%d)]' % os.getpid(), ' '.join(args))
-  assert run_process_with_timeout(args, 20), "Compilation failed for: Bad kernel code, or Time limit exceeded?\nFailure command: %s\n" % ' '.join(args)
+  if verbose:
+    print('[Build (pid=%d)]' % os.getpid(), ' '.join(args))
+  assert run_process_with_timeout(args, krnl_compile_timeout), "Compilation failed for: Bad kernel code, or Time limit exceeded?\nFailure command: %s\n" % ' '.join(args)
   with open(kernel_out, "rb") as fp:
     return bytearray(fp.read())
 
@@ -178,14 +180,14 @@ def get_target_source(s, arg_bufs, dir_sid=None):
       # Compile Source Code
       def build_template():
         return tvm.build(s, arg_bufs, tvm_target, name='template_op')
-      func = wait_for(build_template, 30)
+      func = build_template()
 
   assert(len(func.imported_modules) == 1)
   device_source = translate_code(func.imported_modules[0].get_source())
   kernel_path = local_get_dir_file('my_kernel.cc', dir_sid=dir_sid)
   return device_source, kernel_path
 
-def evaluate_perf(kernel_path, task_flop, slot_id=0):
+def evaluate_perf(kernel_path, task_flop, dev_id):
   try:
     eval_client = importlib.import_module('platforms.%s.evaluator.client' % backend)
   except ModuleNotFoundError:
@@ -196,7 +198,8 @@ def evaluate_perf(kernel_path, task_flop, slot_id=0):
     return None
 
   def handle_result(result):
-    print('\n[EvalAgent] Results =', json.dumps(result))
+    if verbose:
+      print('\n[EvalAgent] Results =', json.dumps(result))
     if 'RESULT' in os.environ:
       if abs(float(os.environ['RESULT']) / result['K/0'] - 1.0) > 1e-6:
         result['TPR'] = None
@@ -206,7 +209,8 @@ def evaluate_perf(kernel_path, task_flop, slot_id=0):
       print("\n[Antares] Incorrect compute kernel from evaluator.")
     else:
       gflops = compute_gflops(task_flop, t)
-      print("\n[Antares] Average time cost / run = %g sec, %g gflops." % (t, gflops))
+      if verbose:
+        print("\n[Antares] Average time cost / run = %g sec, %g gflops." % (t, gflops))
       with open(local_get_dir_file('result.txt'), 'w') as fp:
         fp.write(str(t) + '\n')
         if 'K/0' in result:
@@ -215,27 +219,32 @@ def evaluate_perf(kernel_path, task_flop, slot_id=0):
       kernel_path = codehub_db(os.environ['COMPUTE_V1'], source_code=device_source + '\n// Saved Perf = %g sec / run' % t)
       print('  >> Update current code to codehub: %s' % kernel_path)
 
-  exec_fd, _ = system_lock([slot_id])
-  try:
-    expected_timeout = ''
-    if 'EXPECTED_TIMEOUT' in os.environ and not math.isinf(float(os.environ['EXPECTED_TIMEOUT'])):
-      expected_timeout = float(os.environ['EXPECTED_TIMEOUT'])
-      expected_timeout = max(expected_timeout * 1.1, expected_timeout + 0.1)
+  def do_evaluate():
+    try:
+      expected_timeout = os.environ.get('EXPECTED_TIMEOUT', '')
+      if expected_timeout in ('', 'inf'):
+        expected_timeout = ''
+      else:
+        expected_timeout = float(expected_timeout)
+        expected_timeout = max(expected_timeout * 1.1, expected_timeout + 0.1)
 
-    results = eval_client.eval(kernel_path=local_get_dir_file('my_kernel.cc'),
-                expected_timeout=expected_timeout,
-                slot_id=slot_id,
-              )
-  except:
-    traceback.print_exc()
-    exec_fd()
-    return None
+      results = eval_client.eval(kernel_path=local_get_dir_file('my_kernel.cc'),
+                  expected_timeout=expected_timeout,
+                  dev_id=dev_id,
+                )
+      return results
+    except:
+      traceback.print_exc()
+      return None
 
-  handle_result(results)
+  exec_fd, _ = system_lock([dev_id])
+  results = wait_for(do_evaluate, eval_program_timeout if int(os.environ.get('STEP', '0')) > 0 else None)
+  if results is not None:
+    handle_result(results)
   exec_fd()
   return results
 
-def run_config_entity(params_given, dir_sid, expected_timecost='inf', tune_slot_id=0):
+def run_config_entity(params_given, dir_sid, expected_timecost='inf', tune_dev_id=0):
   dir_sid = str(dir_sid)
   result_file = local_get_dir_file('result.txt', dir_sid)
   try:
@@ -243,17 +252,21 @@ def run_config_entity(params_given, dir_sid, expected_timecost='inf', tune_slot_
   except:
     pass
   config_str = json.dumps(params_given)
-  envs = os.environ.copy()
+  envs = {}
   envs['CONFIG'] = config_str
   envs['DIR_SID'] = dir_sid
-  envs[antares_slot_key] = str(tune_slot_id)
+  envs['DEV_KEY'] = str(tune_dev_id)
   expected_timecost = float(expected_timecost)
   if math.isinf(expected_timecost):
-    expected_timecost = 60.0
-  envs['EXPECTED_TIMEOUT'] = str(expected_timecost)
-  print("  >> [ ] Param_entity on sid = %s: config = '%s', slot_id = %d, expected_timecost = %.6f s" % (dir_sid, config_str, tune_slot_id, expected_timecost))
+    envs['EXPECTED_TIMEOUT'] = ''
+  else:
+    envs['EXPECTED_TIMEOUT'] = str(expected_timecost)
+  env_str = ' '.join(["%s='%s'" % (x, envs[x]) for x in envs])
+  print("  >> [ ] Param_entity on sid = %s: config = '%s', dev_id = %d, expect_kernel_cost = %.6e s" % (dir_sid, config_str, tune_dev_id, expected_timecost))
+  log_path = local_get_dir_file('evaluator.log', dir_sid)
+  exe_cmd = "%s python%d %s > %s.stdout 2> %s.stderr" % (env_str, sys.version_info.major, ' '.join(sys.argv), log_path, log_path)
   try:
-    assert(True == run_process_with_timeout(["python%d" % sys.version_info.major] + sys.argv, envs=envs))
+    assert 0 == os.system(exe_cmd)
     with open(result_file, 'r') as fp:
       parts = fp.read().split()
       result = float(parts[0].strip())
@@ -270,7 +283,8 @@ def main_compute(code_only=False):
   logging.getLogger('autotvm').addHandler(logging.StreamHandler(sys.stdout))
 
   default_tune_op = importlib.import_module('templates.' + (os.environ['OP'] if 'OP' in os.environ else 'auto.generic'))
-  print('  >> Backend = %s, Python PID = %s, Task = %s;' % (backend, os.getpid(), default_tune_op.__name__))
+  if verbose:
+    print('  >> Backend = %s, Python PID = %s, Task = %s;' % (backend, os.getpid(), default_tune_op.__name__))
 
   task = autotvm.task.create("template_op", args=(), target=tvm_target)
 
@@ -353,7 +367,7 @@ def main_compute(code_only=False):
     tuner_type = os.environ.get('TUNER', '')
     if not tuner_type:
       comp = os.environ['COMPUTE_V1']
-      if '=!' in comp and 'plan/' not in comp[comp.find(' ##') + 1:] and backend in ['c-rocm', 'c-cuda', 'c-hlsl', 'c-ocl']:
+      if '=!' in comp and 'plan/' not in comp[comp.find(' ##') + 1:] and ';' not in comp and backend in ['c-rocm', 'c-cuda', 'c-hlsl', 'c-ocl']:
         tuner_type = 'AutoTVM2'
       else:
         tuner_type = 'XGBoost'
@@ -363,7 +377,7 @@ def main_compute(code_only=False):
     if auto_commit:
       saved_code = codehub_db(os.environ['COMPUTE_V1'])
       if saved_code is not None and auto_commit != 'force':
-        raise Exception("Saved code has existed in codehub. Please try COMMIT=force to overide it.")
+        raise Exception("Saved code has existed in codehub. Please try COMMIT=force to override it.")
       os.environ.pop('COMMIT')
 
     try:
@@ -373,13 +387,15 @@ def main_compute(code_only=False):
       raise Exception('>> Cannot import Antares Tuner: %s' % tuner_type)
 
     if tuner is not None:
+      AntaresGlobal.current_step = 0
 
       def measure_batch(inputs):
         results, futures = [], []
         best_slot = -1
         expected_timecost = tuner.task.best.timecost
         for i in range(len(inputs)):
-          futures.append(thread_pool.submit(run_config_entity, config_to_json(inputs[i].config), i, expected_timecost, i % dev_num))
+          futures.append(thread_pool.submit(run_config_entity, config_to_json(inputs[i].config), AntaresGlobal.current_step, expected_timecost, i % dev_num))
+          AntaresGlobal.current_step += 1
         for i in range(len(inputs)):
           t = futures[i].result()
           if t < tuner.task.best.timecost:
@@ -456,7 +472,8 @@ def main_compute(code_only=False):
     best_config = ''
 
   assert isinstance(best_config, str)
-  print("====>> [Current Config Option]", best_config)
+  if verbose:
+    print("====>> [Current Config Option]", best_config)
   if best_config.startswith('['):
     from tvm import auto_scheduler
     origin_cfg = json.loads(best_config)
@@ -493,12 +510,13 @@ def main_compute(code_only=False):
   if code_only:
     return device_source
 
-  print("====================================")
-  print(device_source)
-  print("====================================")
-  print()
+  if verbose:
+    print("====================================")
+    print(device_source)
+    print("====================================\n")
 
-  result = evaluate_perf(kernel_path, task.flop)
+  dev_id = int(os.environ.get('DEV_KEY', '0'))
+  result = evaluate_perf(kernel_path, task.flop, dev_id)
   exit(0 if result is not None else 1)
 
 
