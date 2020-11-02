@@ -350,7 +350,13 @@ def main_compute(code_only=False):
     task.antares_helper.config_to_json = config_to_json
     task.antares_helper.to_json_search_space = get_search_space
 
-    tuner_type = os.environ.get('TUNER', 'XGBoost')
+    tuner_type = os.environ.get('TUNER', '')
+    if not tuner_type:
+      comp = os.environ['COMPUTE_V1']
+      if '=!' in comp and 'plan/' not in comp[comp.find(' ##') + 1:] and backend in ['c-rocm', 'c-cuda', 'c-hlsl', 'c-ocl']:
+        tuner_type = 'AutoTVM2'
+      else:
+        tuner_type = 'XGBoost'
     print('  >> MAKE_PARA = %d/%d, EXEC_PARA = %d, TUNER = %s' % (worker_size, batch_size, dev_num, tuner_type))
 
     auto_commit = os.environ.get('COMMIT', '')
