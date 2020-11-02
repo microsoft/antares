@@ -6,10 +6,10 @@ import numpy as np
 import tvm
 import subprocess
 
-from antares.common import AntaresGlobal, wait_for, backend
+from antares.common import backend
 
 def eval(kernel_path, **kwargs):
-    slot_id = kwargs['slot_id']
+    dev_id = kwargs['dev_id']
     curr_dir = os.getcwd()
     os.chdir(os.path.dirname(kernel_path))
     assert 0 == os.system('ln -sf %s/run_graph.cpp .' % os.path.dirname(__file__))
@@ -25,7 +25,7 @@ def eval(kernel_path, **kwargs):
       os.system('mv %s.tmp %s' % (evaluator_path, evaluator_path))
       assert os.path.exists(evaluator_path)
 
-    exec_cmd = "sh -c 'cd %s && CUDA_VISIBLE_DEVICES=%d EXPECTED_TIMEOUT=%s %s'" % (os.path.dirname(kernel_path), slot_id, kwargs['expected_timeout'], evaluator_path)
+    exec_cmd = "sh -c 'cd %s && CUDA_VISIBLE_DEVICES=%d EXPECTED_TIMEOUT=%s %s'" % (os.path.dirname(kernel_path), dev_id, kwargs['expected_timeout'], evaluator_path)
     st, output = subprocess.getstatusoutput(exec_cmd)
     os.chdir(curr_dir)
     if st != 0:

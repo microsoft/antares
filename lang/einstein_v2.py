@@ -282,7 +282,7 @@ def walk_in_ast(node, func, args, parent, attr_id):
   def _walk(node, parent, attr_id):
     updated_node = func(node, *args)
     if updated_node is not None:
-      if updated_node == '':
+      if isinstance(updated_node, str) and updated_node == '':
         return
       updated_node = copy.deepcopy(updated_node)
       if isinstance(parent, OpTensor):
