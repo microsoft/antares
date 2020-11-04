@@ -79,7 +79,6 @@ def scan_items(root, ast, range_book):
   tensor_name = root._value['tensor']._value['name']
   current_range = []
   for i, sub in enumerate(root._value['index']):
-    tensor_index = i
     index_range = infer_range(sub, ax_rank)
     if index_range == '*':
       index_range = [0, None, 0, ast['props']['data_axes'][i]['range'] - 1]
@@ -94,7 +93,7 @@ def scan_items(root, ast, range_book):
         current_range[i] = [0, None, 0, ast['props']['data_axes'][i]['range'] - 1]
   range_book[tensor_name] = current_range
 
-def auto_shard_on_ast(ast):
+def compute(ast):
   if backend not in ['c-gc']:
     return
 

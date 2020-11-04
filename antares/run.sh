@@ -9,6 +9,16 @@ fi
 
 # Valid Backends: c-cuda, c-rocm, c-mcpu, c-hlsl, c-gc
 
+if [[ "$BACKEND" == "" ]]; then
+  if [ -e /dev/nvidia-modeset ]; then
+    BACKEND=c-cuda
+  elif [ -e /dev/kfd ]; then
+    BACKEND=c-rocm
+  elif grep Microsoft /proc/sys/kernel/osrelease >/dev/null; then
+    BACKEND=c-hlsl
+  fi
+fi
+
 export BACKEND=${BACKEND:-c-rocm}
 export ANTARES_DRIVER_PATH=/tmp/libAntares
 

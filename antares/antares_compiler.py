@@ -82,7 +82,18 @@ def translate_code(code):
   return '%s\n%s%s' % (get_kernel_metadata(), defs, code)
 
 def device_properties():
-  return tvm.runtime.ndarray.gpu(0)
+  props = tvm.runtime.ndarray.gpu(0)
+  with open('%s/device_properties.cfg' % os.environ['ANTARES_DRIVER_PATH'], 'r') as fp:
+    mem_bandwith = 2.5e-7
+    while True:
+      line = fp.readline()
+      if not line:
+        break
+      key, val = line.split(': ')
+      if key in ('GlobalMemoryBusWidth', 'MemoryClockRate'):
+        mem_bandwith *= float(val)
+      props.mem_bandwith = mem_bandwith
+  return props
 
 def compile_source(code):
   if 'HTTP_SERVICE' in os.environ:
