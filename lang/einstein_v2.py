@@ -408,9 +408,19 @@ def emit_tvm_ir(exprss, input_dict):
   arg_props['_in'].sort(key=lambda x: x['name'])
   arg_props['_out'].sort(key=lambda x: x['name'])
   os.environ['GLOBAL_ARG_PROPS'] = json.dumps(arg_props)
- 
-  from lang.auto_shard import auto_shard_on_ast
-  auto_shard_on_ast(ast)
+
+  try: 
+    from lang import auto_shard
+    auto_shard.compute(ast)
+  except:
+    pass
+
+  try:
+    from lang import simplify
+    simplify.compute(ast)
+  except:
+    pass
+
   bias_axis_body = ''
 
   def emit_input_body(input_dict):
