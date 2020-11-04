@@ -113,7 +113,7 @@ std::pair<void *, void *> create_tensor_memory(const tensor_property &tp) {
 int main(int argc, char** argv)
 {
     if (0 != cudaSetDevice(0))
-        throw std::runtime_error("GPU device not found.");
+        throw std::runtime_error("GPU device `" + std::string(getenv("BACKEND")) + "` is not found.");
 
     std::ifstream t("my_kernel.cc");
     std::string source((std::istreambuf_iterator<char>(t)), std::istreambuf_iterator<char>());

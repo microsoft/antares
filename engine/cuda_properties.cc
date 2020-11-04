@@ -14,6 +14,7 @@
 #include <hip/hip_runtime.h>
 #define Q(attr_key) ((0 == hipDeviceGetAttribute(&val, hipDeviceAttribute ## attr_key, 0)) ? printf("%s: %d\n", #attr_key, val) : (exit(1), 0))
 #define hipDeviceAttributeMultiProcessorCount hipDeviceAttributeMultiprocessorCount
+#define hipDeviceAttributeGlobalMemoryBusWidth hipDeviceAttributeMemoryBusWidth
 #define CHECK_ENV() assert(getenv("BACKEND") != NULL), assert(strcmp(getenv("BACKEND"), "c-rocm") == 0);
 #endif
 
@@ -31,5 +32,7 @@ int main() {
 	Q(MaxBlockDimX);
 	Q(MaxBlockDimY);
 	Q(MaxBlockDimZ);
+	Q(GlobalMemoryBusWidth);
+	Q(MemoryClockRate);
 	return 0;
 }
