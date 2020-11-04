@@ -84,15 +84,16 @@ def translate_code(code):
 def device_properties():
   props = tvm.runtime.ndarray.gpu(0)
   with open('%s/device_properties.cfg' % os.environ['ANTARES_DRIVER_PATH'], 'r') as fp:
-    mem_bandwith = 2.5e-7
+    mem_bandwith = []
     while True:
       line = fp.readline()
       if not line:
         break
       key, val = line.split(': ')
       if key in ('GlobalMemoryBusWidth', 'MemoryClockRate'):
-        mem_bandwith *= float(val)
-      props.mem_bandwith = mem_bandwith
+        mem_bandwith.append(float(val))
+    mem_bandwith = 'inf' if not mem_bandwith else np.product(mem_bandwith) * 2.5e-7
+    props.mem_bandwith = float(mem_bandwith)
   return props
 
 def compile_source(code):
@@ -255,6 +256,11 @@ def evaluate_perf(kernel_path, task_flop, dev_id):
   exec_fd()
   return results
 
+def compute_mem_ratio(tpr):
+  access_bytes = int(os.environ.get('MEM_ACCESS', '0'))
+  ratio = np.ceil(access_bytes * 1e-7 / tpr / device_properties().mem_bandwith)
+  return min(int(ratio), 100)
+
 def run_config_entity(params_given, dir_sid, expected_timecost='inf', tune_dev_id=0):
   dir_sid = str(dir_sid)
   result_file = local_get_dir_file('result.txt', dir_sid)
@@ -273,7 +279,7 @@ def run_config_entity(params_given, dir_sid, expected_timecost='inf', tune_dev_i
   else:
     envs['EXPECTED_TIMEOUT'] = str(expected_timecost)
   env_str = ' '.join(["%s='%s'" % (x, envs[x]) for x in envs])
-  print("  >> [ ] Param_entity on sid = %s: config = '%s', dev_id = %d, expect_kernel_cost = %.6e s" % (dir_sid, config_str, tune_dev_id, expected_timecost))
+  print("  >> [ ] Param_entity on sid = %s: config = '%s', dev_id = %d, upper_bound_tpr = %.6e s" % (dir_sid, config_str, tune_dev_id, expected_timecost))
   log_path = local_get_dir_file('evaluator.log', dir_sid)
   exe_cmd = "%s python%d %s > %s.stdout 2> %s.stderr" % (env_str, sys.version_info.major, ' '.join(sys.argv), log_path, log_path)
   try:
@@ -284,7 +290,7 @@ def run_config_entity(params_given, dir_sid, expected_timecost='inf', tune_dev_i
       digest = float(parts[1].strip()) if len(parts) > 1 else float('inf')
   except:
     result = digest = float('inf')
-  print("  >> [*] Param_entity on sid = %s: config = '%s', result = `%.6f`, digest = `%g`" % (dir_sid, config_str, result, digest))
+  print("  >> [*] Param_entity on sid = %s: config = '%s', tpr = `%.6f`, digest = `%g`, mem_occupy = %d %%" % (dir_sid, config_str, result, digest, compute_mem_ratio(result)))
   return result
 
 
@@ -417,11 +423,12 @@ def main_compute(code_only=False):
           results.append(autotvm.measure.MeasureResult(costs=(t,), error_no=0, all_cost=i, timestamp=time.time()))
         tuner.task.best.curr_step += len(results)
 
-        print('\nSTEP[%d / %d] Current Best Config = %s, Perf = %g Gflops, Occur Step = %d;' % (
+        print('\nSTEP[%d / %d] Current Best Config = %s, Perf = %g Gflops, MemRatio = %g %%, Occur Step = %d;' % (
           tuner.task.best.curr_step,
           num_trials,
           json.dumps(config_to_json(tuner.task.best.config)),
           compute_gflops(tuner.task.flop, tuner.task.best.timecost),
+          compute_mem_ratio(tuner.task.best.timecost),
           tuner.task.best.occur))
 
         if auto_commit and best_slot >= 0:
