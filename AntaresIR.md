@@ -32,7 +32,7 @@ COMPUTE_V1='- einstein_v2("output0[N] <=! input0[N, C]", input_dict={"input0": {
 COMPUTE_V1='- einstein_v2("output0[N] = N.cast(\"float32\") where N in 1024", {})' make
 
 # Condition Relu
-COMPUTE_V1='- einstein_v2("output0[N] = input0[N].when([input0[N] > 0.0], 0.0)", input_dict={"input0": {"dtype": "float32", "shape": [1024 * 512]}})' make
+COMPUTE_V1='- einstein_v2("output0[N, C] = input0[N, C].when([input0[N, C] > 0.0], 0.0)", input_dict={"input0": {"dtype": "float32", "shape": [1024, 512]}})' make
 
 # External Function
 COMPUTE_V1='- einstein_v2("output0[N] = N.cast(\"float32\").call(\"tanh\") where N in 1024", {})' make

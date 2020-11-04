@@ -394,6 +394,24 @@ def build_fused_ast(statements, input_dict):
     ast['injective']['props']['input_dict'] = ast['props']['input_dict']
   return ast
 
+def compute_mem_access(ast):
+
+  def parse_bytes(dtype):
+    for i in reversed(range(len(dtype) - 1)):
+      if not dtype[i].isdigit():
+        return (int(dtype[i + 1:]) + 7) // 8
+    raise Exception('Illegal data type: %s' % dtype)
+
+  mem_access_bytes = 0
+  for k in ast['props']['input_dict']:
+    prop = ast['props']['input_dict'][k]
+    mem_access_bytes += np.product(prop['shape']) * parse_bytes(prop['dtype'])
+  for k in ast['props']['output_dict']:
+    prop = ast['props']['output_dict'][k]
+    mem_access_bytes += np.product(prop['shape']) * parse_bytes(prop['dtype'])
+
+  return mem_access_bytes
+ 
 def emit_tvm_ir(exprss, input_dict):
   ast = build_fused_ast(exprss, input_dict)
   arg_props = {'_in': [], '_out': []}
@@ -409,17 +427,13 @@ def emit_tvm_ir(exprss, input_dict):
   arg_props['_out'].sort(key=lambda x: x['name'])
   os.environ['GLOBAL_ARG_PROPS'] = json.dumps(arg_props)
 
-  try: 
-    from lang import auto_shard
-    auto_shard.compute(ast)
-  except:
-    pass
+  from lang import auto_shard
+  auto_shard.compute(ast)
 
-  try:
-    from lang import simplify
-    simplify.compute(ast)
-  except:
-    pass
+  from lang import simplify
+  simplify.compute(ast)
+
+  os.environ['MEM_ACCESS'] = str(compute_mem_access(ast))
 
   bias_axis_body = ''
 
