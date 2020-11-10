@@ -411,20 +411,19 @@ def main_compute(code_only=False):
         best_slot = -1
         expected_timecost = tuner.task.best.timecost
         for i in range(len(inputs)):
-          futures.append(thread_pool.submit(run_config_entity, config_to_json(inputs[i].config), AntaresGlobal.current_step, expected_timecost, i % dev_num))
-          AntaresGlobal.current_step += 1
+          futures.append(thread_pool.submit(run_config_entity, config_to_json(inputs[i].config), AntaresGlobal.current_step + i + 1, expected_timecost, i % dev_num))
         for i in range(len(inputs)):
           t = futures[i].result()
           if t < tuner.task.best.timecost:
-            best_slot = i
+            best_slot = AntaresGlobal.current_step + i + 1
             tuner.task.best.timecost = t
             tuner.task.best.config = inputs[i].config
-            tuner.task.best.occur = tuner.task.best.curr_step + i + 1
+            tuner.task.best.occur = best_slot
           results.append(autotvm.measure.MeasureResult(costs=(t,), error_no=0, all_cost=i, timestamp=time.time()))
-        tuner.task.best.curr_step += len(results)
+        AntaresGlobal.current_step += len(results)
 
         print('\nSTEP[%d / %d] Current Best Config = %s, Perf = %g Gflops, MemRatio = %g %%, Occur Step = %d;' % (
-          tuner.task.best.curr_step,
+          AntaresGlobal.current_step,
           num_trials,
           json.dumps(config_to_json(tuner.task.best.config)),
           compute_gflops(tuner.task.flop, tuner.task.best.timecost),
@@ -436,7 +435,7 @@ def main_compute(code_only=False):
             device_source = fp.read()
           with open(local_get_dir_file('result.txt', best_slot), 'r') as fp:
             t = float(fp.read().split()[0])
-          kernel_path = codehub_db(os.environ['COMPUTE_V1'], source_code=device_source + '\n// Saved Perf = %g sec / run; Step Produced = %d;' % (t, tuner.task.best.curr_step))
+          kernel_path = codehub_db(os.environ['COMPUTE_V1'], source_code=device_source + '\n// Saved Perf = %g sec / run; Step Produced = %d;' % (t, best_slot))
           print('  >> Update current code to codehub: %s' % kernel_path)
         return results
 
@@ -444,7 +443,6 @@ def main_compute(code_only=False):
       tuner.task.best.timecost = float('inf')
       tuner.task.best.config = None
       tuner.task.best.occur = -1
-      tuner.task.best.curr_step = 0
 
       tuner.measure_batch = measure_batch
       tuner.measure_batch.n_parallel = batch_size
@@ -465,6 +463,10 @@ def main_compute(code_only=False):
       ), callbacks=callbacks)
       assert not math.isinf(tuner.task.best.timecost), "Not valid config found in the whole tuning."
       best_config = json.dumps(config_to_json(tuner.task.best.config))
+
+      if auto_commit:
+          device_source = codehub_db(os.environ['COMPUTE_V1'])
+          codehub_db(os.environ['COMPUTE_V1'], source_code=device_source + '\n// Antares Tuning Completed in %d steps.' % AntaresGlobal.current_step)
 
       print("\n[Best Config] CONFIG='%s'  ==>  Performance is up to %f Gflops, occurred at step %d / %d; time per run = %g sec." % (
         best_config,

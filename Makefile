@@ -18,7 +18,7 @@ PARAMS ?=  docker run -v $(shell pwd):/antares -w /antares/antares --privileged 
 	-e COMMIT=$(COMMIT) -e HARDWARE_CONFIG=$(HARDWARE_CONFIG)
 
 HTTP_PORT ?= 8880
-HTTP_NAME ?= AntaresServer-$(HTTP_PORT)_$(BACKEND)
+HTTP_NAME ?= AntaresServer-$(HTTP_PORT)_$(or $(BACKEND), $(BACKEND), default)
 HTTP_EXEC ?= $(PARAMS) -d --name=$(HTTP_NAME) -p $(HTTP_PORT):$(HTTP_PORT) antares
 
 eval: build
