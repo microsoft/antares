@@ -12,14 +12,14 @@ def eval(kernel_path, **kwargs):
     dev_id = kwargs['dev_id']
     curr_dir = os.getcwd()
     os.chdir(os.path.dirname(kernel_path))
-    assert 0 == os.system('ln -sf %s/run_graph.cpp .' % os.path.dirname(__file__))
+    source_file = '%s/run_graph.cpp' % os.path.dirname(__file__)
 
     evaluator_path = '%s/evaluator.%s' % (os.environ['ANTARES_DRIVER_PATH'], backend)
-    if not os.path.exists(evaluator_path):
+    if True or not os.path.exists(evaluator_path):
       if backend == 'c-rocm':
-        assert 0 == os.system('/opt/rocm/bin/hipcc run_graph.cpp -std=c++17 -o %s.tmp' % evaluator_path), "ROCm SDK is not found, please setup the graphcore environment."
+        assert 0 == os.system('/opt/rocm/bin/hipcc %s -std=c++17 -o %s.tmp' % (source_file, evaluator_path)), "ROCm SDK is not found, please setup the graphcore environment."
       elif backend == 'c-cuda':
-        assert 0 == os.system('/usr/local/cuda/bin/nvcc run_graph.cpp -std=c++17 -lcuda -lcudart -o %s.tmp' % evaluator_path), "CUDA SDK is not found, please setup the graphcore environment."
+        assert 0 == os.system('/usr/local/cuda/bin/nvcc %s -std=c++17 -lcuda -lcudart -o %s.tmp' % (source_file, evaluator_path)), "CUDA SDK is not found, please setup the graphcore environment."
       else:
         raise Exception("Unrecognized backend type for `%s`" % backend)
       os.system('mv %s.tmp %s' % (evaluator_path, evaluator_path))
