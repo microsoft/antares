@@ -19,27 +19,25 @@
 
 #if !defined(__HIPCC__)
 #include <cuda.h>
-#include <cuda_runtime.h>
 #else
 #include <hip/hip_runtime.h>
-#define cudaSetDevice hipSetDevice
-#define cudaMalloc hipMalloc
-#define cudaFree hipFree
+#define cuMemAlloc hipMalloc
+#define cuMemFree hipFree
 #define cuModuleLoad hipModuleLoad
 #define cuModuleGetFunction hipModuleGetFunction
 #define cuLaunchKernel hipModuleLaunchKernel
-#define cudaMallocHost hipHostMalloc
-#define cudaFreeHost hipHostFree
-#define cudaStreamSynchronize hipStreamSynchronize
+#define cuMemAllocHost hipHostMalloc
+#define cuMemFreeHost hipHostFree
+#define cuStreamSynchronize hipStreamSynchronize
 #define cuMemcpyHtoDAsync hipMemcpyHtoDAsync
 #define cuMemcpyDtoHAsync hipMemcpyDtoHAsync
 #define CUdeviceptr hipDeviceptr_t
 #define CUmodule hipModule_t
 #define CUfunction hipFunction_t
-#define cudaEvent_t hipEvent_t
-#define cudaEventElapsedTime hipEventElapsedTime
-#define cudaEventCreate hipEventCreate
-#define cudaEventRecord hipEventRecord
+#define CUevent hipEvent_t
+#define cuEventElapsedTime hipEventElapsedTime
+#define cuEventCreate hipEventCreateWithFlags
+#define cuEventRecord hipEventRecord
 #endif
 
 std::string get_between(const std::string &str, const std::string &begin, const std::string &end, int start_idx = 0, const std::string &def_ret = "") {
@@ -105,15 +103,21 @@ std::pair<void *, void *> create_tensor_memory(const tensor_property &tp) {
     auto num_elements = tp.element_size();
     auto type_size = tp.type_size();
     void *hptr = nullptr, *dptr = nullptr;
-    assert(0 == cudaMallocHost(&hptr, num_elements * type_size) && hptr != nullptr);
-    assert(0 == cudaMalloc(&dptr, num_elements * type_size) && dptr != nullptr);
+    assert(0 == cuMemAllocHost(&hptr, num_elements * type_size) && hptr != nullptr);
+    assert(0 == cuMemAlloc((CUdeviceptr*)&dptr, num_elements * type_size) && dptr != nullptr);
     return {hptr, dptr};
 }
 
 int main(int argc, char** argv)
 {
-    if (0 != cudaSetDevice(0))
-        throw std::runtime_error("GPU device `" + std::string(getenv("BACKEND")) + "` is not found.");
+#if !defined(__HIPCC__)
+    CUcontext ctx;
+    if (0 != cuInit(0) || 0 != cuDevicePrimaryCtxRetain(&ctx, 0) || 0 != cuCtxSetCurrent(ctx))
+        throw std::runtime_error("GPU device for CUDA is not found.");
+#else
+    if (0 != hipSetDevice(0))
+        throw std::runtime_error("GPU device for ROCM is not found.");
+#endif
 
     std::ifstream t("my_kernel.cc");
     std::string source((std::istreambuf_iterator<char>(t)), std::istreambuf_iterator<char>());
@@ -182,7 +186,7 @@ int main(int argc, char** argv)
     size_t output_byte_size = outputs.back().element_size() * outputs.back().type_size();
     if (h_args.back() != d_args.back())
       assert(0 == cuMemcpyDtoHAsync(h_args.back(), (CUdeviceptr)d_args.back(), output_byte_size, nullptr));
-    assert(0 == cudaStreamSynchronize(nullptr));
+    assert(0 == cuStreamSynchronize(nullptr));
 
     assert(output_byte_size % 4 == 0);
     double digest = 0.0;
@@ -195,16 +199,16 @@ int main(int argc, char** argv)
     }
     printf("- K/0: %g\n", digest);
 
-    cudaEvent_t hStart, hStop;
+    CUevent hStart, hStop;
     float ms;
-    assert(0 == cudaEventCreate(&hStart));
-    assert(0 == cudaEventCreate(&hStop));
+    assert(0 == cuEventCreate(&hStart, 0));
+    assert(0 == cuEventCreate(&hStop, 0));
 
-    assert(0 == cudaEventRecord(hStart, nullptr));
+    assert(0 == cuEventRecord(hStart, nullptr));
     launch_kernel();
-    assert(0 == cudaEventRecord(hStop, nullptr));
-    assert(0 == cudaStreamSynchronize(nullptr));
-    assert(0 == cudaEventElapsedTime(&ms, hStart, hStop));
+    assert(0 == cuEventRecord(hStop, nullptr));
+    assert(0 == cuStreamSynchronize(nullptr));
+    assert(0 == cuEventElapsedTime(&ms, hStart, hStop));
     float tpr = ms * 1e-3;
 
     const char *expected_timeout = getenv("EXPECTED_TIMEOUT");
@@ -221,28 +225,28 @@ int main(int argc, char** argv)
       for (int i = 0; i < num_runs; ++i) {
         for (int j = 0; j < inputs.size(); ++j)
            assert(0 == cuMemcpyHtoDAsync((CUdeviceptr)d_args[j], h_args[j], inputs[j].element_size() * inputs[j].type_size(), nullptr));
-        assert(0 == cudaEventRecord(hStart, nullptr));
+        assert(0 == cuEventRecord(hStart, nullptr));
         launch_kernel();
-        assert(0 == cudaEventRecord(hStop, nullptr));
-        assert(0 == cudaStreamSynchronize(nullptr));
-        assert(0 == cudaEventElapsedTime(&ms, hStart, hStop));
+        assert(0 == cuEventRecord(hStop, nullptr));
+        assert(0 == cuStreamSynchronize(nullptr));
+        assert(0 == cuEventElapsedTime(&ms, hStart, hStop));
         tpr += ms * 1e-3;
       }
       tpr /= num_runs;
     } else {
-      assert(0 == cudaEventRecord(hStart, nullptr));
+      assert(0 == cuEventRecord(hStart, nullptr));
       for (int i = 0; i < num_runs; ++i)
         launch_kernel();
-      assert(0 == cudaEventRecord(hStop, nullptr));
-      assert(0 == cudaStreamSynchronize(nullptr));
-      assert(0 == cudaEventElapsedTime(&ms, hStart, hStop));
+      assert(0 == cuEventRecord(hStop, nullptr));
+      assert(0 == cuStreamSynchronize(nullptr));
+      assert(0 == cuEventElapsedTime(&ms, hStart, hStop));
       tpr = ms * 1e-3 / num_runs;
     }
     printf("- TPR: %g\n", tpr);
 
     for (auto &it: h_args)
-      assert(0 == cudaFreeHost(it));
+      assert(0 == cuMemFreeHost(it));
     for (auto &it: d_args)
-      assert(0 == cudaFree(it));
+      assert(0 == cuMemFree((CUdeviceptr)it));
     return 0;
 }
