@@ -28,7 +28,7 @@ if [[ "$BACKEND" == "c-rocm" ]]; then
   /opt/rocm/bin/hipcc engine/cuda_properties.cc -o ${ANTARES_DRIVER_PATH}/device_properties
   ${ANTARES_DRIVER_PATH}/device_properties > ${ANTARES_DRIVER_PATH}/device_properties.cfg || rm -f ${ANTARES_DRIVER_PATH}/device_properties.cfg
 elif [[ "$BACKEND" == "c-cuda" ]]; then
-  /usr/local/cuda/bin/nvcc engine/cuda_properties.cc -o ${ANTARES_DRIVER_PATH}/device_properties
+  g++ engine/cuda_properties.cc -lcuda -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -o ${ANTARES_DRIVER_PATH}/device_properties
   ${ANTARES_DRIVER_PATH}/device_properties > ${ANTARES_DRIVER_PATH}/device_properties.cfg || rm -f ${ANTARES_DRIVER_PATH}/device_properties.cfg
 else
   rm -f ${ANTARES_DRIVER_PATH}/device_properties.cfg
