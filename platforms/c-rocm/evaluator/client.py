@@ -19,7 +19,7 @@ def eval(kernel_path, **kwargs):
       if backend == 'c-rocm':
         assert 0 == os.system('/opt/rocm/bin/hipcc %s -std=c++17 -o %s.tmp' % (source_file, evaluator_path)), "ROCm SDK is not found, please setup the graphcore environment."
       elif backend == 'c-cuda':
-        assert 0 == os.system('/usr/local/cuda/bin/nvcc %s -std=c++17 -lcuda -lcudart -o %s.tmp' % (source_file, evaluator_path)), "CUDA SDK is not found, please setup the graphcore environment."
+        assert 0 == os.system('g++ %s -std=c++17 -lcuda -lcudart -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -o %s.tmp' % (source_file, evaluator_path)), "CUDA SDK is not found, please setup the graphcore environment."
       else:
         raise Exception("Unrecognized backend type for `%s`" % backend)
       os.system('mv %s.tmp %s' % (evaluator_path, evaluator_path))
