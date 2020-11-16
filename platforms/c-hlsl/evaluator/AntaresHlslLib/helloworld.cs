@@ -61,9 +61,9 @@ namespace AntaresHelloWorldExample
             }
             catch (UnauthorizedAccessException)
             {
-                Console.Error.WriteLine("[WARNING] Failed to add safe TDR settings in to Windows registry.");
+                Console.Error.WriteLine("[WARNING] Failed to add safe TDR settings into Windows registry.");
                 Console.Error.WriteLine("[WARNING] Super privilege is required for safe TDR settings.");
-                Console.Error.WriteLine("[WARNING] Otherwrise, invalid shaders might trigger blue screen on Win10.");
+                Console.Error.WriteLine("[WARNING] Otherwrise, invalid shaders might trigger Win10's blue screen.");
                 Console.Error.WriteLine();
             }
         }
@@ -121,7 +121,7 @@ void CSMain(uint3 threadIdx: SV_GroupThreadID, uint3 blockIdx : SV_GroupID, uint
 
             // print result
             Console.WriteLine("  output0 = [" + h_output0[0] + ", " + h_output0[1] + ", .., " + h_output0[31] + "]");
-            Console.WriteLine("Program finished succesfully.");
+            Console.WriteLine("Program finished successfully.");
         }
     }
 }
