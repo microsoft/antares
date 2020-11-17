@@ -134,6 +134,13 @@ class OpTensor:
         return OpTensor('when', {"if": conditions, "true": self, "false": other}, self._dtype, max(self._flopbase, other._flopbase))
 
 def parse_to_ast(expr, input_dict={}):
+  expr = expr.strip()
+  if expr.find('[]') >= 0:
+    expr = expr.replace('[]', '[Scaler]')
+    if expr.rfind('where') == -1:
+      expr += ' where Scaler in 1'
+    else:
+      expr += ', Scaler in 1'
   at_index = expr.rfind(' where ')
   if at_index != -1:
     range_desc = expr[at_index + len(' where '):]
@@ -335,9 +342,10 @@ def build_fused_ast(statements, input_dict):
   statements = [x.strip() for x in statements.split(';')]
   prev_ast, inputs = {}, copy.deepcopy(input_dict)
   for stat in statements:
-    if not stat:
+    single_stat = stat.strip()
+    if not single_stat:
       continue
-    ast = parse_to_ast(stat, input_dict=inputs)
+    ast = parse_to_ast(single_stat, input_dict=inputs)
     if prev_ast:
       ast = apply_fusion(ast, prev_ast)
     outputs = ast['props']['output_dict']
