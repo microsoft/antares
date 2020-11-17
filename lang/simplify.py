@@ -159,7 +159,7 @@ def scan_trivial_axis(root, ast):
     return OpTensor('const', 0, 'int32')
 
 def eliminate_trivial_axis(ast):
-  print(ast['props'])
+  # print(ast['props'])
   walk_in_ast(ast['root'], scan_trivial_axis, [ast], ast, 'root')
 
   def update(axes, start=0):
