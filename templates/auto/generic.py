@@ -16,6 +16,9 @@ from antares.common import Mock, AntaresGlobal, backend
 def einstein_v2(exprss, input_dict, **kwargs):
   ir = os.environ.get('LL_IR', '')
   if not ir:
+    for k in input_dict:
+     if len(input_dict[k]['shape']) == 0:
+       input_dict[k]['shape'] = [1]
     from lang import einstein_v2
     ir = einstein_v2.emit_tvm_ir(exprss, input_dict)
     assert(len(ir) > 0)
