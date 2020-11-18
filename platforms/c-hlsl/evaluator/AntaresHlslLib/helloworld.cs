@@ -19,23 +19,23 @@ namespace AntaresHelloWorldExample
 {
     class Program
     {
-        [DllImport(@"antares_hlsl_x64_v0.1.dll", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(@"C:\Users\weicu\Desktop\antares\platforms\c-hlsl\evaluator\AntaresHlslLib\x64\Release\antares_hlsl.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern IntPtr dxLoadShader(string source, IntPtr num_outputs, IntPtr num_inputs);
 
-        [DllImport(@"antares_hlsl_x64_v0.1.dll", CallingConvention = CallingConvention.Cdecl)]
-        public static extern IntPtr dxAllocateBufferForShaderArgument(IntPtr handle, int arg_index, IntPtr num_elements, IntPtr dtype_name);
+        [DllImport(@"C:\Users\weicu\Desktop\antares\platforms\c-hlsl\evaluator\AntaresHlslLib\x64\Release\antares_hlsl.dll", CallingConvention = CallingConvention.Cdecl)]
+        public static extern IntPtr dxAllocateBuffer(long bytes);
 
-        [DllImport(@"antares_hlsl_x64_v0.1.dll", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(@"C:\Users\weicu\Desktop\antares\platforms\c-hlsl\evaluator\AntaresHlslLib\x64\Release\antares_hlsl.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern void dxLaunchShader(IntPtr kptr, IntPtr[] source);
 
-        [DllImport(@"antares_hlsl_x64_v0.1.dll", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(@"C:\Users\weicu\Desktop\antares\platforms\c-hlsl\evaluator\AntaresHlslLib\x64\Release\antares_hlsl.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern void dxMemcpyHostToBuffer(IntPtr dptr, IntPtr hptr, long bytes);
 
-        [DllImport(@"antares_hlsl_x64_v0.1.dll", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(@"C:\Users\weicu\Desktop\antares\platforms\c-hlsl\evaluator\AntaresHlslLib\x64\Release\antares_hlsl.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern void dxMemcpyBufferToHost(IntPtr hptr, IntPtr dptr, long bytes);
 
-        [DllImport(@"antares_hlsl_x64_v0.1.dll", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void dxLaunchSynchronize();
+        [DllImport(@"C:\Users\weicu\Desktop\antares\platforms\c-hlsl\evaluator\AntaresHlslLib\x64\Release\antares_hlsl.dll", CallingConvention = CallingConvention.Cdecl)]
+        public static extern void dxSynchronize();
 
         static void initRegistryForSafeTDR()
         {
@@ -99,8 +99,8 @@ void CSMain(uint3 threadIdx: SV_GroupThreadID, uint3 blockIdx : SV_GroupID, uint
                 throw new Exception("Invalid Shader Source for Compilation.");
 
             Console.WriteLine("Initializing buffers ..");
-            var d_input0 = dxAllocateBufferForShaderArgument(handle, 0, IntPtr.Zero, IntPtr.Zero); // create device buffer for input0
-            var d_output0 = dxAllocateBufferForShaderArgument(handle, 1, IntPtr.Zero, IntPtr.Zero); // create device buffer for output0
+            var d_input0 = dxAllocateBuffer(32 * 1024 * sizeof(float)); // create device buffer for input0
+            var d_output0 = dxAllocateBuffer(32 * sizeof(float)); // create device buffer for output0
 
             // fill input data
             var h_input0 = new float[32 * 1024];
@@ -108,20 +108,23 @@ void CSMain(uint3 threadIdx: SV_GroupThreadID, uint3 blockIdx : SV_GroupID, uint
               h_input0[i] = 1;
             dxMemcpyHostToBuffer(d_input0, Marshal.UnsafeAddrOfPinnedArrayElement(h_input0, 0), h_input0.Length * sizeof(float));
 
-            Console.WriteLine("Executing shaders ..");
+            Console.WriteLine("Executing shaders asynchronously ..");
             // execute hlsl shader
             var kargs = new IntPtr[]{d_input0, d_output0};
             dxLaunchShader(handle, kargs);
-            dxLaunchSynchronize();
+            dxSynchronize();
 
-            Console.WriteLine("Reading results back:");
             // read output data
             var h_output0 = new float[32];
             dxMemcpyBufferToHost(Marshal.UnsafeAddrOfPinnedArrayElement(h_output0, 0), d_output0, h_output0.Length * sizeof(float));
+            Console.WriteLine("Waiting for execution to complete ..");
+            dxSynchronize();
 
             // print result
+            Console.WriteLine("Reading results back:");
             Console.WriteLine("  output0 = [" + h_output0[0] + ", " + h_output0[1] + ", .., " + h_output0[31] + "]");
-            Console.WriteLine("Program finished successfully.");
+            Console.Write("Program finished successfully.");
+            Console.ReadKey();
         }
     }
 }

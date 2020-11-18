@@ -6,6 +6,7 @@
 #include <string>
 #include <cassert>
 #include <unordered_map>
+#include <vector>
 
 #include "d3dx12_antares.h"
 
@@ -96,32 +97,33 @@ __EXPORT__ void dxReleaseBuffer(void* dptr)
     bufferDict[_buff->size].push_back(dptr);
 }
 
-__EXPORT__ void* dxAllocateBufferForShaderArgument(void* handle, int arg_index, size_t* num_elements, const char** dtype_name)
+__EXPORT__ void dxGetShaderArgumentProperty(void* handle, int arg_index, size_t* num_elements, size_t* type_size, const char** dtype_name)
 {
     auto hd = (dx_shader_t*)handle;
-    size_t count, type_size;
+    size_t count, tsize;
     std::string dtype;
     if (arg_index < hd->inputs.size())
     {
         count = hd->inputs[arg_index].NumElements();
         dtype = hd->inputs[arg_index].dtype;
-        type_size = hd->inputs[arg_index].TypeSize();
+        tsize = hd->inputs[arg_index].TypeSize();
     }
     else
     {
         count = hd->outputs[arg_index - hd->inputs.size()].NumElements();
         dtype = hd->outputs[arg_index - hd->inputs.size()].dtype;
-        type_size = hd->outputs[arg_index - hd->inputs.size()].TypeSize();
+        tsize = hd->outputs[arg_index - hd->inputs.size()].TypeSize();
     }
     if (num_elements != nullptr)
         *num_elements = count;
+    if (type_size != nullptr)
+        *type_size = tsize;
     if (dtype_name != nullptr)
     {
         static char lastDtypeName[MAX_PATH];
         strncpy_s(lastDtypeName, dtype.c_str(), sizeof(lastDtypeName));
         *dtype_name = lastDtypeName;
     }
-    return dxAllocateBuffer(count * type_size);
 }
 
 __EXPORT__ void* dxLoadShader(const char* _source, int *num_inputs, int *num_outputs)
@@ -205,11 +207,51 @@ __EXPORT__ void* dxLoadShader(const char* _source, int *num_inputs, int *num_out
     return handle;
 }
 
+struct LaunchShaderAsyncResource {
+    ComPtr<ID3D12GraphicsCommandList> m_computeCommandList;
+    ComPtr<ID3D12CommandAllocator> m_computeCommandAllocator;
+
+    // Compute Command Only
+    ComPtr<ID3D12RootSignature> m_computeRootSignature;
+    ComPtr<ID3D12PipelineState> m_computeState;
+
+    // Memcpy Command Only
+    ComPtr<ID3D12Resource> deviceCPUSrcX;
+    void *src, *dst;
+    size_t bytes;
+
+    LaunchShaderAsyncResource(
+        ComPtr<ID3D12GraphicsCommandList> m_computeCommandList,
+        ComPtr<ID3D12CommandAllocator> m_computeCommandAllocator,
+        ComPtr<ID3D12RootSignature> m_computeRootSignature,
+        ComPtr<ID3D12PipelineState> m_computeState) :
+        m_computeCommandList(m_computeCommandList),
+        m_computeCommandAllocator(m_computeCommandAllocator),
+        m_computeRootSignature(m_computeRootSignature),
+        m_computeState(m_computeState),
+        src(nullptr), dst(nullptr), bytes(0L)
+    {
+    }
+
+    LaunchShaderAsyncResource(
+        ComPtr<ID3D12GraphicsCommandList> m_computeCommandList,
+        ComPtr<ID3D12CommandAllocator> m_computeCommandAllocator,
+        ComPtr<ID3D12Resource> deviceCPUSrcX,
+        void* src, void* dst, size_t bytes) :
+        m_computeCommandList(m_computeCommandList),
+        m_computeCommandAllocator(m_computeCommandAllocator),
+        deviceCPUSrcX(deviceCPUSrcX),
+        src(src), dst(dst), bytes(bytes)
+    {
+    }
+};
+
+static std::vector<LaunchShaderAsyncResource> reservedResources;
+
 __EXPORT__ void dxMemcpyHostToBuffer(void* dst, void* src, size_t bytes)
 {
     ComPtr<ID3D12Resource> deviceCPUSrcX;
     device.CreateUploadBuffer(bytes, &deviceCPUSrcX);
-    device.MapAndCopyToResource(deviceCPUSrcX.Get(), src, bytes);
 
     auto dst_buffer = (dx_buffer_t*)dst;
 
@@ -218,11 +260,9 @@ __EXPORT__ void dxMemcpyHostToBuffer(void* dst, void* src, size_t bytes)
     IFE(device.pDevice->CreateCommandAllocator(device.CommandListType, IID_PPV_ARGS(&pCommandAllocator)));
     IFE(device.pDevice->CreateCommandList(0, device.CommandListType, pCommandAllocator.Get(), nullptr, IID_PPV_ARGS(&m_computeCommandList)));
     m_computeCommandList->CopyResource(dst_buffer->handle.Get(), deviceCPUSrcX.Get());
-    m_computeCommandList->Close();
+    IFE(m_computeCommandList->Close());
 
-    auto cmd = m_computeCommandList.Get();
-    device.pCommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)(&cmd));
-    device.AwaitExecution();
+    reservedResources.emplace_back(m_computeCommandList, pCommandAllocator, deviceCPUSrcX, src, nullptr, bytes);
 }
 
 __EXPORT__ void dxMemcpyBufferToHost(void* dst, void* src, size_t bytes)
@@ -237,35 +277,10 @@ __EXPORT__ void dxMemcpyBufferToHost(void* dst, void* src, size_t bytes)
     IFE(device.pDevice->CreateCommandAllocator(device.CommandListType, IID_PPV_ARGS(&pCommandAllocator)));
     IFE(device.pDevice->CreateCommandList(0, device.CommandListType, pCommandAllocator.Get(), nullptr, IID_PPV_ARGS(&m_computeCommandList)));
     m_computeCommandList->CopyResource(deviceCPUSrcX.Get(), src_buffer->handle.Get());
-    m_computeCommandList->Close();
+    IFE(m_computeCommandList->Close());
 
-    auto cmd = m_computeCommandList.Get();
-    device.pCommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)(&cmd));
-    device.AwaitExecution();
-
-    device.MapCopyFromResource(deviceCPUSrcX.Get(), dst, bytes);
+    reservedResources.emplace_back(m_computeCommandList, pCommandAllocator, deviceCPUSrcX, nullptr, dst, bytes);
 }
-
-struct LaunchShaderAsyncResource {
-    ComPtr<ID3D12GraphicsCommandList> m_computeCommandList;
-    ComPtr<ID3D12RootSignature> m_computeRootSignature;
-    ComPtr<ID3D12PipelineState> m_computeState;
-    ComPtr<ID3D12CommandAllocator> computeCommandAllocator;
-
-    LaunchShaderAsyncResource(
-        ComPtr<ID3D12GraphicsCommandList> m_computeCommandList,
-        ComPtr<ID3D12RootSignature> m_computeRootSignature,
-        ComPtr<ID3D12PipelineState> m_computeState,
-        ComPtr<ID3D12CommandAllocator> computeCommandAllocator) :
-        m_computeCommandList(m_computeCommandList),
-        m_computeRootSignature(m_computeRootSignature),
-        m_computeState(m_computeState),
-        computeCommandAllocator(computeCommandAllocator)
-    {
-    }
-};
-
-static std::vector<LaunchShaderAsyncResource> reservedResources;
 
 __EXPORT__ void dxLaunchShader(void* handle, void** buffers)
 {
@@ -274,7 +289,7 @@ __EXPORT__ void dxLaunchShader(void* handle, void** buffers)
     ComPtr<ID3D12GraphicsCommandList> m_computeCommandList;
     ComPtr<ID3D12RootSignature> m_computeRootSignature;
     ComPtr<ID3D12PipelineState> m_computeState;
-    ComPtr<ID3D12CommandAllocator> computeCommandAllocator;
+    ComPtr<ID3D12CommandAllocator> m_computeCommandAllocator;
     D3D12_COMPUTE_PIPELINE_STATE_DESC computePsoDesc{};
 
 #ifdef _USE_DECRIPTOR_HEAP_
@@ -345,8 +360,8 @@ __EXPORT__ void dxLaunchShader(void* handle, void** buffers)
     computePsoDesc.pRootSignature = m_computeRootSignature.Get();
 
     IFE(device.pDevice->CreateComputePipelineState(&computePsoDesc, IID_PPV_ARGS(&m_computeState)));
-    IFE(device.pDevice->CreateCommandAllocator(device.CommandListType, IID_PPV_ARGS(&computeCommandAllocator)));
-    IFE(device.pDevice->CreateCommandList(0, device.CommandListType, computeCommandAllocator.Get(), m_computeState.Get(), IID_PPV_ARGS(&m_computeCommandList)));
+    IFE(device.pDevice->CreateCommandAllocator(device.CommandListType, IID_PPV_ARGS(&m_computeCommandAllocator)));
+    IFE(device.pDevice->CreateCommandList(0, device.CommandListType, m_computeCommandAllocator.Get(), m_computeState.Get(), IID_PPV_ARGS(&m_computeCommandList)));
 
     m_computeCommandList->SetComputeRootSignature(m_computeRootSignature.Get());
 
@@ -400,15 +415,41 @@ __EXPORT__ void dxLaunchShader(void* handle, void** buffers)
 #endif
 
     IFE(m_computeCommandList->Close());
-    reservedResources.emplace_back(m_computeCommandList, m_computeRootSignature, m_computeState, computeCommandAllocator);
+    reservedResources.emplace_back(m_computeCommandList, m_computeCommandAllocator, m_computeRootSignature, m_computeState);
 }
 
-__EXPORT__ void dxLaunchSynchronize()
+__EXPORT__ void dxSynchronize()
 {
-    std::vector<ID3D12CommandList*> launchList;
+    std::vector<ID3D12CommandList*> commandList;
+
+    auto sync_list = [&]() -> void {
+        if (commandList.empty())
+            return;
+        device.pCommandQueue->ExecuteCommandLists(commandList.size(), commandList.data());
+        device.AwaitExecution();
+        commandList.clear();
+    };
+
     for (int i = 0; i < reservedResources.size(); ++i)
-        launchList.push_back(reservedResources[i].m_computeCommandList.Get());
-    device.pCommandQueue->ExecuteCommandLists(launchList.size(), launchList.data());
-    device.AwaitExecution();
+    {
+        auto &it = reservedResources[i];
+        if (it.src != nullptr) // memcpyHtoD
+        {
+            sync_list();
+            device.MapAndCopyToResource(it.deviceCPUSrcX.Get(), it.src, it.bytes);
+            commandList.push_back(it.m_computeCommandList.Get());
+        }
+        else if (it.dst != nullptr) // memcpyDtoH
+        {
+            commandList.push_back(it.m_computeCommandList.Get());
+            sync_list();
+            device.MapCopyFromResource(it.deviceCPUSrcX.Get(), it.dst, it.bytes);
+        }
+        else // launchShader
+        {
+            commandList.push_back(it.m_computeCommandList.Get());
+        }
+    }
+    sync_list();
     reservedResources.clear();
 }
