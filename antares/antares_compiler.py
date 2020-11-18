@@ -70,7 +70,7 @@ def translate_code(code):
     for buf in global_arg_bufs['_out']:
       outp_args.append('-'.join([str(x) for x in buf['shape']]) + '/' + buf['dtype'] + '/' + buf['name'])
 
-    header_meta = '///' + ','.join(inp_args) + ':' + ','.join(outp_args) + '\n// backend = %s\n' % backend
+    header_meta = '///' + ','.join(inp_args) + ':' + ','.join(outp_args) + '\n// BACKEND = %s\n' % backend
     properties = "// CONFIG: %s\n// COMPUTE_V1: %s\n" % (os.environ['CONFIG'].strip(), os.environ['COMPUTE_V1'] if os.environ['OP'] == 'auto.generic' else os.environ['OP'])
     return header_meta + properties
 

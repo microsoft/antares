@@ -20,7 +20,7 @@ COMPUTE_V1='- einstein_v2("output0[N] = input0[N] + input1[N]", input_dict={"inp
 COMPUTE_V1='- einstein_v2("output0[N, C, H, W] = input0[N, H, W, C]", input_dict={"input0": {"dtype": "float32", "shape": [32, 229, 229, 3]}})' make
 
 # Reshape
-COMPUTE_V1='- einstein_v2("output0[A, B, C] = input0[A, B, C // 64, C % 64] where C in 128", input_dict={"input0": {"dtype": "float32", "shape": [3, 3, 2, 64]}})' make
+COMPUTE_V1='- einstein_v2("output0[A, B, C] = input0[A, B, C / 64, C % 64] where C in 128", input_dict={"input0": {"dtype": "float32", "shape": [3, 3, 2, 64]}})' make
 
 # ReduceSum
 COMPUTE_V1='- einstein_v2("output0[N] +=! input0[N, C]", input_dict={"input0": {"dtype": "float32", "shape": [32, 1024]}})' make
@@ -56,7 +56,7 @@ COMPUTE_V1='- einstein_v2("output0[N, F] = input0[N, F, 2]", input_dict={"input0
 COMPUTE_V1='- einstein_v2("output0[N, F] = input0[N, F].when([F < 128], input1[N, F - 128]) where F in 256", input_dict={"input0": {"dtype": "float32", "shape": [4, 128]}, "input1": {"dtype": "float32", "shape": [4, 128]}})' make
 
 # OneHot
-COMPUTE_V1='- einstein_v2("output0[N, F] = parse(1.0).when([input0[N] == F], 0.0) where F in 128", input_dict={"input0": {"dtype": "int32", "shape": [4]}})' make
+COMPUTE_V1='- einstein_v2("output0[N, F] = const(1.0).when([input0[N] == F], 0.0) where F in 128", input_dict={"input0": {"dtype": "int32", "shape": [4]}})' make
 
 # Take
 COMPUTE_V1='- einstein_v2("output0[F, C] = input0[input1[F], C]", input_dict={"input0": {"dtype": "float32", "shape": [30528, 1024]}, "input1": {"dtype": "int32", "shape": [3072]}})' make
@@ -84,8 +84,16 @@ COMPUTE_V1='- einstein_v2("temp0[N] >=! input0[N, C]",                          
 COMPUTE_V1='- einstein_v2("temp1[N] +=! (input0[N, C] - temp0[N]).call(\"exp\")",                 { "input0": {"dtype": "float32", "shape": [32, 1024]}, "temp0": {"dtype": "float32", "shape": [32]} })' make
 COMPUTE_V1='- einstein_v2("output0[N, C] = (input0[N, C] - temp0[N]).call(\"exp\") / temp1[N]",   { "input0": {"dtype": "float32", "shape": [32, 1024]}, "temp0": {"dtype": "float32", "shape": [32]}, "temp1": {"dtype": "float32", "shape": [32]} })' make
 
+# BatchNorm Inference
+COMPUTE_V1='- einstein_v2("output0[N, C, H, W] = bias[C] + scale[C] * (input0[N, C, H, W] - mean[C]) / (1e-5 + variance[C]).call(\"sqrt\")", input_dict={"input0": {"dtype": "float32", "shape": [16, 256, 16, 16]}, "mean": {"dtype": "float32", "shape": [256]}, "variance": {"dtype": "float32", "shape": [256]}, "scale": {"dtype": "float32", "shape": [256]}, "bias": {"dtype": "float32", "shape": [256]} })' make
 
-####### Advance Use Cases
+# Logical Bool Operation
+COMPUTE_V1='- einstein_v2("output0[N, M] = input0[N, M] & ~input1[N, M]", { "input0": {"dtype": "int8", "shape": [1024, 512]}, "input1": {"dtype": "int8", "shape": [1024, 512]} })' make
+
+# Sigmoid
+COMPUTE_V1='- einstein_v2("output0[N, M] = 1.0 / (1.0 + (-input0[N, M]).call(\"exp\"))", { "input0": {"dtype": "float32", "shape": [1024, 512]} })' make
+
+####### Experimental (Platform-dependent)
 # MatMul (explicit plan)
 COMPUTE_V1='- einstein_v2("output0[N, M] +=! input0[N, K] * input1[K, M]", { "input0": {"dtype": "float32", "shape": [1024, 512]}, "input1": {"dtype": "float32", "shape": [512, 512]}})  ## @: plan/matmul_v1' make
 

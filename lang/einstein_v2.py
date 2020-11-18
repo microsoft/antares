@@ -58,11 +58,23 @@ class OpTensor:
 
     def __truediv__(self, other):
         other = OpTensor.parse(other)
-        return OpTensor('op', {"name": "/", "inputs": [self, other]}, self._dtype, self._flopbase + other._flopbase + self.filter_flop(other))
+        op_name = '//' if self._dtype == 'int32' and other._dtype == 'int32' else '/'
+        return OpTensor('op', {"name": op_name, "inputs": [self, other]}, self._dtype, self._flopbase + other._flopbase + self.filter_flop(other))
+
+    def __rtruediv__(self, other):
+        other = OpTensor.parse(other)
+        op_name = '//' if self._dtype == 'int32' and other._dtype == 'int32' else '/'
+        return OpTensor('op', {"name": op_name, "inputs": [other, self]}, self._dtype, self._flopbase + other._flopbase + self.filter_flop(other))
 
     def __floordiv__(self, other):
         other = OpTensor.parse(other)
+        assert self._dtype == 'int32' and other._dtype == 'int32'
         return OpTensor('op', {"name": "//", "inputs": [self, other]}, self._dtype, self._flopbase + other._flopbase + self.filter_flop(other))
+
+    def __rfloordiv__(self, other):
+        other = OpTensor.parse(other)
+        assert self._dtype == 'int32' and other._dtype == 'int32'
+        return OpTensor('op', {"name": "//", "inputs": [other, self]}, self._dtype, self._flopbase + other._flopbase + self.filter_flop(other))
 
     def __mod__(self, other):
         other = OpTensor.parse(other)
@@ -90,33 +102,46 @@ class OpTensor:
     # Relation Ops
     def __lt__ (self, other):
         other = OpTensor.parse(other)
-        return OpTensor('op', {"name": "<", "inputs": [self, other]}, 'bool', self._flopbase + other._flopbase)
+        return OpTensor('op', {"name": "<", "inputs": [self, other]}, 'int8', self._flopbase + other._flopbase)
 
     def __le__ (self, other):
         other = OpTensor.parse(other)
-        return OpTensor('op', {"name": "<=", "inputs": [self, other]}, 'bool', self._flopbase + other._flopbase)
+        return OpTensor('op', {"name": "<=", "inputs": [self, other]}, 'int8', self._flopbase + other._flopbase)
 
     def __gt__ (self, other):
         other = OpTensor.parse(other)
-        return OpTensor('op', {"name": "<", "inputs": [other, self]}, 'bool', self._flopbase + other._flopbase)
+        return OpTensor('op', {"name": "<", "inputs": [other, self]}, 'int8', self._flopbase + other._flopbase)
 
     def __ge__ (self, other):
         other = OpTensor.parse(other)
-        return OpTensor('op', {"name": "<=", "inputs": [other, self]}, 'bool', self._flopbase + other._flopbase)
+        return OpTensor('op', {"name": "<=", "inputs": [other, self]}, 'int8', self._flopbase + other._flopbase)
 
     def __eq__ (self, other):
         other = OpTensor.parse(other)
-        return OpTensor('op', {"name": "==", "inputs": [self, other]}, 'bool', self._flopbase + other._flopbase)
+        return OpTensor('op', {"name": "==", "inputs": [self, other]}, 'int8', self._flopbase + other._flopbase)
 
     def __ne__ (self, other):
         other = OpTensor.parse(other)
-        return OpTensor('op', {"name": "!=", "inputs": [self, other]}, 'bool', self._flopbase + other._flopbase)
+        return OpTensor('op', {"name": "!=", "inputs": [self, other]}, 'int8', self._flopbase + other._flopbase)
+
+    def __and__(self, other):
+        other = OpTensor.parse(other)
+        return OpTensor('op', {"name": "&", "inputs": [self, other]}, 'int8', self._flopbase + other._flopbase)
+
+    def __or__(self, other):
+        other = OpTensor.parse(other)
+        return OpTensor('op', {"name": "|", "inputs": [self, other]}, 'int8', self._flopbase + other._flopbase)
+
+    def __invert__(self):
+        return OpTensor('op', {"name": "~", "inputs": [self]}, 'int8', self._flopbase)
 
     # Special Ops
     def cast(self, dtype):
         return OpTensor('cast', {"name": dtype, "inputs": [self]}, dtype, self._flopbase)
 
-    def call(self, func_name, others=[], dtype=None):
+    def call(self, func_name, others=None, dtype=None):
+        if others is None:
+          others = []
         _flopbase = self._flopbase + self.filter_flop(self)
         for i in range(len(others)):
           others[i] = OpTensor.parse(others[i])
@@ -127,10 +152,10 @@ class OpTensor:
 
     def when(self, conditions, other):
         other = OpTensor.parse(other)
-        assert(self._dtype == other._dtype or '@' in self._dtype or '@' in other._dtype)
+        assert self._dtype == other._dtype or '@' in self._dtype or '@' in other._dtype, "Conditional true and false values must have same datatype (%s v.s. %s)" % (self._dtype, other._dtype)
         conditions = conditions if isinstance(conditions, list) else [conditions]
         for cond in conditions:
-          assert(cond._dtype == 'bool')
+          assert(cond._dtype == 'int8')
         return OpTensor('when', {"if": conditions, "true": self, "false": other}, self._dtype, max(self._flopbase, other._flopbase))
 
 def parse_to_ast(expr, input_dict={}):
@@ -236,7 +261,7 @@ def parse_to_ast(expr, input_dict={}):
 
 #####################
 
-def parse(other):
+def const(other):
   return OpTensor.parse(other)
 
 def warp_axis(ax_name):
@@ -268,7 +293,14 @@ def emit_tvm_body(node, props):
   elif node._op == 'op':
     op_name = node._value["name"]
     op_input_size = len(node._value["inputs"])
-    if op_input_size == 2:
+    if op_name in ('&', '|', '~'):
+      if op_name == '&':
+        return 'te.all(' + emit_tvm_body(node._value["inputs"][0], props) + '.astype("bool"), ' + emit_tvm_body(node._value["inputs"][1], props) + '.astype("bool"))'
+      elif op_name == '|':
+        return 'te.any(' + emit_tvm_body(node._value["inputs"][0], props) + '.astype("bool"), ' + emit_tvm_body(node._value["inputs"][1], props) + '.astype("bool"))'
+      else:
+        return '(' + emit_tvm_body(node._value["inputs"][0], props) + ' == 0)'
+    elif op_input_size == 2:
       return '(' + emit_tvm_body(node._value["inputs"][0], props) + ' ' + op_name + ' ' + emit_tvm_body(node._value["inputs"][1], props) + ')'
     elif op_input_size == 1:
       return '(' + op_name + emit_tvm_body(node._value["inputs"][0], props) + ')'
