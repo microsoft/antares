@@ -12,18 +12,21 @@ import numpy as np
 class OpTensor:
     @staticmethod
     def parse(other):
-      if isinstance(other, OpTensor):
-        return other
-      if isinstance(other, int):
-        return OpTensor('const', other, 'int32', 0)
-      if isinstance(other, float):
-        return OpTensor('const', other, 'float32', 0)
-      raise Exception("Unrecognized const node type: %s" % type(other))
+        if isinstance(other, OpTensor):
+          return other
+        if isinstance(other, int):
+          return OpTensor('const', other, 'int32', 0)
+        if isinstance(other, float):
+          return OpTensor('const', other, 'float32', 0)
+        raise Exception("Unrecognized const node type: %s" % type(other))
 
     def filter_flop(self, other):
-      if self._op == 'get_item' or other._op == 'get_item':
-        return 1
-      return 0
+        if self._op == 'get_item' or other._op == 'get_item':
+          return 1
+        return 0
+
+    def dtype(self):
+        return self._dtype
 
     def __init__(self, _op, _value, _dtype, _flopbase=0):
         self._op = _op
@@ -32,7 +35,7 @@ class OpTensor:
         self._flopbase = _flopbase
 
     def __repr__(self):
-      return 'OpTensor{"%s", "%s", "%s"}' % (self._op, self._value, self._dtype)
+        return 'OpTensor{"%s", "%s", "%s"}' % (self._op, self._value, self._dtype)
 
     def __getitem__(self, key):
         if self._op != 'tensor':
@@ -159,7 +162,7 @@ class OpTensor:
         return OpTensor('when', {"if": conditions, "true": self, "false": other}, self._dtype, max(self._flopbase, other._flopbase))
 
 def parse_to_ast(expr, input_dict={}):
-  expr = expr.strip()
+  expr = expr.strip().replace('`', '"')
   if expr.find('[]') >= 0:
     expr = expr.replace('[]', '[Scaler]')
     if expr.rfind('where') == -1:
@@ -307,6 +310,8 @@ def emit_tvm_body(node, props):
     else:
       raise Exception('Unrecognized op type: %s[%d]' % (op_name, op_input_size))
   elif node._op == 'cast':
+    if node._value["inputs"][0]._op == 'const':
+      return 'np.%s(%s)' % (node._value['name'], emit_tvm_body(node._value["inputs"][0], props))
     return '%s.astype(cast_dtype("%s"))' % (emit_tvm_body(node._value["inputs"][0], props), node._value['name'])
   elif node._op == 'call':
     return 'tir.call_pure_extern(cast_dtype("%s"), "%s", %s)' % (node._dtype, node._value['name'], ', '.join([emit_tvm_body(x, props) for x in node._value["inputs"]]))
