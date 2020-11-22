@@ -29,13 +29,13 @@ COMPUTE_V1='- einstein_v2("output0[N] +=! input0[N, C]", input_dict={"input0": {
 COMPUTE_V1='- einstein_v2("output0[N] <=! input0[N, C]", input_dict={"input0": {"dtype": "float32", "shape": [32, 1024]}})' make
 
 # Cast
-COMPUTE_V1='- einstein_v2("output0[N] = N.cast(\"float32\") where N in 1024", {})' make
+COMPUTE_V1='- einstein_v2("output0[N] = N.cast(`float32`) where N in 1024", {})' make
 
 # Condition Relu
 COMPUTE_V1='- einstein_v2("output0[N, C] = input0[N, C].when([input0[N, C] > 0.0], 0.0)", input_dict={"input0": {"dtype": "float32", "shape": [1024, 512]}})' make
 
 # External Function
-COMPUTE_V1='- einstein_v2("output0[N] = N.cast(\"float32\").call(\"tanh\") where N in 1024", {})' make
+COMPUTE_V1='- einstein_v2("output0[N] = N.cast(`float32`).call(`tanh`) where N in 1024", {})' make
 
 # ConvolutionNoPad
 COMPUTE_V1='- einstein_v2("output0[N, F, HO, WO] +=! input0[N, C, HO + KH, WO + KW] * input1[F, C, KH, KW] where HO in 30, WO in 30", { "input0": {"dtype": "float32", "shape": [16, 64, 32, 32]}, "input1": {"dtype": "float32", "shape": [256, 64, 3, 3]}})' make
@@ -81,17 +81,17 @@ COMPUTE_V1='- einstein_v2("output0[ON, OC] = input0[ON % 2, OC % 16] where ON in
 
 # Softmax (3 different kernels)
 COMPUTE_V1='- einstein_v2("temp0[N] >=! input0[N, C]",                                            { "input0": {"dtype": "float32", "shape": [32, 1024]} })' make
-COMPUTE_V1='- einstein_v2("temp1[N] +=! (input0[N, C] - temp0[N]).call(\"exp\")",                 { "input0": {"dtype": "float32", "shape": [32, 1024]}, "temp0": {"dtype": "float32", "shape": [32]} })' make
-COMPUTE_V1='- einstein_v2("output0[N, C] = (input0[N, C] - temp0[N]).call(\"exp\") / temp1[N]",   { "input0": {"dtype": "float32", "shape": [32, 1024]}, "temp0": {"dtype": "float32", "shape": [32]}, "temp1": {"dtype": "float32", "shape": [32]} })' make
+COMPUTE_V1='- einstein_v2("temp1[N] +=! (input0[N, C] - temp0[N]).call(`exp`)",                 { "input0": {"dtype": "float32", "shape": [32, 1024]}, "temp0": {"dtype": "float32", "shape": [32]} })' make
+COMPUTE_V1='- einstein_v2("output0[N, C] = (input0[N, C] - temp0[N]).call(`exp`) / temp1[N]",   { "input0": {"dtype": "float32", "shape": [32, 1024]}, "temp0": {"dtype": "float32", "shape": [32]}, "temp1": {"dtype": "float32", "shape": [32]} })' make
 
 # BatchNorm Inference
-COMPUTE_V1='- einstein_v2("output0[N, C, H, W] = bias[C] + scale[C] * (input0[N, C, H, W] - mean[C]) / (1e-5 + variance[C]).call(\"sqrt\")", input_dict={"input0": {"dtype": "float32", "shape": [16, 256, 16, 16]}, "mean": {"dtype": "float32", "shape": [256]}, "variance": {"dtype": "float32", "shape": [256]}, "scale": {"dtype": "float32", "shape": [256]}, "bias": {"dtype": "float32", "shape": [256]} })' make
+COMPUTE_V1='- einstein_v2("output0[N, C, H, W] = bias[C] + scale[C] * (input0[N, C, H, W] - mean[C]) / (1e-5 + variance[C]).call(`sqrt`)", input_dict={"input0": {"dtype": "float32", "shape": [16, 256, 16, 16]}, "mean": {"dtype": "float32", "shape": [256]}, "variance": {"dtype": "float32", "shape": [256]}, "scale": {"dtype": "float32", "shape": [256]}, "bias": {"dtype": "float32", "shape": [256]} })' make
 
 # Logical Bool Operation
 COMPUTE_V1='- einstein_v2("output0[N, M] = input0[N, M] & ~input1[N, M]", { "input0": {"dtype": "int8", "shape": [1024, 512]}, "input1": {"dtype": "int8", "shape": [1024, 512]} })' make
 
 # Sigmoid
-COMPUTE_V1='- einstein_v2("output0[N, M] = 1.0 / (1.0 + (-input0[N, M]).call(\"exp\"))", { "input0": {"dtype": "float32", "shape": [1024, 512]} })' make
+COMPUTE_V1='- einstein_v2("output0[N, M] = 1.0 / (1.0 + (-input0[N, M]).call(`exp`))", { "input0": {"dtype": "float32", "shape": [1024, 512]} })' make
 
 ####### Experimental (Platform-dependent)
 # MatMul (explicit plan)
@@ -107,19 +107,19 @@ COMPUTE_V1='- einstein_v2("temp0[K, N] = input0[N, K] + 100; output0[N, M] +=! t
 COMPUTE_V1='- einstein_v2("conv_out[N, F, HO, WO] +=! input0[N, C, HO + KH, WO + KW] * input1[KH, KW, C, F] where HO in 256, WO in 256; conv_bias[N, F, HO, WO] = conv_out[N, F, HO, WO] + input2[0, 0, 0, F]; output0[N, F, HO, WO] = conv_bias[N, F, HO, WO].when(conv_bias[N, F, HO, WO] > 0.0, 0.0)", input_dict={"input0": {"dtype": "float32", "shape": [1, 16, 256, 256]}, "input1": {"dtype": "float32", "shape": [1, 1, 16, 16]}, "input2": {"dtype": "float32", "shape": [1, 1, 1, 16]}})  ## @: plan/convfwd_nchw_v1' make
 
 # [INTRISIC SPEC] ROCm/CUDA's Custom Argmax2D
-BACKEND=c-rocm COMPUTE_V1='- einstein_v2("output0[N] argmax(0, N)=! input0[N, C].call(\"index_of\", [N], dtype=\"int32\")", input_dict={"input0": {"dtype": "float32", "shape": [32, 128]}})  ## @: plan/c-cuda=blend.my_argmax,c-rocm=blend.my_argmax' make
+BACKEND=c-rocm COMPUTE_V1='- einstein_v2("output0[N] argmax(0, N)=! input0[N, C].call(`index_of`, [N], dtype=`int32`)", input_dict={"input0": {"dtype": "float32", "shape": [32, 128]}})  ## @: plan/c-cuda=blend.my_argmax,c-rocm=blend.my_argmax' make
 
 # [INTRISIC SPEC] HLSL ElementwiseExp of VecFloat
-BACKEND=c-hlsl COMPUTE_V1='- einstein_v2("output0[N] = input0[N].call(\"my_exp\")", input_dict={"input0": {"dtype": "float4@128", "shape": [16]}})  ## @: plan/c-hlsl=blend.my_exp' make
+BACKEND=c-hlsl COMPUTE_V1='- einstein_v2("output0[N] = input0[N].call(`my_exp`)", input_dict={"input0": {"dtype": "float4@128", "shape": [16]}})  ## @: plan/c-hlsl=blend.my_exp' make
 
 # [INTRISIC SPEC] ROCm MatMul (mixed type for float16 -> float16)
-BACKEND=c-rocm COMPUTE_V1='- einstein_v2("temp0[N, M] +=! input0[N, K].call(\"dot2h1\", [input1[K, M]]); output0[N, M] = temp0[N, M].call(\"dot2h2\", dtype=\"float16\")", { "input0": {"dtype": "half2@32", "shape": [1024, 512]}, "input1": {"dtype": "half2@32", "shape": [512, 512]}})  ## @: plan/c-rocm=blend.hgemm_v1' make
+BACKEND=c-rocm COMPUTE_V1='- einstein_v2("temp0[N, M] +=! input0[N, K].call(`dot2h1`, [input1[K, M]]); output0[N, M] = temp0[N, M].call(`dot2h2`, dtype=`float16`)", { "input0": {"dtype": "half2@32", "shape": [1024, 512]}, "input1": {"dtype": "half2@32", "shape": [512, 512]}})  ## @: plan/c-rocm=blend.hgemm_v1' make
 
 # [INTRISIC SPEC] ROCm MatMul (mixed type for int8x4 -> int32)
-BACKEND=c-rocm COMPUTE_V1='- einstein_v2("output0[N, M] +=! input0[N, K].call(\"dot4a\", [input1[K, M]], dtype=\"int32\")", { "input0": {"dtype": "int32", "shape": [1024, 512]}, "input1": {"dtype": "int32", "shape": [512, 512]}})  ## @: plan/c-rocm=blend.dot4a_v1' make
+BACKEND=c-rocm COMPUTE_V1='- einstein_v2("output0[N, M] +=! input0[N, K].call(`dot4a`, [input1[K, M]], dtype=`int32`)", { "input0": {"dtype": "int32", "shape": [1024, 512]}, "input1": {"dtype": "int32", "shape": [512, 512]}})  ## @: plan/c-rocm=blend.dot4a_v1' make
 
 # [INTRISIC SPEC] CPU AVX Add (elementwise add using CPU AVX instructions)
-BACKEND=c-mcpu COMPUTE_V1='- einstein_v2("output0[N] = input0[N].call(\"fastadd\", [input1[N]])", input_dict={"input0": {"dtype": "avx256@256", "shape": [16]}, "input1": {"dtype": "avx256@256", "shape": [16]}})  ## @: plan/c-mcpu=blend.avx_add' make
+BACKEND=c-mcpu COMPUTE_V1='- einstein_v2("output0[N] = input0[N].call(`fastadd`, [input1[N]])", input_dict={"input0": {"dtype": "avx256@256", "shape": [16]}, "input1": {"dtype": "avx256@256", "shape": [16]}})  ## @: plan/c-mcpu=blend.avx_add' make
 
 # [INTRISIC SPEC] CUDA FP16 Tensorcore
-BACKEND=c-cuda COMPUTE_V1='- einstein_v2("output0[N, M] +=! input0[N, K].cast(\"float32\") * input1[K, M].cast(\"float32\")", { "input0": {"dtype": "float16", "shape": [1024, 1024]}, "input1": {"dtype": "float16", "shape": [1024, 1024]}})  ## @: plan/c-cuda=blend.matmul_fp16_tensorcore|layout=NN' make
+BACKEND=c-cuda COMPUTE_V1='- einstein_v2("output0[N, M] +=! input0[N, K].cast(`float32`) * input1[K, M].cast(`float32`)", { "input0": {"dtype": "float16", "shape": [1024, 1024]}, "input1": {"dtype": "float16", "shape": [1024, 1024]}})  ## @: plan/c-cuda=blend.matmul_fp16_tensorcore|layout=NN' make

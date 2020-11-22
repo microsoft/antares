@@ -85,6 +85,8 @@ struct tensor_property {
 };
 
 std::vector<tensor_property> parse_properties(const std::string &encoded_inputs) {
+    if (encoded_inputs.size() == 0)
+      return {};
     std::vector<tensor_property> ret;
     for (auto it: ssplit(encoded_inputs, ",")) {
       auto props = ssplit(it, "/");
