@@ -5,99 +5,95 @@ import os
 import json
 import numpy as np
 from common import backend
+from lang.einstein_v2 import walk_in_ast
 
-def compute_local_ranges(nodes, ranges, input_dict, sliced_shape):
-  tensor_slices = {}
 
-  def _merge_range(l, r):
-    if '*' in [l, r]:
-      return '*'
-    return [min(l[0], r[0]), max(l[1], r[1])]
-
-  def _compute_slices(node):
-    if node._op == 'const':
-      val = int(node._value)
-      return [val, val]
-    elif node._op == 'get_item':
-      tensor = node._value['tensor']
-      index = node._value['index']
-      slices = []
-      for i, it in enumerate(index):
-        subrange = _compute_slices(it)
-        slices.append(subrange)
-      if tensor._value['name'] in tensor_slices:
-        prev = tensor_slices[tensor._value['name']]
-        slices = [_merge_range(slices[i], prev[i]) for i in range(len(slices))]
-      if tensor._value['name'] in input_dict:
-        tensor_slices[tensor._value['name']] = slices
-        if tensor._value['name'] not in sliced_shape:
-          sliced_shape[tensor._value['name']] = [0] * len(slices)
-        for i, rng in enumerate(slices):
-          sliced_shape[tensor._value['name']][i] = max(sliced_shape[tensor._value['name']][i], rng[1] - rng[0] + 1) if rng != '*' else input_dict[tensor._value['name']]['shape'][i]
-      return '*'
-    elif node._op == 'axis':
-      ax_name = node._value['name']
-      if ax_name in ranges:
-        return ranges[ax_name]
-      return [0, node._value['range'] - 1]
-    elif node._op == 'op':
-      subrange = []
-      for i in range(len(node._value["inputs"])):
-        subrange.append(_compute_slices(node._value["inputs"][i]))
-      if '*' in subrange:
-        return '*'
-      if node._value['name'] == '+' and len(subrange) == 2:
-        return [subrange[0][0] + subrange[1][0], subrange[0][1] + subrange[1][1]]
-      elif node._value['name'] == '-' and len(subrange) == 2:
-        return [subrange[0][0] - subrange[1][1], subrange[0][1] - subrange[1][0]]
-      elif node._value['name'] == '*' and len(subrange) == 2:
-        d1, d2 = subrange[0][0] * subrange[1][0], subrange[0][0] * subrange[1][1]
-        d3, d4 = subrange[0][1] * subrange[1][0], subrange[0][1] * subrange[1][1]
-        return [min(d1, d2, d3, d4), max(d1, d2, d3, d4)]
-      elif node._value['name'] == '<=' and len(subrange) == 2:
-        if subrange[0][1] <= subrange[1][0]:
-          return [1, 1]
-        if subrange[0][0] >= subrange[1][1]:
-          return [0, 0]
-        return [0, 1]
-      elif node._value['name'] == '<' and len(subrange) == 2:
-        if subrange[0][1] < subrange[1][0]:
-          return [1, 1]
-        if subrange[0][0] > subrange[1][1]:
-          return [0, 0]
-        return [0, 1]
-      else:
-        raise Exception("TODO: Unhandled case - constant prop for other const ops `%s`" % node._value['name'])
-    elif node._op == 'cast':
-      return _compute_slices(node._value["inputs"][0])
-    elif node._op == 'call':
-      _compute_slices(node._value["inputs"][0])
-      return '*'
-    elif node._op == 'when':
-      infer_fa = [0, 0]
-      for cond in node._value['if']:
-        infer_res = _compute_slices(cond)
-        if infer_res == [0, 0]:
-          infer_fa[0] += 1
-        if infer_res == [0, 1]:
-          infer_fa[1] += 1
-      l, r = _compute_slices(node._value['true']), _compute_slices(node._value['false'])
-      if infer_fa[0] > 0:
-        subrange = r
-      elif infer_fa[1] > 0:
-        subrange = _merge_range(l, r)
-      else:
-        subrange = 1
-      return subrange
+def infer_range(root, ax_rank):
+  if root._op == 'get_item':
+    return '*'
+  if root._op == 'const':
+    ival = int(root._value)
+    return [0, None, ival, ival]
+  if root._op == 'axis':
+    if root._value['name'] in ax_rank:
+      return [1, root._value['name'], 0, 0]
     else:
-      raise Exception('Unrecognized node type: %s' % node._op)
+      return [0, None, 0, root._value['range'] - 1]
+  if root._op == 'op':
+    if root._value['name'] == '*' and len(root._value['inputs']) == 2:
+      ll, rr = infer_range(root._value['inputs'][0], ax_rank), infer_range(root._value['inputs'][1], ax_rank)
+      if ll == '*' or rr == '*':
+        return '*'
+      if rr[1] is not None:
+        ll, rr = rr, ll
+      if rr[1] is not None:
+        return '*'
+      a0, a1, a2, a3 = ll[2] * rr[2], ll[2] * rr[3], ll[3] * rr[2], ll[3] * rr[3]
+      amin, amax = min(a0, a1, a2, a3), max(a0, a1, a2, a3)
+      if ll[1] is None:
+        return [ll[0], ll[1], amin, amax]
+      elif rr[2] != rr[3]:
+        return '*'
+      else:
+        return [ll[0] * rr[2], ll[1], amin, amax]
+    if root._value['name'] == '+' and len(root._value['inputs']) == 2:
+      ll, rr = infer_range(root._value['inputs'][0], ax_rank), infer_range(root._value['inputs'][1], ax_rank)
+      if ll == '*' or rr == '*':
+        return '*'
+      if rr[1] is not None:
+        ll, rr = rr, ll
+      if rr[1] is not None:
+        if ll[1] != rr[1]:
+          return '*'
+        return [ll[0] + rr[0], ll[1], ll[2] + rr[2], ll[3] + rr[3]]
+      return [ll[0], ll[1], ll[2] + rr[2], ll[3] + rr[3]]
+    if root._value['name'] == '-' and len(root._value['inputs']) == 2:
+      ll, rr = infer_range(root._value['inputs'][0], ax_rank), infer_range(root._value['inputs'][1], ax_rank)
+      if ll == '*' or rr == '*':
+        return '*'
+      if ll[1] == rr[1]:
+        return [ll[0] - rr[0], ll[1], ll[2] - rr[3], ll[3] - rr[2]]
+      if ll[1] == None:
+        return [- rr[0], rr[1], ll[2] - rr[3], ll[3] - rr[2]]
+      if rr[1] == None:
+        return [ll[0], ll[1], ll[2] - rr[3], ll[3] - rr[2]]
+      return '*'
+    if root._value['name'] == '%' and len(root._value['inputs']) == 2:
+      ll, rr = infer_range(root._value['inputs'][0], ax_rank), infer_range(root._value['inputs'][1], ax_rank)
+      if ll == '*' or rr == '*':
+        return '*'
+      if rr[1] != None or rr[2] != rr[3]:
+        return '*'
+      return [0, None, 0, rr[2] - 1]
 
-  for node in nodes:
-    _compute_slices(node)
-  return tensor_slices
+  raise Exception('Unhandled infer_range op type: %s' % root)
 
+def scan_items(root, ast, range_book):
+  if root._op != 'get_item':
+    return
 
-def auto_shard_on_ast(ast):
+  ax_rank = {None: -1}
+  for i, item in enumerate(ast['props']['data_axes']):
+    ax_rank[item['name']] = i
+
+  tensor_name = root._value['tensor']._value['name']
+  current_range = []
+  for i, sub in enumerate(root._value['index']):
+    index_range = infer_range(sub, ax_rank)
+    if index_range == '*':
+      index_range = [0, None, 0, ast['props']['data_axes'][i]['range'] - 1]
+    index_range[1] = ax_rank[index_range[1]]
+    current_range.append(index_range)
+
+  if tensor_name in range_book:
+    previous_range = range_book[tensor_name]
+    assert len(previous_range) == len(current_range)
+    for i in range(len(current_range)):
+      if previous_range[i] != current_range[i]:
+        current_range[i] = [0, None, 0, ast['props']['data_axes'][i]['range'] - 1]
+  range_book[tensor_name] = current_range
+
+def compute(ast):
   if backend not in ['c-gc']:
     return
 
@@ -114,40 +110,34 @@ def auto_shard_on_ast(ast):
   except:
     pieces = [1] * len(data_axes)
 
-  slice_results = []
-  num_parallel = int(np.product(pieces))
-  if num_parallel > 4096:
-    raise Exception("Please be cautious of the whole number of parallelism: %d" % num_parallel)
-  stride = []
-  for i in range(len(data_axes)):
-    size = data_axes[i]['range']
-    assert(size % pieces[i] == 0)
-    stride.append(size // pieces[i])
+  assert 'injective' not in ast, "Unhandled injective case for graphcore."
+  range_book = {}
+  walk_in_ast(ast['root'], scan_items, [ast, range_book], ast, 'root')
+  ast['props']['shard'] = {'nparts': pieces, 'book': range_book}
 
-  sliced_shape = {}
-  for i in range(num_parallel):
-    step_id = i
-    startup = []
-    for j in range(len(pieces)):
-      startup.append(step_id % pieces[j])
-      step_id //= pieces[j]
-    ranges = {}
-    for j in range(len(data_axes)):
-      ax_name = data_axes[j]['name']
-      ranges[ax_name] = [stride[j] * startup[j], stride[j] * (startup[j] + 1) - 1]
-    roots = [ast['root']] + ([ast['injective']['root']] if 'injective' in ast else [])
-    tensor_slices = compute_local_ranges(roots, ranges=ranges, input_dict=ast['props']['input_dict'], sliced_shape=sliced_shape)
-    slice_results.append((ranges, tensor_slices))
-
-  for i in range(len(data_axes)):
+  # AST props: ast['props']['data_axes'], ast['props']['output_dict'], ast['props']['input_dict']
+  for i in range(len(pieces)):
+    assert data_axes[i]['range'] % pieces[i] == 0
     data_axes[i]['range'] //= pieces[i]
-
-  ast['props']['slices'] = slice_results
+    for k in ast['props']['output_dict']:
+      output_item = ast['props']['output_dict'][k]
+      assert output_item['shape'][i] % pieces[i] == 0
+      output_item['shape'][i] //= pieces[i]
   for k in ast['props']['input_dict']:
-    if k in sliced_shape:
-     ast['props']['input_dict'][k]['shape'] = sliced_shape[k]
+    input_item = ast['props']['input_dict'][k]
+    sub_shape = []
+    for it in range_book[k]:
+      bias_diff = it[3] - it[2] + 1
+      if it[1] < 0 or it[0] == 0:
+        sub_shape.append(bias_diff)
+      elif it[0] > 0:
+        sub_shape.append(it[0] * (data_axes[it[1]]['range'] - 1) + bias_diff)
+      else:
+        raise Exception('Unhandled book case:', it)
+    input_item['shape'] = sub_shape
 
-  if 'injective' in ast:
-    ast['injective']['props']['slices'] = ast['props']['slices']
-    ast['injective']['props']['input_dict'] = ast['props']['input_dict']
-    assert(id(data_axes) == id(ast['injective']['props']['data_axes']))
+  from antares.common import local_get_dir_file
+  output_key = next(iter(ast['props']['output_dict']))
+  ast['props']['shard']['local_shape'] = ast['props']['output_dict'][output_key]['shape']
+  with open(local_get_dir_file('range_book.json'), 'w') as fp:
+    json.dump(ast['props']['shard'], fp)

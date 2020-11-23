@@ -1,6 +1,131 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
 
+#if 1
+
+#include <windows.h>
+#include <cstdio>
+#include <vector>
+#include <string>
+#include <chrono>
+
+#define FATAL_ERROR(msg) \
+    fprintf(stderr, "[Error] %s", msg), _exit(1);
+
+int main(int argc, char** argv)
+{
+    HINSTANCE hAntaresHlslLib = LoadLibrary(L"antares_hlsl_x64_v0.1.dll");
+    if (hAntaresHlslLib == nullptr)
+        FATAL_ERROR("Cannot load antares hlsl DLL library.");
+
+    auto dxLoadShader = (void* (*)(const char*, int*, int*))::GetProcAddress(hAntaresHlslLib, "dxLoadShader");
+    auto dxAllocateBuffer = (void* (*)(size_t))::GetProcAddress(hAntaresHlslLib, "dxAllocateBuffer");
+    auto dxGetShaderArgumentProperty = (void (*)(void*, int, size_t*, size_t*, const char**))::GetProcAddress(hAntaresHlslLib, "dxGetShaderArgumentProperty");
+    auto dxMemcpyHostToBuffer = (void (*)(void*, void*, size_t))::GetProcAddress(hAntaresHlslLib, "dxMemcpyHostToBuffer");
+    auto dxMemcpyBufferToHost = (void (*)(void*, void*, size_t))::GetProcAddress(hAntaresHlslLib, "dxMemcpyBufferToHost");
+    auto dxLaunchShader = (void (*)(void*, void**))::GetProcAddress(hAntaresHlslLib, "dxLaunchShader");
+    auto dxSynchronize = (void (*)())::GetProcAddress(hAntaresHlslLib, "dxSynchronize");
+
+    int num_inputs, num_outputs;
+    auto handle = dxLoadShader("file://dx_kernel.hlsl", &num_inputs, &num_outputs);
+    if (handle == nullptr)
+        FATAL_ERROR("Invalid hlsl source code in complation.");
+
+    std::vector<void*> kargs(size_t(num_inputs) + size_t(num_outputs));
+    std::vector<size_t> counts(kargs.size());
+    std::vector<std::string> dtypes(kargs.size());
+
+    for (int i = 0; i < kargs.size(); ++i) {
+        const char* dtype_ptr;
+        size_t type_size;
+        dxGetShaderArgumentProperty(handle, i, &counts[i], &type_size, &dtype_ptr);
+        dtypes[i] = dtype_ptr;
+        kargs[i] = dxAllocateBuffer(counts[i] * type_size);
+
+        if (i < num_inputs)
+        {
+            if (dtypes[i] == "float32")
+            {
+                std::vector<float> h_input(counts[i]);
+                for (int k = 0; k < h_input.size(); ++k)
+                    h_input[k] = (i + k + 1) % 71;
+                dxMemcpyHostToBuffer(kargs[i], h_input.data(), h_input.size() * sizeof(h_input[0]));
+                dxSynchronize();
+            }
+            else if (dtypes[i] == "int32")
+            {
+                std::vector<int> h_input(counts[i]);
+                for (int k = 0; k < h_input.size(); ++k)
+                    h_input[k] = (i + k + 1) % 71;
+                dxMemcpyHostToBuffer(kargs[i], h_input.data(), h_input.size() * sizeof(h_input[0]));
+                dxSynchronize();
+            }
+            else
+                FATAL_ERROR(("Unhandled value initialization for dtype name: " + dtypes[i]).c_str());
+
+            printf("InputArg %d: NumElements = %zd, TypeBytes = %zd, TypeName = %s\n", i, counts[i], type_size, dtypes[i].c_str());
+        }
+        else
+        {
+            printf("OutputArg %d: NumElements = %zd, TypeBytes = %zd, TypeName = %s\n", i - num_inputs, counts[i], type_size, dtypes[i].c_str());
+        }
+    }
+    printf("\n");
+
+    dxLaunchShader(handle, kargs.data());
+    if (num_outputs <= 0)
+        FATAL_ERROR("No output result for evaluation.");
+
+    for (int i = num_inputs; i < kargs.size(); ++i)
+    {
+        double digest = 0.0;
+        int output_id = i - num_inputs;
+        if (dtypes[output_id] == "float32")
+        {
+            std::vector<float> h_output(counts[i]);
+            dxMemcpyBufferToHost(h_output.data(), kargs[i], h_output.size() * sizeof(h_output[0]));
+            dxSynchronize();
+            for (int k = 0; k < h_output.size(); ++k)
+                digest += double((k + output_id + 1) % 83) * h_output[k];
+        }
+        else if (dtypes[output_id] == "int32")
+        {
+            std::vector<int> h_output(counts[i]);
+            dxMemcpyBufferToHost(h_output.data(), kargs[i], h_output.size() * sizeof(h_output[0]));
+            dxSynchronize();
+            for (int k = 0; k < h_output.size(); ++k)
+                digest += double((k + output_id + 1) % 83) * h_output[k];
+        }
+        else
+            FATAL_ERROR(("Unhandled result digest calculation for dtype name: " + dtypes[i]).c_str());
+        printf("- K/%d = %.6e\n", output_id, digest);
+    }
+
+    auto start = std::chrono::high_resolution_clock::now();
+    dxLaunchShader(handle, kargs.data());
+    dxSynchronize();
+    auto stop = std::chrono::high_resolution_clock::now();
+
+    double elasped_sec = std::chrono::duration_cast<std::chrono::duration<double>>(stop - start).count();
+
+    int num_runs = int(1 / (elasped_sec > 1e-3 ? elasped_sec : 1e-3));
+    num_runs = num_runs > 3 ? num_runs : 3;
+
+    start = std::chrono::high_resolution_clock::now();
+    for (int i = 0; i < num_runs; ++i)
+    {
+        dxLaunchShader(handle, kargs.data());
+    }
+    dxSynchronize();
+    stop = std::chrono::high_resolution_clock::now();
+
+    elasped_sec = std::chrono::duration_cast<std::chrono::duration<double>>(stop - start).count() / num_runs;
+    printf("- TPR = %.6e\n", elasped_sec);
+    return 0;
+}
+
+#else
+
 #include "d3dx12_antares.h"
 
 int main(int argc, char** argv)
@@ -185,3 +310,4 @@ int main(int argc, char** argv)
     }
     return 0;
 }
+#endif

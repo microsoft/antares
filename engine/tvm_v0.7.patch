@@ -1,0 +1,196 @@
+diff --git a/python/tvm/autotvm/tuner/tuner.py b/python/tvm/autotvm/tuner/tuner.py
+index ba54291ad..fe21a3f20 100644
+--- a/python/tvm/autotvm/tuner/tuner.py
++++ b/python/tvm/autotvm/tuner/tuner.py
+@@ -109,7 +109,7 @@ class Tuner(object):
+         si_prefix: str
+             One of tvm.autotvm.utils.SI_PREFIXES. The SI prefix to use when reporting FLOPS.
+         """
+-        measure_batch = create_measure_batch(self.task, measure_option)
++        measure_batch = self.measure_batch if hasattr(self, 'measure_batch') else create_measure_batch(self.task, measure_option)
+         n_parallel = getattr(measure_batch, "n_parallel", 1)
+         early_stopping = early_stopping or 1e9
+         self.n_trial = n_trial
+diff --git a/src/auto_scheduler/search_policy/utils.h b/src/auto_scheduler/search_policy/utils.h
+index f0c4cbca9..347163278 100644
+--- a/src/auto_scheduler/search_policy/utils.h
++++ b/src/auto_scheduler/search_policy/utils.h
+@@ -524,7 +524,8 @@ inline Iterator GetLastReduceIteratorInOutermostReduceTile(const Stage& stage) {
+         }
+       }
+     }
+-  } else {
++  }
++  if (reduce_axis_size) {
+     // Return the first reduce iterator
+     for (const auto& iter : stage->iters) {
+       if (iter->iter_kind == IteratorKind::kReduction) {
+diff --git a/src/runtime/cuda/cuda_common.h b/src/runtime/cuda/cuda_common.h
+index 471fefb23..9a6d9c033 100644
+--- a/src/runtime/cuda/cuda_common.h
++++ b/src/runtime/cuda/cuda_common.h
+@@ -65,4 +65,39 @@ class CUDAThreadEntry {
+ };
+ }  // namespace runtime
+ }  // namespace tvm
++
++#include <fstream>
++#define cudaDeviceGetAttribute antaresDeviceGetAttribute
++#define DEF_ATTR(key_attr)  attr2sattr[cudaDevAttr ## key_attr] = # key_attr
++
++inline cudaError_t cudaDeviceGetAttribute(int *value, cudaDeviceAttr attr, int device) {
++  static std::unordered_map<std::string, int> sattr2val;
++  static std::unordered_map<cudaDeviceAttr, std::string> attr2sattr;
++  if (!attr2sattr.size()) {
++    std::ifstream fin(getenv("ANTARES_DRIVER_PATH") + std::string("/device_properties.cfg"));
++    std::string key, val;
++    while (getline(fin, key, ':') && getline(fin, val))
++      sattr2val[key] = std::atoi(val.c_str());
++    DEF_ATTR(MaxThreadsPerBlock);
++    DEF_ATTR(WarpSize);
++    DEF_ATTR(MaxSharedMemoryPerBlock);
++    DEF_ATTR(ComputeCapabilityMajor);
++    DEF_ATTR(ComputeCapabilityMinor);
++    DEF_ATTR(ClockRate);
++    DEF_ATTR(MultiProcessorCount);
++    DEF_ATTR(MaxBlockDimX);
++    DEF_ATTR(MaxBlockDimY);
++    DEF_ATTR(MaxBlockDimZ);
++    DEF_ATTR(MaxRegistersPerBlock);
++    if (!sattr2val["MaxRegistersPerBlock"])
++      sattr2val["MaxRegistersPerBlock"] = 64 << 10;
++  }
++  auto sattr = attr2sattr.find(attr);
++  assert(sattr != attr2sattr.end());
++  auto pvalue = sattr2val.find(sattr->second);
++  assert(pvalue != sattr2val.end());
++  *value = pvalue->second;
++  return cudaSuccess;
++}
++
+ #endif  // TVM_RUNTIME_CUDA_CUDA_COMMON_H_
+diff --git a/src/target/source/codegen_c.cc b/src/target/source/codegen_c.cc
+index ca9b80564..8242c129a 100644
+--- a/src/target/source/codegen_c.cc
++++ b/src/target/source/codegen_c.cc
+@@ -160,7 +160,7 @@ std::string CodeGenC::GetBufferRef(DataType t, const VarNode* buffer, PrimExpr i
+   }
+   bool is_vol = IsVolatile(buffer);
+   if (t.lanes() == 1) {
+-    if (!HandleTypeMatch(buffer, t) || is_vol) {
++    if (strcmp(getenv("BACKEND"), "c-hlsl") && (!HandleTypeMatch(buffer, t) || is_vol)) {
+       os << "((";
+       if (is_vol) {
+         os << "volatile ";
+@@ -850,6 +850,9 @@ void CodeGenC::VisitStmt_(const AttrStmtNode* op) {
+     IterVar iv = Downcast<IterVar>(op->node);
+     if (iv->thread_tag.length() != 0) {
+       if (!var_idmap_.count(iv->var.get())) {
++        int nthread = static_cast<int>(op->value.as<IntImmNode>()->value);
++        if (std::string(iv->thread_tag).find("threadIdx.") == 0 || std::string(iv->thread_tag).find("blockIdx.") == 0)
++          this->stream << "  // [thread_extent] " << iv->thread_tag << " = " << nthread << "\n";
+         BindThreadIndex(iv);
+       }
+     }
+diff --git a/src/target/source/codegen_cuda.cc b/src/target/source/codegen_cuda.cc
+index 51fcbb633..ccdade699 100644
+--- a/src/target/source/codegen_cuda.cc
++++ b/src/target/source/codegen_cuda.cc
+@@ -22,7 +22,7 @@
+  */
+ 
+ #include "codegen_cuda.h"
+-
++#include "../datatype/registry.h"
+ #include <tvm/runtime/registry.h>
+ 
+ #include <cmath>
+@@ -47,6 +47,8 @@ void CodeGenCUDA::Init(bool output_ssa) {
+ void CodeGenCUDA::PrintFuncPrefix() { stream << "extern \"C\" __global__ void"; }
+ 
+ std::string CodeGenCUDA::Finish() {
++  return CodeGenC::Finish();
++
+   if (enable_fp16_) {
+     decl_stream << "#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 530)\n";
+     decl_stream << "#include <cuda_fp16.h>\n";
+@@ -264,6 +266,9 @@ void CodeGenCUDA::PrintType(DataType t, std::ostream& os) {  // NOLINT(*)
+       return;
+     }
+   }
++  auto name = tvm::datatype::Registry::Global()->GetTypeName(t.code());
++  os << name; return;
++
+   LOG(FATAL) << "Cannot convert type " << t << " to CUDA type";
+ }
+ 
+diff --git a/src/tir/op/op.cc b/src/tir/op/op.cc
+index 71321d2a3..7c2af1c3b 100644
+--- a/src/tir/op/op.cc
++++ b/src/tir/op/op.cc
+@@ -343,9 +343,9 @@ PrimExpr operator/(PrimExpr a, PrimExpr b) { return div(a, b); }
+ PrimExpr operator%(PrimExpr a, PrimExpr b) { return truncmod(a, b); }
+ 
+ // TODO(tqchen): switch to floordiv
+-PrimExpr indexdiv(PrimExpr a, PrimExpr b) { return floordiv(a, b); }
++PrimExpr indexdiv(PrimExpr a, PrimExpr b) { return truncdiv(a, b); }
+ 
+-PrimExpr indexmod(PrimExpr a, PrimExpr b) { return floormod(a, b); }
++PrimExpr indexmod(PrimExpr a, PrimExpr b) { return truncmod(a, b); }
+ 
+ PrimExpr floordiv(PrimExpr a, PrimExpr b) {
+   ICHECK(a.dtype().is_int() || a.dtype().is_uint()) << a;
+diff --git a/src/tir/transforms/arg_binder.cc b/src/tir/transforms/arg_binder.cc
+index 1b58bfa38..d6b30f8e9 100644
+--- a/src/tir/transforms/arg_binder.cc
++++ b/src/tir/transforms/arg_binder.cc
+@@ -163,7 +163,9 @@ void ArgBinder::BindDLTensor(const Buffer& buffer, const PrimExpr& device_type,
+   DataType dtype = buffer->dtype;
+   std::ostringstream type_err_msg;
+   type_err_msg << arg_name << ".dtype is expected to be " << dtype;
+-  PrimExpr cond = (TVMArrayGet(DataType::UInt(8), handle, builtin::kArrTypeCode) ==
++
++  PrimExpr cond = IntImm(DataType::UInt(8), dtype.code()) > IntImm(DataType::UInt(8), DataType::kCustomBegin) ||
++                   (TVMArrayGet(DataType::UInt(8), handle, builtin::kArrTypeCode) ==
+                        IntImm(DataType::UInt(8), dtype.code()) &&
+                    TVMArrayGet(DataType::UInt(8), handle, builtin::kArrTypeBits) ==
+                        IntImm(DataType::UInt(8), dtype.bits()) &&
+diff --git a/src/tir/transforms/split_host_device.cc b/src/tir/transforms/split_host_device.cc
+index 921c7ad79..bc86a265a 100644
+--- a/src/tir/transforms/split_host_device.cc
++++ b/src/tir/transforms/split_host_device.cc
+@@ -94,6 +94,7 @@ class VarUseDefAnalysis : public StmtExprMutator {
+   }
+ 
+   Stmt VisitStmt_(const StoreNode* op) final {
++    this->output_hints.insert(op->buffer_var.get()->name_hint);
+     this->HandleUse(op->buffer_var);
+     return StmtExprMutator::VisitStmt_(op);
+   }
+@@ -178,6 +179,7 @@ class VarUseDefAnalysis : public StmtExprMutator {
+   Array<PrimExpr> thread_extent_;
+   std::unordered_map<const VarNode*, int> use_count_;
+   std::unordered_map<const VarNode*, int> def_count_;
++  std::unordered_set<std::string> output_hints;
+ 
+  private:
+   ExprDeepEqual deep_equal_;
+@@ -233,8 +235,16 @@ class HostDeviceSplitter : public StmtMutator {
+     Array<PrimExpr> arguments;
+     Map<tir::Var, PrimExpr> remap_vars;
+ 
+-    // Strictly order the arguments: Var pointers, positional arguments.
+-    for (Var var : m.undefined_) {
++    // Strictly order the arguments: Var pointers, positional arguments
++    std::vector<Var> ordered_args(m.undefined_.begin(), m.undefined_.end());
++    std::sort(ordered_args.begin(), ordered_args.end(), [&](const Var &x, const Var &y) {
++      int x_access = m.output_hints.count(x.get()->name_hint);
++      int y_access = m.output_hints.count(y.get()->name_hint);
++      if (x_access != y_access)
++        return x_access < y_access;
++      return x.get()->name_hint < y.get()->name_hint;
++    });
++    for (Var var : ordered_args) {
+       if (var.dtype().is_handle()) {
+         // Create a new version of v.
+         auto it = handle_data_type_.find(var.get());

@@ -8,6 +8,21 @@ import subprocess
 class Mock(object):
   pass
 
+
+def wait_for(func, timeout=None, args=[]):
+  if not timeout:
+    return func(*args)
+  def timeout_handler():
+    print("Error: Timeout during Kernel warmup")
+    os._exit(1)
+  from threading import Timer
+  my_timer = Timer(timeout, timeout_handler, [])
+  my_timer.start()
+  res = func(*args)
+  my_timer.cancel()
+  del my_timer
+  return res
+
 def local_get_dir_file(rel_file, dir_sid=None):
   if dir_sid is None:
     dir_sid = os.environ['DIR_SID'] if 'DIR_SID' in os.environ else '_'

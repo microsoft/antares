@@ -28,11 +28,11 @@ sudo BACKEND=c-cuda make
 
 # If you need Antares to extend/boost Tensorflow operators, please also run:
 sudo python3 ./frameworks/antares/tensorflow/setup.py
-# (Recommended Tensorflow CUDA Installation Source: pip3 install --upgrade pip && pip3 install tensorflow-gpu==1.15.3)
+# (Recommended Tensorflow CUDA Installation Source (for CUDA 10.0): pip3 install --upgrade pip && pip3 install tensorflow-gpu==1.15.3)
 
 # If you need Antares to extend/boost Pytorch operators, please also run:
 sudo python3 ./frameworks/antares/pytorch/setup.py
-# (Recommended Pytorch CUDA Installation Source: pip3 install torch==1.5.0 torchvision==0.6.0 -f https://download.pytorch.org/whl/torch_stable.html)
+# (Recommended Pytorch CUDA Installation Source (for CUDA 10.0): pip3 install torch==1.5.0 torchvision==0.6.0 -f https://download.pytorch.org/whl/torch_stable.html)
 ```
 
 # Startup with First Example (CUDA example):
@@ -115,11 +115,11 @@ Antares can support multi-line statements as long as they are fuse-able, for exa
 | Platform: ROCm HIP C |  Y | - |
 | Platform: GraphCore | Y | - |
 | Decoupling for Multi-Platforms | Y | - |
-| Workflow: Auto Plan Spaces | Y | - |
+| Workflow: Auto Shard | Y | - |
 | Workflow: Auto Infershape | Y | - |
-| Language | Simple Antares IR | Hyrbid Script/Topi/.. |
-| Framework: Custom Op for Tensorflow | Y | - |
-| Framework: Custom Op for Pytorch | Y | - |
+| Language | Antares IR | Hyrbid Script/Topi/.. |
+| Framework: JIT Op Maker for Tensorflow | Y | - |
+| Framework: JIT Op Maker for Pytorch | Y | - |
 
 # Current Feature Table:
 
@@ -128,7 +128,7 @@ Antares can support multi-line statements as long as they are fuse-able, for exa
 | Global schedules | Y | Y | Y | Y | Y |  |
 | Local schedules | Y | Y | Y | Y |  |  |
 | Head fusion | Y | Y | Y | Y | Y |  |
-| Tail fusion | Y | Y | Y | Y | Y |  |
+| Tail fusion | Y | Y |  | Y |  |  |
 | Evaluator | Y | Y | Y | Y |  |  |
 | Tensorflow Plugin | Y | Y |  |  |  |  |
 | Pytorch Plugin | Y | Y |  |  |  |  |
@@ -186,12 +186,9 @@ You can add environment variable `HTTP_PORT=<portnum>` to change the listening p
 ```
 
 # How to use custom tuners as searching algorithms:
-Custom tuners can be chosen by adding variable `TUNER=..`, and the value can be selected from any filename under folder `tuner/`:
+Custom tuners can be chosen by adding variable `TUNER=..`, and the value can be selected from any filename under folder `tuner/`, e.g.:
 ```sh
-    STEP=100 BACKEND=c-cuda make
-
-    # Adding `RECORD=<filename>` can help you record the incremental tuning history
-    RECORD=history.log STEP=100 BACKEND=c-cuda make
+    TUNER=AutoTVM2 STEP=100 BACKEND=c-cuda make
 ```
 
 # About Microsft Open Source
