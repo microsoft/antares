@@ -12,6 +12,7 @@ import re
 import json
 import importlib
 import signal
+import collections
 
 import tvm
 from tvm import autotvm
@@ -97,7 +98,7 @@ def device_properties():
   return props
 
 def compile_source(code):
-  if 'HTTP_SERVICE' in os.environ:
+  if os.environ.get('HTTP_SERVICE', ''):
     return bytearray()
   kernel_src = local_get_dir_file("my_kernel.cc")
   kernel_out = local_get_dir_file("my_kernel.out")
@@ -435,7 +436,7 @@ def main_compute(code_only=False):
             device_source = fp.read()
           with open(local_get_dir_file('result.txt', best_slot), 'r') as fp:
             t = float(fp.read().split()[0])
-          kernel_path = codehub_db(os.environ['COMPUTE_V1'], source_code=device_source + '\n// Saved Perf = %g sec / run; Step Produced = %d;' % (t, best_slot))
+          kernel_path = codehub_db(os.environ['COMPUTE_V1'], source_code=device_source + '\n// Saved Perf = %g sec / run; Step Produced = %d; Planned Steps = %d;' % (t, best_slot, num_trials))
           print('  >> Update current code to codehub: %s' % kernel_path)
         return results
 
@@ -542,29 +543,44 @@ def main_compute(code_only=False):
 
 if __name__ == '__main__':
 
-  if 'HTTP_SERVICE' in os.environ:
+  if os.environ.get('HTTP_SERVICE', ''):
     import tornado
     import tornado.httpserver
     import tornado.ioloop
     import tornado.web
 
+    task_lists = collections.deque()
+
+    def clear_environ(compute_exp, step):
+      os.environ['COMPUTE_V1'] = compute_exp
+      os.environ['OP'] = 'auto.generic'
+      os.environ['STEP'] = str(step)
+      os.environ['LL_IR'] = ''
+      os.environ['COMMIT'] = 'force'
+
     class IndexHandler(tornado.web.RequestHandler):
       @tornado.gen.coroutine
       def get(self):
         compute_exp = self.request.headers.get('COMPUTE_V1', '')
-        print(">> New connection from peer: `%s`" % (compute_exp))
+        num_step = self.request.headers.get('STEP', '')
+        print(">> New connection from peer: `%s` (step = %s)" % (compute_exp, num_step))
 
-        code = codehub_db(compute_exp)
-        if code is None:
-          os.environ['COMPUTE_V1'] = compute_exp
-          os.environ['OP'] = 'auto.generic'
-          os.environ['STEP'] = '0'
-          os.environ['LL_IR'] = ''
-          try:
-            code = main_compute(code_only=True)
-          except:
-            print('>> Kernel code failed to generate.')
-            code = '[ERROR] ' + traceback.format_exc()
+        if num_step == '@':
+          code = '\n'.join(['Steps: %d; Exprs: %s' % (s, c) for s, c in task_lists])
+        elif num_step not in ('', '0'):
+          task = (int(num_step), compute_exp)
+          if task not in task_lists:
+            task_lists.append(task)
+          code = '[Async Task Has Been Put in Background ..]'
+        else:
+          code = codehub_db(compute_exp)
+          if code is None:
+            clear_environ(compute_exp, 0)
+            try:
+              code = main_compute(code_only=True)
+            except:
+              print('>> Kernel code failed to generate.')
+              code = '[ERROR] ' + traceback.format_exc()
         self.write(code)
         self.flush()
         print(">> Finish subprocess.")
@@ -580,7 +596,25 @@ if __name__ == '__main__':
 
     print("* Antares service for backend = `%s` is listening on ':%d'" % (backend, app.port))
     tornado.httpserver.HTTPServer(app).listen(app.port)
-    tornado.ioloop.IOLoop.current().start()
+
+    def scan_tasks(ioloop):
+      try:
+        if os.wait3(os.WNOHANG)[0] != 0:
+          task_lists.popleft()
+          raise ChildProcessError
+        ## Still waiting for current task to complete
+      except ChildProcessError:
+        if task_lists:
+          task_step, task_expr = task_lists[0]
+          clear_environ(task_expr, task_step)
+          os.environ['HTTP_SERVICE'], _ = '', os.environ['HTTP_SERVICE']
+          os.spawnlp(os.P_NOWAIT, '/bin/bash', 'bash', '%s/run.sh' % os.path.dirname(os.path.abspath(__file__)))
+          os.environ['HTTP_SERVICE'] = _
+      ioloop.add_timeout(time.time() + 5, lambda: scan_tasks(ioloop))
+
+    ioloop = tornado.ioloop.IOLoop.current()
+    scan_tasks(ioloop)
+    ioloop.start()
   else:
     try:
       main_compute()
