@@ -226,8 +226,11 @@ def evaluate_perf(kernel_path, task_flop, dev_id):
         print("\n[Antares] Average time cost / run = %g sec, %g gflops." % (t, gflops))
       with open(local_get_dir_file('result.txt'), 'w') as fp:
         fp.write(str(t) + '\n')
-        if 'K/0' in result:
-          fp.write(str(result['K/0']) + '\n')
+        for i in range(len(result)):
+          key = 'K/%d' % i
+          if key not in result:
+            break
+          fp.write(str(result[key]) + '\n')
     if os.environ.get('COMMIT', ''):
       kernel_path = codehub_db(os.environ['COMPUTE_V1'], source_code=device_source + '\n// Saved Perf = %g sec / run' % t)
       print('  >> Update current code to codehub: %s' % kernel_path)
@@ -289,11 +292,13 @@ def run_config_entity(params_given, dir_sid, expected_timecost='inf', tune_dev_i
     assert 0 == os.system(exe_cmd)
     with open(result_file, 'r') as fp:
       parts = fp.read().split()
+      if len(parts) == 1:
+        parts.append('inf')
       result = float(parts[0].strip())
-      digest = float(parts[1].strip()) if len(parts) > 1 else float('inf')
+      digest = ','.join(['%.6e' % float(x.strip()) for x in parts[1:]])
   except:
     result = digest = float('inf')
-  print("  >> [*] Param_entity on sid = %s: config = '%s', tpr = `%.6f`, digest = `%g`, mem_occupy = %d %%" % (dir_sid, config_str, result, digest, compute_mem_ratio(result)))
+  print("  >> [*] Param_entity on sid = %s: config = '%s', tpr = `%.6f`, digest = `%s`, mem_occupy = %d %%" % (dir_sid, config_str, result, digest, compute_mem_ratio(result)))
   return result
 
 

@@ -185,21 +185,27 @@ int main(int argc, char** argv)
     };
 
     launch_kernel();
-    size_t output_byte_size = outputs.back().element_size() * outputs.back().type_size();
-    if (h_args.back() != d_args.back())
-      assert(0 == cuMemcpyDtoHAsync(h_args.back(), (CUdeviceptr)d_args.back(), output_byte_size, nullptr));
+
+    for (int c = 0; c < outputs.size(); ++c) {
+      size_t output_byte_size = outputs[c].element_size() * outputs[c].type_size();
+      if (h_args[inputs.size() + c] != d_args[inputs.size() + c])
+        assert(0 == cuMemcpyDtoHAsync(h_args[inputs.size() + c], (CUdeviceptr)d_args[inputs.size() + c], output_byte_size, nullptr));
+    }
     assert(0 == cuStreamSynchronize(nullptr));
 
-    assert(output_byte_size % 4 == 0);
-    double digest = 0.0;
-    if (outputs.back().dtype == "int32") {
-      for (int i = 0; i < output_byte_size / 4; ++i)
-        digest += (i + 1) % 83 * ((int*)h_args.back())[i];
-    } else {
-      for (int i = 0; i < output_byte_size / 4; ++i)
-        digest += (i + 1) % 83 * ((float*)h_args.back())[i];
+    for (int c = 0; c < outputs.size(); ++c) {
+      size_t output_byte_size = outputs[c].element_size() * outputs[c].type_size();
+      assert(output_byte_size % 4 == 0);
+      double digest = 0.0;
+      if (outputs[c].dtype == "int32") {
+        for (int i = 0; i < output_byte_size / 4; ++i)
+          digest += (i + 1) % 83 * ((int*)h_args[inputs.size() + c])[i];
+      } else {
+        for (int i = 0; i < output_byte_size / 4; ++i)
+          digest += (i + 1) % 83 * ((float*)h_args[inputs.size() + c])[i];
+      }
+      printf("- K/%d: %g\n", c, digest);
     }
-    printf("- K/0: %g\n", digest);
 
     CUevent hStart, hStop;
     float ms;
@@ -218,7 +224,7 @@ int main(int argc, char** argv)
         throw std::runtime_error(("Time limit exceeded: " + std::to_string(tpr) + " v.s. (expected) " + expected_timeout).c_str());
     }
 
-    int num_runs = std::max(3, std::min(10000, int(3.0 / tpr)));
+    int num_runs = std::max(3, std::min(10000, int(1.0 / tpr)));
     bool flush_global_memory = (getenv("FLUSH_MEM") != nullptr);
 
     tpr = 0.0f;

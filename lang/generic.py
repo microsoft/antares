@@ -185,8 +185,12 @@ def get_template_op(**kwargs):
       program, options = program[:anno].strip(), program[program.index(':', anno) + 1:].strip().split('|')
 
     if len(outputs) > 1:
+      def to_list(shape):
+        return [int(d) for d in shape]
+      for i in range(1, len(outputs)):
+        assert to_list(outputs[0].shape) == to_list(outputs[i].shape), "Shape sizes for multiple outputs should be equal."
       outputs = te.compute(outputs[0].shape, lambda *X: [v[X] for v in outputs], name="MultipleOutputsTempVar")
-    sch = te.create_schedule(outputs[0].op)
+    sch = te.create_schedule([outputs[i].op for i in range(len(outputs))])
 
     def _callback(op):
         output_spec = op.output(0)
