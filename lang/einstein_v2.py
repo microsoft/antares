@@ -461,7 +461,6 @@ def emit_tvm_ir_v2(exprss, input_dict, extra_outputs):
   statements = [s_.strip() for s_ in exprss.split(';')]
   inputs = copy.deepcopy(input_dict)
   ast_seq = []
-  output_shapes = []
   for s in statements:
     if not s:
       continue
@@ -472,18 +471,12 @@ def emit_tvm_ir_v2(exprss, input_dict, extra_outputs):
       inputs[k] = ast_outputs_dict[k]
       if k in extra_outputs:
         ast['as_result'] = True
-        output_shapes.append(ast_outputs_dict[k]['shape'])
     ast_seq.append(ast)
 
   # Also appending the last output
   full_outputs = extra_outputs
   if k not in full_outputs:
-    output_shapes.append(ast_outputs_dict[k]['shape'])
     full_outputs.append(k)
-
-  for i in range(1, len(output_shapes)):
-    if output_shapes[0] != output_shapes[i]:
-      raise Exception("Unhandled multiple outputs with different output shapes")
 
   def emit_input_body(input_dict):
     input_body = ''

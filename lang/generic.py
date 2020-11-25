@@ -105,6 +105,7 @@ def output(shape, func=None, flops=None, name='output0', topi=None, dtype=None, 
   global output_saver
   output_saver["outputs"].append(result)
   output_saver["flops"] += flops
+  return result
 
 def traverse_inline(s, final_op, callback):
     visited = set()
@@ -178,11 +179,14 @@ def get_template_op(**kwargs):
     outputs = output_saver["outputs"]
     cfg = autotvm.get_config()
     cfg.flop = output_saver["flops"]
-    sch = te.create_schedule(outputs[0].op)
 
     anno, options = program.find('## @'), []
     if anno >= 0:
       program, options = program[:anno].strip(), program[program.index(':', anno) + 1:].strip().split('|')
+
+    if len(outputs) > 1:
+      outputs = te.compute(outputs[0].shape, lambda *X: [v[X] for v in outputs], name="MultipleOutputsTempVar")
+    sch = te.create_schedule(outputs[0].op)
 
     def _callback(op):
         output_spec = op.output(0)
@@ -201,4 +205,4 @@ def get_template_op(**kwargs):
         do_native_scheduling(attrs)
 
     traverse_inline(sch, outputs[0].op, _callback)
-    return sch, inputs + outputs
+    return sch, list(inputs) + list(outputs)
