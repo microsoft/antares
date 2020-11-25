@@ -20,7 +20,7 @@ from tvm.autotvm.task.dispatcher import ApplyConfig
 from tvm.autotvm.task import ConfigEntity
 
 from antares.common import *
-from templates.auto.generic import custom_dtypes
+from lang.generic import custom_dtypes
 
 signal.signal(signal.SIGINT, lambda signum, frame: sys.exit(1))
 
@@ -72,7 +72,7 @@ def translate_code(code):
       outp_args.append('-'.join([str(x) for x in buf['shape']]) + '/' + buf['dtype'] + '/' + buf['name'])
 
     header_meta = '///' + ','.join(inp_args) + ':' + ','.join(outp_args) + '\n// BACKEND = %s\n' % backend
-    properties = "// CONFIG: %s\n// COMPUTE_V1: %s\n" % (os.environ['CONFIG'].strip(), os.environ['COMPUTE_V1'] if os.environ['OP'] == 'auto.generic' else os.environ['OP'])
+    properties = "// CONFIG: %s\n// COMPUTE_V1: %s\n" % (os.environ['CONFIG'].strip(), os.environ['COMPUTE_V1'])
     return header_meta + properties
 
   code = platform_config.do_native_translation(code, attrs=AntaresGlobal.attrs)
@@ -228,7 +228,7 @@ def evaluate_perf(kernel_path, task_flop, dev_id):
         fp.write(str(t) + '\n')
         if 'K/0' in result:
           fp.write(str(result['K/0']) + '\n')
-    if os.environ['OP'] == 'auto.generic' and os.environ.get('COMMIT', ''):
+    if os.environ.get('COMMIT', ''):
       kernel_path = codehub_db(os.environ['COMPUTE_V1'], source_code=device_source + '\n// Saved Perf = %g sec / run' % t)
       print('  >> Update current code to codehub: %s' % kernel_path)
 
@@ -258,7 +258,9 @@ def evaluate_perf(kernel_path, task_flop, dev_id):
   return results
 
 def compute_mem_ratio(tpr):
-  access_bytes = int(os.environ.get('MEM_ACCESS', '0'))
+  access_bytes = int(os.environ.get('MEM_ACCESS', '-1'))
+  if access_bytes < 0:
+    return -1
   ratio = np.ceil(access_bytes * 1e-7 / tpr / device_properties().mem_bandwith)
   return min(int(ratio), 100)
 
@@ -300,7 +302,7 @@ def main_compute(code_only=False):
   logging.getLogger('autotvm').setLevel(logging.DEBUG)
   logging.getLogger('autotvm').addHandler(logging.StreamHandler(sys.stdout))
 
-  default_tune_op = importlib.import_module('templates.' + (os.environ['OP'] if 'OP' in os.environ else 'auto.generic'))
+  default_tune_op = importlib.import_module('lang.generic')
   if verbose:
     print('  >> Backend = %s, Python PID = %s, Task = %s;' % (backend, os.getpid(), default_tune_op.__name__))
 
@@ -482,14 +484,13 @@ def main_compute(code_only=False):
       raise Exception('Unrecognized tuner type: `%s`' % tuner_type)
     exit(0)
   else:
-    if os.environ['OP'] == 'auto.generic':
-      saved_code = codehub_db(os.environ['COMPUTE_V1'])
-      if saved_code is not None:
-        print("  >> Using Saved Code from Codehub:")
-        print("===========================")
-        print(saved_code)
-        print("===========================")
-        exit(0)
+    saved_code = codehub_db(os.environ['COMPUTE_V1'])
+    if saved_code is not None:
+      print("  >> Using Saved Code from Codehub:")
+      print("===========================")
+      print(saved_code)
+      print("===========================")
+      exit(0)
     best_config = ''
 
   assert isinstance(best_config, str)
@@ -553,7 +554,6 @@ if __name__ == '__main__':
 
     def clear_environ(compute_exp, step):
       os.environ['COMPUTE_V1'] = compute_exp
-      os.environ['OP'] = 'auto.generic'
       os.environ['STEP'] = str(step)
       os.environ['LL_IR'] = ''
       os.environ['COMMIT'] = 'force'

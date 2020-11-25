@@ -55,4 +55,4 @@ rm -f ${ANTARES_DRIVER_PATH}/property.cache
 
 [[ "$USING_GDB" == "" ]] || USING_GDB="gdb --ex run --args"
 
-time OP=${OP:-auto.generic} STEP=${STEP:-0} ${USING_GDB} python3 ./antares/antares_compiler.py "$@"
+time STEP=${STEP:-0} ${USING_GDB} python3 ./antares/antares_compiler.py "$@"

@@ -13,22 +13,21 @@ import traceback
 
 from antares.common import Mock, AntaresGlobal, backend
 
-def einstein_v2(exprss, input_dict, **kwargs):
+def einstein_v2(exprss, input_dict, extra_outputs=[], **kwargs):
   ir = os.environ.get('LL_IR', '')
   if not ir:
     for k in input_dict:
      if len(input_dict[k]['shape']) == 0:
        input_dict[k]['shape'] = [1]
     from lang import einstein_v2
-    ir = einstein_v2.emit_tvm_ir(exprss, input_dict)
+    ir = einstein_v2.emit_tvm_ir(exprss, input_dict, extra_outputs)
     assert(len(ir) > 0)
     os.environ['LL_IR'] = ir
     print('\n[LL-IR]\n%s\n' % ir)
 
   exec(ir, globals())
 
-placeholders = {}
-output_saver = None
+placeholders, output_saver = None, None
 custom_dtypes = {"@": 0}
 
 def args(name):
@@ -85,13 +84,12 @@ def loop(length, start=0):
   return te.reduce_axis((start, length))
 
 def output(shape, func=None, flops=None, name='output0', topi=None, dtype=None, tag='', final_output=True):
-  global output_saver
   if len(shape) == 0:
     shape = [1]
   if flops is None:
     flops = np.product(shape)
   if topi is not None:
-    result = te.compute(topi.shape, lambda *X: topi[X], name=name, tag=('antares_injective' if topi.op.reduce_axis else ''))
+    result = te.compute(topi.shape, lambda *X: topi[X], name=name, tag='')
   else:
     result = te.compute(shape, func, name=name, tag=tag)
   if not final_output:
@@ -103,25 +101,32 @@ def output(shape, func=None, flops=None, name='output0', topi=None, dtype=None, 
     dtype = result.dtype
   target = {'name': name, 'shape': shape, 'dtype': dtype}
   AntaresGlobal.current_arg_bufs['_out'].append(target)
-  output_saver = {
-    "output": result,
-    "flops": flops,
-  }
+
+  global output_saver
+  output_saver["outputs"].append(result)
+  output_saver["flops"] += flops
 
 def traverse_inline(s, final_op, callback):
     visited = set()
+    explicit_ops = set()
+
     def _traverse(op):
         if op in visited:
             return
         visited.add(op)
-        if op.tag == 'antares_injective':
-            if op not in s.outputs:
-                s[op].compute_inline()
-            for tensor in op.input_tensors:
-                if isinstance(tensor.op, te.tensor.ComputeOp):
-                    _traverse(tensor.op)
-        callback(op)
+        for tensor in op.input_tensors:
+          if isinstance(tensor.op, te.tensor.ComputeOp):
+            _traverse(tensor.op)
+        if op.reduce_axis:
+          explicit_ops.add(op)
+        elif op not in s.outputs:
+          s[op].compute_inline()
     _traverse(final_op)
+
+    if not explicit_ops:
+      explicit_ops.add(final_op)
+    for op in explicit_ops:
+      callback(op)
 
 def do_native_scheduling(attrs):
 
@@ -160,7 +165,7 @@ def get_template_op(**kwargs):
   assert(program.startswith('- '))
 
   global placeholders, output_saver
-  placeholders, output_saver = {}, None
+  placeholders, output_saver = {}, {"outputs": [], "flops": 0}
   AntaresGlobal.current_arg_bufs = {'_in': [], '_out': []}
 
   program = program[2:].strip()
@@ -170,22 +175,17 @@ def get_template_op(**kwargs):
     AntaresGlobal.current_arg_bufs['_out'].sort(key=lambda x: x['name'])
 
     inputs = sorted(list(placeholders.values()), key=lambda x: x.name)
-    output = output_saver["output"]
+    outputs = output_saver["outputs"]
     cfg = autotvm.get_config()
     cfg.flop = output_saver["flops"]
-    sch = te.create_schedule(output.op)
+    sch = te.create_schedule(outputs[0].op)
 
     anno, options = program.find('## @'), []
     if anno >= 0:
       program, options = program[:anno].strip(), program[program.index(':', anno) + 1:].strip().split('|')
 
     def _callback(op):
-      if op.tag != 'antares_injective':
         output_spec = op.output(0)
-        for inp in sch[output_spec].op.input_tensors:
-          if isinstance(inp.op, te.tensor.ComputeOp) and not inp.op.reduce_axis:
-            sch[inp].compute_inline()
-
         attrs = Mock()
         attrs.inputs = inputs
         attrs.outputs = [output_spec]
@@ -200,5 +200,5 @@ def get_template_op(**kwargs):
         AntaresGlobal.attrs = attrs
         do_native_scheduling(attrs)
 
-    traverse_inline(sch, output.op, _callback)
-    return sch, inputs + [output]
+    traverse_inline(sch, outputs[0].op, _callback)
+    return sch, inputs + outputs
