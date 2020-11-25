@@ -10,6 +10,7 @@ import json
 import os
 import importlib
 import traceback
+import re
 
 from antares.common import Mock, AntaresGlobal, backend
 
@@ -72,7 +73,7 @@ def common_reduce(name, args=(0,)):
   return te.comm_reducer(reduce_op, lambda t: tir.const(args[0], dtype=t), name=name)
 
 def input(name, shape, dtype="float32"):
-  AntaresGlobal.current_arg_bufs['_in'] += [{'name': name, 'dtype': dtype, 'shape': shape}]
+  AntaresGlobal.local_arg_pros['_in'] += [{'name': name, 'dtype': dtype, 'shape': shape}]
 
   global placeholders
   if len(shape) == 0:
@@ -100,7 +101,7 @@ def output(shape, func=None, flops=None, name='output0', topi=None, dtype=None, 
   if not dtype:
     dtype = result.dtype
   target = {'name': name, 'shape': shape, 'dtype': dtype}
-  AntaresGlobal.current_arg_bufs['_out'].append(target)
+  AntaresGlobal.local_arg_pros['_out'].append(target)
 
   global output_saver
   output_saver["outputs"].append(result)
@@ -158,6 +159,17 @@ def do_native_scheduling(attrs):
   return select_plan(plan)
 
 
+intermediate_output = 'MultipleOutputsTempVar'
+
+def refactor_multiple_names(code, global_arg_bufs):
+  if len(global_arg_bufs['_out']) <= 1:
+    return code
+  for i in range(len(global_arg_bufs['_out'])):
+    std_name = global_arg_bufs['_out'][i]['name']
+    code = re.sub(r'\b%s\b' % std_name, '__%s' % std_name, code)
+    code = re.sub(r'\b%s_v%d\b' % (intermediate_output, i), std_name, code)
+  return code
+
 @autotvm.template("template_op")
 def get_template_op(**kwargs):
   if 'COMPUTE_V1' not in os.environ:
@@ -167,13 +179,13 @@ def get_template_op(**kwargs):
 
   global placeholders, output_saver
   placeholders, output_saver = {}, {"outputs": [], "flops": 0}
-  AntaresGlobal.current_arg_bufs = {'_in': [], '_out': []}
+  AntaresGlobal.local_arg_pros = {'_in': [], '_out': []}
 
   program = program[2:].strip()
   if program:
     exec('import tvm; from tvm import topi; ' + program, globals())
-    AntaresGlobal.current_arg_bufs['_in'].sort(key=lambda x: x['name'])
-    AntaresGlobal.current_arg_bufs['_out'].sort(key=lambda x: x['name'])
+    AntaresGlobal.local_arg_pros['_in'].sort(key=lambda x: x['name'])
+    AntaresGlobal.local_arg_pros['_out'].sort(key=lambda x: x['name'])
 
     inputs = sorted(list(placeholders.values()), key=lambda x: x.name)
     outputs = output_saver["outputs"]
@@ -189,7 +201,7 @@ def get_template_op(**kwargs):
         return [int(d) for d in shape]
       for i in range(1, len(outputs)):
         assert to_list(outputs[0].shape) == to_list(outputs[i].shape), "Shape sizes for multiple outputs should be equal."
-      outputs = te.compute(outputs[0].shape, lambda *X: [v[X] for v in outputs], name="MultipleOutputsTempVar")
+      outputs = te.compute(outputs[0].shape, lambda *X: [v[X] for v in outputs], name=intermediate_output)
     sch = te.create_schedule([outputs[i].op for i in range(len(outputs))])
 
     def _callback(op):

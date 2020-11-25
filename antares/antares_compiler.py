@@ -20,7 +20,7 @@ from tvm.autotvm.task.dispatcher import ApplyConfig
 from tvm.autotvm.task import ConfigEntity
 
 from antares.common import *
-from lang.generic import custom_dtypes
+from lang.generic import custom_dtypes, refactor_multiple_names
 
 signal.signal(signal.SIGINT, lambda signum, frame: sys.exit(1))
 
@@ -53,14 +53,14 @@ def get_search_space(config_space):
 
 def translate_code(code):
   assert(len(code.split('extern "C"')) == 2)
+  global_arg_bufs = os.environ.get('GLOBAL_ARG_PROPS', '')
+  if not global_arg_bufs:
+    global_arg_bufs = AntaresGlobal.local_arg_pros
+  else:
+    global_arg_bufs = json.loads(global_arg_bufs)
+
   def get_kernel_metadata():
     inp_args, outp_args = [], []
-
-    global_arg_bufs = os.environ.get('GLOBAL_ARG_PROPS', '')
-    if not global_arg_bufs:
-      global_arg_bufs = AntaresGlobal.current_arg_bufs
-    else:
-      global_arg_bufs = json.loads(global_arg_bufs)
 
     for buf in global_arg_bufs['_in']:
       if buf['name'].startswith('_'):
@@ -75,6 +75,7 @@ def translate_code(code):
     properties = "// CONFIG: %s\n// COMPUTE_V1: %s\n" % (os.environ['CONFIG'].strip(), os.environ['COMPUTE_V1'])
     return header_meta + properties
 
+  code = refactor_multiple_names(code, global_arg_bufs)
   code = platform_config.do_native_translation(code, attrs=AntaresGlobal.attrs)
   try:
     defs = platform_config.get_intrisic_defs() + '\n'
