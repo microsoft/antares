@@ -2,6 +2,7 @@
 # Licensed under the MIT license.
 
 import subprocess
+import re
 
 from antares.common import type_to_c, AntaresGlobal
 
@@ -12,7 +13,7 @@ def get_compile_kernel_args(kernel_src, kernel_out, device_props):
     return ['/bin/cp', kernel_src, kernel_out]
 
 def do_native_translation(code, **kwargs):
-    arg_bufs = AntaresGlobal.current_arg_bufs
+    arg_bufs = AntaresGlobal.local_arg_pros
 
     registers = []
     for i, buf in enumerate(arg_bufs['_in']):
@@ -73,6 +74,6 @@ def do_native_translation(code, **kwargs):
     code = '\n'.join(lines)
     default_thread_count = 1
     code = '[numthreads(%d, %d, %d)]\nvoid CSMain(uint3 threadIdx: SV_GroupThreadID, uint3 blockIdx: SV_GroupID, uint3 dispatchIdx: SV_DispatchThreadID) ' % (numthreads.get('threadIdx.x', default_thread_count), numthreads.get('threadIdx.y', default_thread_count), numthreads.get('threadIdx.z', default_thread_count)) + code[code.index('{'):]
-    code = code.replace('__syncthreads()', 'GroupMemoryBarrierWithGroupSync()');
+    code = re.sub(r'\b__syncthreads\b', 'GroupMemoryBarrierWithGroupSync', code);
     code = '\n'.join(lds) + ('\n\n' if lds else '') + ''.join(registers) + '\n' + kwargs['attrs'].blend + '\n' + code
     return code

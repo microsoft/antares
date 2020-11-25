@@ -27,7 +27,7 @@ def remove_local_cache(code, arg_bufs):
     return '\n'.join(result)
 
 def do_native_translation(code, **kwargs):
-    arg_bufs = AntaresGlobal.current_arg_bufs
+    arg_bufs = AntaresGlobal.local_arg_pros
 
     idx = code.index('(', code.index('extern "C" __global__ ')) + 1
     tail = code.index(') {\n', idx)

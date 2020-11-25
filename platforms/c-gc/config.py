@@ -27,7 +27,7 @@ def remove_local_cache(code, arg_bufs):
     return '\n'.join(result)
 
 def do_native_translation(code, **kwargs):
-    arg_bufs = AntaresGlobal.current_arg_bufs
+    arg_bufs = AntaresGlobal.local_arg_pros
 
     if 'einstein_v2' not in kwargs['attrs'].ir:
       raise Exception("Program for graphcore must be based on Antares IR")
@@ -49,8 +49,11 @@ def do_native_translation(code, **kwargs):
     blend_code = 'namespace {\n%s\n}\n\n' if blend_code else ''
 
     from antares.common import local_get_dir_file
-    with open(local_get_dir_file('range_book.json'), 'r') as fp:
-      range_book = json.load(fp)
+    try:
+      with open(local_get_dir_file('range_book.json'), 'r') as fp:
+        range_book = json.load(fp)
+    except FileNotFoundError:
+      raise Exception("TODO: Graphcore code generation is not implemented in new emit_tvm_ir_v2()")
 
     props = []
     for k in range_book['book']:

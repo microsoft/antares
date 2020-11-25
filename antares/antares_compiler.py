@@ -20,7 +20,7 @@ from tvm.autotvm.task.dispatcher import ApplyConfig
 from tvm.autotvm.task import ConfigEntity
 
 from antares.common import *
-from templates.auto.generic import custom_dtypes
+from lang.generic import custom_dtypes, refactor_multiple_names
 
 signal.signal(signal.SIGINT, lambda signum, frame: sys.exit(1))
 
@@ -53,28 +53,29 @@ def get_search_space(config_space):
 
 def translate_code(code):
   assert(len(code.split('extern "C"')) == 2)
+  global_arg_props = os.environ.get('GLOBAL_ARG_PROPS', '')
+  if not global_arg_props:
+    global_arg_props = AntaresGlobal.local_arg_pros
+  else:
+    global_arg_props = json.loads(global_arg_props)
+
   def get_kernel_metadata():
     inp_args, outp_args = [], []
 
-    global_arg_bufs = os.environ.get('GLOBAL_ARG_PROPS', '')
-    if not global_arg_bufs:
-      global_arg_bufs = AntaresGlobal.current_arg_bufs
-    else:
-      global_arg_bufs = json.loads(global_arg_bufs)
-
-    for buf in global_arg_bufs['_in']:
+    for buf in global_arg_props['_in']:
       if buf['name'].startswith('_'):
         # Just for Auto Shard
         assert(buf['dtype'] == 'int32' and buf['shape'] == [1])
         continue
       inp_args.append('-'.join([str(x) for x in buf['shape']]) + '/' + buf['dtype'] + '/' + buf['name'])
-    for buf in global_arg_bufs['_out']:
+    for buf in global_arg_props['_out']:
       outp_args.append('-'.join([str(x) for x in buf['shape']]) + '/' + buf['dtype'] + '/' + buf['name'])
 
     header_meta = '///' + ','.join(inp_args) + ':' + ','.join(outp_args) + '\n// BACKEND = %s\n' % backend
-    properties = "// CONFIG: %s\n// COMPUTE_V1: %s\n" % (os.environ['CONFIG'].strip(), os.environ['COMPUTE_V1'] if os.environ['OP'] == 'auto.generic' else os.environ['OP'])
+    properties = "// CONFIG: %s\n// COMPUTE_V1: %s\n" % (os.environ['CONFIG'].strip(), os.environ['COMPUTE_V1'])
     return header_meta + properties
 
+  code = refactor_multiple_names(code, global_arg_props)
   code = platform_config.do_native_translation(code, attrs=AntaresGlobal.attrs)
   try:
     defs = platform_config.get_intrisic_defs() + '\n'
@@ -226,9 +227,12 @@ def evaluate_perf(kernel_path, task_flop, dev_id):
         print("\n[Antares] Average time cost / run = %g sec, %g gflops." % (t, gflops))
       with open(local_get_dir_file('result.txt'), 'w') as fp:
         fp.write(str(t) + '\n')
-        if 'K/0' in result:
-          fp.write(str(result['K/0']) + '\n')
-    if os.environ['OP'] == 'auto.generic' and os.environ.get('COMMIT', ''):
+        for i in range(len(result)):
+          key = 'K/%d' % i
+          if key not in result:
+            break
+          fp.write(str(result[key]) + '\n')
+    if os.environ.get('COMMIT', ''):
       kernel_path = codehub_db(os.environ['COMPUTE_V1'], source_code=device_source + '\n// Saved Perf = %g sec / run' % t)
       print('  >> Update current code to codehub: %s' % kernel_path)
 
@@ -258,7 +262,9 @@ def evaluate_perf(kernel_path, task_flop, dev_id):
   return results
 
 def compute_mem_ratio(tpr):
-  access_bytes = int(os.environ.get('MEM_ACCESS', '0'))
+  access_bytes = int(os.environ.get('MEM_ACCESS', '-1'))
+  if access_bytes < 0:
+    return -1
   ratio = np.ceil(access_bytes * 1e-7 / tpr / device_properties().mem_bandwith)
   return min(int(ratio), 100)
 
@@ -287,11 +293,13 @@ def run_config_entity(params_given, dir_sid, expected_timecost='inf', tune_dev_i
     assert 0 == os.system(exe_cmd)
     with open(result_file, 'r') as fp:
       parts = fp.read().split()
+      if len(parts) == 1:
+        parts.append('inf')
       result = float(parts[0].strip())
-      digest = float(parts[1].strip()) if len(parts) > 1 else float('inf')
+      digest = ','.join(['%.6e' % float(x.strip()) for x in parts[1:]])
   except:
     result = digest = float('inf')
-  print("  >> [*] Param_entity on sid = %s: config = '%s', tpr = `%.6f`, digest = `%g`, mem_occupy = %d %%" % (dir_sid, config_str, result, digest, compute_mem_ratio(result)))
+  print("  >> [*] Param_entity on sid = %s: config = '%s', tpr = `%.6f`, digest = `%s`, mem_occupy = %d %%" % (dir_sid, config_str, result, digest, compute_mem_ratio(result)))
   return result
 
 
@@ -300,7 +308,7 @@ def main_compute(code_only=False):
   logging.getLogger('autotvm').setLevel(logging.DEBUG)
   logging.getLogger('autotvm').addHandler(logging.StreamHandler(sys.stdout))
 
-  default_tune_op = importlib.import_module('templates.' + (os.environ['OP'] if 'OP' in os.environ else 'auto.generic'))
+  default_tune_op = importlib.import_module('lang.generic')
   if verbose:
     print('  >> Backend = %s, Python PID = %s, Task = %s;' % (backend, os.getpid(), default_tune_op.__name__))
 
@@ -482,14 +490,13 @@ def main_compute(code_only=False):
       raise Exception('Unrecognized tuner type: `%s`' % tuner_type)
     exit(0)
   else:
-    if os.environ['OP'] == 'auto.generic':
-      saved_code = codehub_db(os.environ['COMPUTE_V1'])
-      if saved_code is not None:
-        print("  >> Using Saved Code from Codehub:")
-        print("===========================")
-        print(saved_code)
-        print("===========================")
-        exit(0)
+    saved_code = codehub_db(os.environ['COMPUTE_V1'])
+    if saved_code is not None:
+      print("  >> Using Saved Code from Codehub:")
+      print("===========================")
+      print(saved_code)
+      print("===========================")
+      exit(0)
     best_config = ''
 
   assert isinstance(best_config, str)
@@ -553,7 +560,6 @@ if __name__ == '__main__':
 
     def clear_environ(compute_exp, step):
       os.environ['COMPUTE_V1'] = compute_exp
-      os.environ['OP'] = 'auto.generic'
       os.environ['STEP'] = str(step)
       os.environ['LL_IR'] = ''
       os.environ['COMMIT'] = 'force'
