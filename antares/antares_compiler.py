@@ -53,29 +53,29 @@ def get_search_space(config_space):
 
 def translate_code(code):
   assert(len(code.split('extern "C"')) == 2)
-  global_arg_bufs = os.environ.get('GLOBAL_ARG_PROPS', '')
-  if not global_arg_bufs:
-    global_arg_bufs = AntaresGlobal.local_arg_pros
+  global_arg_props = os.environ.get('GLOBAL_ARG_PROPS', '')
+  if not global_arg_props:
+    global_arg_props = AntaresGlobal.local_arg_pros
   else:
-    global_arg_bufs = json.loads(global_arg_bufs)
+    global_arg_props = json.loads(global_arg_props)
 
   def get_kernel_metadata():
     inp_args, outp_args = [], []
 
-    for buf in global_arg_bufs['_in']:
+    for buf in global_arg_props['_in']:
       if buf['name'].startswith('_'):
         # Just for Auto Shard
         assert(buf['dtype'] == 'int32' and buf['shape'] == [1])
         continue
       inp_args.append('-'.join([str(x) for x in buf['shape']]) + '/' + buf['dtype'] + '/' + buf['name'])
-    for buf in global_arg_bufs['_out']:
+    for buf in global_arg_props['_out']:
       outp_args.append('-'.join([str(x) for x in buf['shape']]) + '/' + buf['dtype'] + '/' + buf['name'])
 
     header_meta = '///' + ','.join(inp_args) + ':' + ','.join(outp_args) + '\n// BACKEND = %s\n' % backend
     properties = "// CONFIG: %s\n// COMPUTE_V1: %s\n" % (os.environ['CONFIG'].strip(), os.environ['COMPUTE_V1'])
     return header_meta + properties
 
-  code = refactor_multiple_names(code, global_arg_bufs)
+  code = refactor_multiple_names(code, global_arg_props)
   code = platform_config.do_native_translation(code, attrs=AntaresGlobal.attrs)
   try:
     defs = platform_config.get_intrisic_defs() + '\n'

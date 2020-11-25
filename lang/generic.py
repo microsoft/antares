@@ -161,11 +161,11 @@ def do_native_scheduling(attrs):
 
 intermediate_output = 'MultipleOutputsTempVar'
 
-def refactor_multiple_names(code, global_arg_bufs):
-  if len(global_arg_bufs['_out']) <= 1:
+def refactor_multiple_names(code, global_arg_props):
+  if len(global_arg_props['_out']) <= 1:
     return code
-  for i in range(len(global_arg_bufs['_out'])):
-    std_name = global_arg_bufs['_out'][i]['name']
+  for i in range(len(global_arg_props['_out'])):
+    std_name = global_arg_props['_out'][i]['name']
     code = re.sub(r'\b%s\b' % std_name, '__%s' % std_name, code)
     code = re.sub(r'\b%s_v%d\b' % (intermediate_output, i), std_name, code)
   return code
