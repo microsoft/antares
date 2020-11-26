@@ -1,6 +1,10 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
 
+
+#include "D3D12APIWrapper.h"
+
+#ifndef _API_WRAPPER_V2_
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <string>
@@ -43,10 +47,14 @@ struct dx_shader_t {
     std::vector<dx_tensor_t> inputs, outputs;
     std::string source;
     CD3DX12_SHADER_BYTECODE bytecode;
-    void* computeShader;
+#ifdef _USE_DXC_
+    ComPtr<IDxcBlob> computeShader;
+#else
+    ComPtr<ID3DBlob> computeShader;
+#endif
 };
 
-static antares::D3DDevice device(true, true);
+static antares::D3DDevice device(false, false);
 static std::unordered_map<size_t, std::vector<void*>> bufferDict;
 
 static std::string get_between(const std::string& source, const std::string& begin, const std::string& end, const char* def = "") {
@@ -146,14 +154,15 @@ __EXPORT__ void* dxLoadShader(const char* _source, int *num_inputs, int *num_out
 
 #ifdef _USE_DXC_
     // Use cs_6_0 since dxc only supports cs_6_0 or higher shader models.
-    IDxcBlob* computeShader = nullptr;
-    computeShader = antares::DXCompiler::Get()->Compile(source.data(), source.size(), L"CSMain", L"cs_6_0").Get();
+    //IDxcBlob* computeShader = nullptr;
+    //computeShader = antares::DXCompiler::Get()->Compile(source.data(), source.size(), L"CSMain", L"cs_6_0").Get(); // Bug fix.
+    auto computeShader = antares::DXCompiler::Get()->Compile(source.data(), source.size(), L"CSMain", L"cs_6_0");
     if (computeShader != nullptr)
         handle->bytecode = CD3DX12_SHADER_BYTECODE(computeShader->GetBufferPointer(), computeShader->GetBufferSize());
 #else
-    ID3DBlob* computeShader = nullptr;
+    ComPtr<ID3DBlob> computeShader = nullptr;
     if (D3DCompile(source.data(), source.size(), NULL, NULL, NULL, "CSMain", "cs_5_1", 0, 0, &computeShader, NULL) >= 0 && computeShader != nullptr)
-        handle->bytecode = CD3DX12_SHADER_BYTECODE(computeShader);
+        handle->bytecode = CD3DX12_SHADER_BYTECODE(computeShader.Get());
 #endif
     if (computeShader == nullptr) {
         delete handle;
@@ -292,7 +301,7 @@ __EXPORT__ void dxLaunchShader(void* handle, void** buffers)
     ComPtr<ID3D12CommandAllocator> m_computeCommandAllocator;
     D3D12_COMPUTE_PIPELINE_STATE_DESC computePsoDesc{};
 
-#ifdef _USE_DECRIPTOR_HEAP_
+#ifdef _USE_DESCRIPTOR_HEAP_
 
     struct DescHeap {
         ComPtr<ID3D12DescriptorHeap> heap;
@@ -366,7 +375,7 @@ __EXPORT__ void dxLaunchShader(void* handle, void** buffers)
     m_computeCommandList->SetComputeRootSignature(m_computeRootSignature.Get());
 
 
-#ifdef _USE_DECRIPTOR_HEAP_
+#ifdef _USE_DESCRIPTOR_HEAP_
     // Prepare Heap Argument Offset
     for (int i = 0; i < hd->inputs.size(); ++i) {
         D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
@@ -452,4 +461,14 @@ __EXPORT__ void dxSynchronize()
     }
     sync_list();
     reservedResources.clear();
+
+    device.SyncTimerData();
+    auto times = device.GetAllTimes();
+    for (auto t : times)
+    {
+        std::wcout << t << "\n";
+    }
+    
 }
+
+#endif
