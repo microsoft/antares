@@ -273,7 +273,7 @@ def warp_axis(ax_name):
 
 def emit_tvm_body(node, props):
   if node._op == 'const':
-    return '%s' % node._value
+    return 'tir.const(%s, dtype="%s")' % (node._value, node._dtype)
   elif node._op == 'get_item':
     tensor = node._value['tensor']
     index = node._value['index']
@@ -310,8 +310,6 @@ def emit_tvm_body(node, props):
     else:
       raise Exception('Unrecognized op type: %s[%d]' % (op_name, op_input_size))
   elif node._op == 'cast':
-    if node._value["inputs"][0]._op == 'const':
-      return 'tir.const(%s, "%s")' % (emit_tvm_body(node._value["inputs"][0], props), node._value['name'])
     return '%s.astype(cast_dtype("%s"))' % (emit_tvm_body(node._value["inputs"][0], props), node._value['name'])
   elif node._op == 'call':
     return 'tir.call_pure_extern(cast_dtype("%s"), "%s", %s)' % (node._dtype, node._value['name'], ', '.join([emit_tvm_body(x, props) for x in node._value["inputs"]]))
