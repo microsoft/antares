@@ -78,7 +78,7 @@ def generate_source_file(kernel_code):
             input_types.append(type[:idx])
             bits = int(type[idx + 1:])
             type = "byte"
-            size = size * bits / 8
+            size = size * bits // 8
         else:
             input_types.append(type_converter[type])
         if not type in type_converter:
@@ -101,7 +101,7 @@ def generate_source_file(kernel_code):
             output_types.append(type[:idx])
             bits = int(type[idx + 1:])
             type = "byte"
-            size = size * bits / 8
+            size = size * bits // 8
         else:
             output_types.append(type_converter[type])
         if not type in type_converter:

@@ -311,7 +311,7 @@ def emit_tvm_body(node, props):
       raise Exception('Unrecognized op type: %s[%d]' % (op_name, op_input_size))
   elif node._op == 'cast':
     if node._value["inputs"][0]._op == 'const':
-      return 'np.%s(%s)' % (node._value['name'], emit_tvm_body(node._value["inputs"][0], props))
+      return 'tir.const(%s, "%s")' % (emit_tvm_body(node._value["inputs"][0], props), node._value['name'])
     return '%s.astype(cast_dtype("%s"))' % (emit_tvm_body(node._value["inputs"][0], props), node._value['name'])
   elif node._op == 'call':
     return 'tir.call_pure_extern(cast_dtype("%s"), "%s", %s)' % (node._dtype, node._value['name'], ', '.join([emit_tvm_body(x, props) for x in node._value["inputs"]]))
@@ -439,24 +439,6 @@ def build_fused_ast(statements, input_dict):
     ast['injective']['props']['input_dict'] = ast['props']['input_dict']
   return ast
 
-def compute_mem_access(ast):
-
-  def parse_bytes(dtype):
-    for i in reversed(range(len(dtype) - 1)):
-      if not dtype[i].isdigit():
-        return (int(dtype[i + 1:]) + 7) // 8
-    raise Exception('Illegal data type: %s' % dtype)
-
-  mem_access_bytes = 0
-  for k in ast['props']['input_dict']:
-    prop = ast['props']['input_dict'][k]
-    mem_access_bytes += np.product(prop['shape']) * parse_bytes(prop['dtype'])
-  for k in ast['props']['output_dict']:
-    prop = ast['props']['output_dict'][k]
-    mem_access_bytes += np.product(prop['shape']) * parse_bytes(prop['dtype'])
-
-  return mem_access_bytes
-
 def emit_tvm_ir_v2(exprss, input_dict, extra_outputs):
   statements = [s_.strip() for s_ in exprss.split(';')]
   inputs = copy.deepcopy(input_dict)
@@ -547,8 +529,6 @@ def emit_tvm_ir(exprss, input_dict, extra_outputs):
 
   from lang import simplify
   simplify.compute(ast)
-
-  os.environ['MEM_ACCESS'] = str(compute_mem_access(ast))
 
   bias_axis_body = ''
 
