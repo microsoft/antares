@@ -51,13 +51,17 @@ def get_search_space(config_space):
       raise Exception("Cannot recognize search space type: %s" % (config_space.space_map[name].__class__))
   return search_space
 
-def translate_code(code):
-  assert(len(code.split('extern "C"')) == 2)
+def get_global_arg_props():
   global_arg_props = os.environ.get('GLOBAL_ARG_PROPS', '')
   if not global_arg_props:
     global_arg_props = AntaresGlobal.local_arg_pros
   else:
     global_arg_props = json.loads(global_arg_props)
+  return global_arg_props
+
+def translate_code(code):
+  assert(len(code.split('extern "C"')) == 2)
+  global_arg_props = get_global_arg_props()
 
   def get_kernel_metadata():
     inp_args, outp_args = [], []
@@ -182,11 +186,9 @@ def get_target_source(s, arg_bufs, dir_sid=None):
       for allocate_type, allocate_size in allocate_shared:
         if allocate_type.startswith('custom['):
           type_name = allocate_type[7:].split(']')[0]
-          shared_memory_inc = int(custom_dtypes[type_name][-1].split('@')[-1])
         else:
-          shared_memory_inc = 8 * np.dtype(allocate_type).itemsize
-        assert shared_memory_inc % 8 == 0, "The bits of shared_memory is not aligned with 8-bit bytes."
-        shared_memory_in_bytes += shared_memory_inc // 8 * allocate_size
+          type_name = allocate_type
+        shared_memory_in_bytes += get_type_size(type_name) * allocate_size
 
       if shared_memory_in_bytes > max_shared_memory_per_block:
         raise Exception("Invalid kernel code: using shared_memory_in_bytes %d > max_shared_memory_per_block %d" % (shared_memory_in_bytes, max_shared_memory_per_block))
@@ -262,8 +264,15 @@ def evaluate_perf(kernel_path, task_flop, dev_id):
   return results
 
 def compute_mem_ratio(tpr):
-  access_bytes = int(os.environ.get('MEM_ACCESS', '-1'))
-  if access_bytes < 0:
+  global_arg_props = get_global_arg_props()
+  access_bytes = 0
+  for buf in global_arg_props['_in']:
+    access_bytes += np.product(buf['shape']) * get_type_size(buf['dtype'])
+  for buf in global_arg_props['_out']:
+    access_bytes += np.product(buf['shape']) * get_type_size(buf['dtype'])
+
+  access_bytes = int(access_bytes)
+  if access_bytes <= 0:
     return -1
   ratio = np.ceil(access_bytes * 1e-7 / tpr / device_properties().mem_bandwith)
   return min(int(ratio), 100)
