@@ -83,6 +83,14 @@ def type_to_c(dtype):
     return native_types[dtype]
   raise Exception("Unhandled ctype mapping case: %s" % dtype)
 
+def get_type_size(dtype):
+  for i in reversed(range(len(dtype))):
+    if not dtype[i].isdigit():
+      bits = int(dtype[i + 1:])
+      assert bits % 8 == 0, "Data type size must align with 8-bit byte size."
+      return bits // 8
+  raise Exception("Unrecognized data size for data type: %s" % dtype)
+
 backend = os.environ['BACKEND'] if 'BACKEND' in os.environ else 'c-rocm'
 AntaresGlobal = Mock()
 
