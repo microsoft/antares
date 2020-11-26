@@ -145,8 +145,12 @@ void CSMain(uint3 threadIdx: SV_GroupThreadID, uint3 blockIdx : SV_GroupID, uint
             var kargs = new IntPtr[]{d_input0, d_output0};
             
 			dxRecordQuery(query0, stream);
+			List<IntPtr> qlist = new List<IntPtr>();
 			for(int i=0; i<100; ++i)
 			{
+				var query = dxCreateQuery();
+				qlist.Add(query);
+				dxRecordQuery(query, stream);
 				dxLaunchShaderAsync(handle, kargs, stream);
 			}
 			dxRecordQuery(query1, stream);
@@ -160,10 +164,18 @@ void CSMain(uint3 threadIdx: SV_GroupThreadID, uint3 blockIdx : SV_GroupID, uint
 			
 			var time_result = dxQueryElapsedTime(query0, query1);
 			
+			for(int i=0; i<qlist.Count-1; ++i)
+			{
+				var t = dxQueryElapsedTime(qlist[i], qlist[i+1]);
+				Console.WriteLine("Run " + i + ": " + t + "s.");
+			}
+			
+			// TODO: release resources.
+			
             // print result
             Console.WriteLine("Reading results back:");
             Console.WriteLine("  output0 = [" + h_output0[0] + ", " + h_output0[1] + ", .., " + h_output0[31] + "]");
-			 Console.WriteLine("Kernel launch time: " + time_result);
+			Console.WriteLine("Total kernel launch time: " + time_result);
             Console.Write("Program finished successfully.");
             Console.ReadKey();
         }
