@@ -591,8 +591,11 @@ if __name__ == '__main__':
           code = codehub_db(compute_exp)
           if code is None:
             clear_environ(compute_exp, 0)
+            is_duplicated = len([c for s, c in task_lists if c == compute_exp]) > 0
             try:
               code = main_compute(code_only=True)
+              if is_duplicated:
+                code += '\n// Antares Tuning is in Pending Status'
             except:
               print('>> Kernel code failed to generate.')
               code = '[ERROR] ' + traceback.format_exc()
