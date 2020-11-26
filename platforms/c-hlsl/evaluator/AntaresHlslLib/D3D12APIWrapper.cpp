@@ -1,174 +1,196 @@
-#include "D3D12APIWrapper.h"
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <string>
 #include <cassert>
 #include <unordered_map>
 #include <vector>
-#include "d3dx12_antares.h"
 
-#ifdef _API_WRAPPER_V2_
-struct dx_buffer_t
-{
-    size_t size;
-    ComPtr<ID3D12Resource> handle;
-    
-    // Added state management code.
-    D3D12_RESOURCE_STATES state;
-    void StateTransition(ID3D12GraphicsCommandList* pCmdList, D3D12_RESOURCE_STATES dstState)
+#define _USE_GPU_TIMER_
+// #define _USE_DESCRIPTOR_HEAP_
+// #define _USE_DXC_
+
+#include "D3D12Antares.h"
+#include "D3D12APIWrapper.h"
+
+namespace {
+    struct dx_buffer_t
     {
-        if (dstState != state)
+        size_t size;
+        ComPtr<ID3D12Resource> handle;
+
+        // Added state management code.
+        D3D12_RESOURCE_STATES state;
+        void StateTransition(ID3D12GraphicsCommandList* pCmdList, D3D12_RESOURCE_STATES dstState)
         {
-            D3D12_RESOURCE_BARRIER barrier;
-            ZeroMemory(&barrier, sizeof(barrier));
-            barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-            barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-            barrier.Transition.pResource = handle.Get();
-            barrier.Transition.StateBefore = state;
-            barrier.Transition.StateAfter = dstState;
-            barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-            pCmdList->ResourceBarrier(1, &barrier);
-            state = dstState;
-        }
-        else if (dstState == D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
-        {
-            //Add UAV barrier
-            D3D12_RESOURCE_BARRIER barrier;
-            ZeroMemory(&barrier, sizeof(barrier));
-            barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
-            barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-            barrier.UAV.pResource = handle.Get();
-            pCmdList->ResourceBarrier(1, &barrier);
-        }
-    }
-};
-
-struct dx_tensor_t
-{
-    std::vector<size_t> shape;
-    std::string name, dtype;
-
-    size_t NumElements() {
-        return std::accumulate(shape.begin(), shape.end(), (size_t)1L, std::multiplies<size_t>());
-    }
-
-    size_t TypeSize() {
-        for (int i = (int)dtype.size() - 1; i >= 0; --i) {
-            if (!isdigit(dtype[i])) {
-                int bits = std::atoi(dtype.c_str() + i + 1);
-                if (bits % 8 > 0)
-                    throw std::runtime_error("Data type bitsize must align with 8-bit byte type.");
-                return bits / 8;
+            if (dstState != state)
+            {
+                D3D12_RESOURCE_BARRIER barrier;
+                ZeroMemory(&barrier, sizeof(barrier));
+                barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+                barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+                barrier.Transition.pResource = handle.Get();
+                barrier.Transition.StateBefore = state;
+                barrier.Transition.StateAfter = dstState;
+                barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+                pCmdList->ResourceBarrier(1, &barrier);
+                state = dstState;
+            }
+            else if (dstState == D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+            {
+                //Add UAV barrier
+                D3D12_RESOURCE_BARRIER barrier;
+                ZeroMemory(&barrier, sizeof(barrier));
+                barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+                barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+                barrier.UAV.pResource = handle.Get();
+                pCmdList->ResourceBarrier(1, &barrier);
             }
         }
-        throw std::runtime_error(("Invalid data type name: " + dtype).c_str());
-    }
-};
-
-struct dx_shader_t
-{
-    int block[3], thread[3];
-    std::vector<dx_tensor_t> inputs, outputs;
-    std::string source;
-    CD3DX12_SHADER_BYTECODE bytecode;
-
-    // Added D3D12 resource ptr.
-    ComPtr<ID3D12RootSignature> pRootSignature;
-    ComPtr<ID3D12PipelineState> pPSO;
-};
-
-// Query heaps are used to allocate query objects.
-struct dx_query_heap_t
-{
-    ComPtr<ID3D12QueryHeap> pHeap;
-    ComPtr<ID3D12Resource> pReadbackBuffer;
-    uint32_t curIdx;
-    uint32_t totSize;
-};
-
-// Currently queries are only used to query GPU time-stamp.
-struct dx_query_t
-{
-    uint32_t heapIdx;
-    uint32_t queryIdxInHeap;
-};
-
-// Stream is wrapper of resources for record and execute commands.
-// Currently it only wraps commandlist, allocator and descriptor heaps.
-// Since all streams essentially will be submitted to a single DIRECT queue, their execution are not overlapped on GPU.
-// In the future we may submit streams to multiple queues for overlapped execution.
-struct dx_stream_t
-{
-    // Set and get by device.
-    uint64_t fenceVal = 0;
-    enum class State
-    {
-        INRECORD,
-        SUBMITTED,
     };
 
-    // A stream is a wrapper of cmdlist, cmdallocator and descriptor heap.
-    ComPtr<ID3D12GraphicsCommandList> pCmdList;
-    ComPtr<ID3D12CommandAllocator> pCmdAllocator;
-#ifdef _USE_DESCRIPTOR_HEAP_
-    ComPtr<ID3D12DescriptorHeap> pDescHeap;
-#endif
-    State state;
-    uint32_t descIdxOffset = 0;
-
-    void Reset()
+    struct dx_tensor_t
     {
-        pCmdAllocator->Reset();
-        pCmdList->Reset(pCmdAllocator.Get(), nullptr);
-        descIdxOffset = 0;
-        state = State::INRECORD;
-#ifdef _USE_DESCRIPTOR_HEAP_
-        ID3D12DescriptorHeap* pDescHeaps[] = { pDescHeap.Get() };
-        pCmdList->SetDescriptorHeaps(1, pDescHeaps);
-#endif
-        queryHeapsNeedToResolve.clear();
-    }
+        std::vector<size_t> shape;
+        std::string name, dtype;
 
-    std::vector<size_t> queryHeapsNeedToResolve;
-};
+        size_t NumElements() {
+            return std::accumulate(shape.begin(), shape.end(), (size_t)1L, std::multiplies<size_t>());
+        }
+
+        size_t TypeSize() {
+            for (int i = (int)dtype.size() - 1; i >= 0; --i) {
+                if (!isdigit(dtype[i])) {
+                    int bits = std::atoi(dtype.c_str() + i + 1);
+                    if (bits % 8 > 0)
+                        throw std::runtime_error("Data type bitsize must align with 8-bit byte type.");
+                    return bits / 8;
+                }
+            }
+            throw std::runtime_error(("Invalid data type name: " + dtype).c_str());
+        }
+    };
+
+    struct dx_shader_t
+    {
+        int block[3], thread[3];
+        std::vector<dx_tensor_t> inputs, outputs;
+        std::string source;
+        CD3DX12_SHADER_BYTECODE bytecode;
+
+        // Added D3D12 resource ptr.
+        ComPtr<ID3D12RootSignature> pRootSignature;
+        ComPtr<ID3D12PipelineState> pPSO;
+    };
+
+    // Query heaps are used to allocate query objects.
+    struct dx_query_heap_t
+    {
+        ComPtr<ID3D12QueryHeap> pHeap;
+        ComPtr<ID3D12Resource> pReadbackBuffer;
+        uint32_t curIdx;
+        uint32_t totSize;
+    };
+
+    // Currently queries are only used to query GPU time-stamp.
+    struct dx_query_t
+    {
+        uint32_t heapIdx;
+        uint32_t queryIdxInHeap;
+    };
+
+    // Stream is wrapper of resources for record and execute commands.
+    // Currently it only wraps commandlist, allocator and descriptor heaps.
+    // Since all streams essentially will be submitted to a single DIRECT queue, their execution are not overlapped on GPU.
+    // In the future we may submit streams to multiple queues for overlapped execution.
+    struct dx_stream_t
+    {
+        // Set and get by device.
+        uint64_t fenceVal = 0;
+        enum class State
+        {
+            INRECORD,
+            SUBMITTED,
+        };
+
+        // A stream is a wrapper of cmdlist, cmdallocator and descriptor heap.
+        ComPtr<ID3D12GraphicsCommandList> pCmdList;
+        ComPtr<ID3D12CommandAllocator> pCmdAllocator;
+#ifdef _USE_DESCRIPTOR_HEAP_
+        ComPtr<ID3D12DescriptorHeap> pDescHeap;
+#endif
+        State state;
+        uint32_t descIdxOffset = 0;
+
+        void Reset()
+        {
+            pCmdAllocator->Reset();
+            pCmdList->Reset(pCmdAllocator.Get(), nullptr);
+            descIdxOffset = 0;
+            state = State::INRECORD;
+#ifdef _USE_DESCRIPTOR_HEAP_
+            ID3D12DescriptorHeap* pDescHeaps[] = { pDescHeap.Get() };
+            pCmdList->SetDescriptorHeaps(1, pDescHeaps);
+#endif
+            queryHeapsNeedToResolve.clear();
+        }
+
+        std::vector<size_t> queryHeapsNeedToResolve;
+    };
 
 #ifdef _DEBUG
-static antares::D3DDevice device(true, true);
+    static antares::D3DDevice device(true, true);
 #else
-static antares::D3DDevice device(false, false);
+    static antares::D3DDevice device(false, false);
 #endif
 
-static std::unordered_map<size_t, std::vector<void*>> bufferDict;
+    static std::unordered_map<size_t, std::vector<void*>> bufferDict;
 
-// Use unique_ptr to ensure the D3D resources are released when app exits.
-// TODO: Release buffers in somewhere to avoid running out GPU memory.
-static std::vector<std::unique_ptr<dx_buffer_t>> buffers;
+    // Use unique_ptr to ensure the D3D resources are released when app exits.
+    // TODO: Release buffers in somewhere to avoid running out GPU memory.
+    static std::vector<std::unique_ptr<dx_buffer_t>> buffers;
 
-// Allocate individual queries from heaps for higher efficiency.
-// Since they consume little memory, we can release heaps when app exits.
-static std::vector<dx_query_heap_t> globalQueryHeaps;
+    // Allocate individual queries from heaps for higher efficiency.
+    // Since they consume little memory, we can release heaps when app exits.
+    static std::vector<dx_query_heap_t> globalQueryHeaps;
 
-// Reuse queries since they are small objects and may be frequently created.
-// Use unique_ptr to grantee it will be released when app exits.
-static std::vector<std::unique_ptr<dx_query_t>> globalFreeQueries;
+    // Reuse queries since they are small objects and may be frequently created.
+    // Use unique_ptr to grantee it will be released when app exits.
+    static std::vector<std::unique_ptr<dx_query_t>> globalFreeQueries;
+
+    static std::string get_between(const std::string& source, const std::string& begin, const std::string& end, const char* def = "")
+    {
+        std::string ret;
+        int idx = (int)source.find(begin);
+        if (idx < 0)
+            return def;
+        idx += (int)begin.size();
+        int tail = (int)source.find(end, idx);
+        if (idx < 0)
+            return def;
+        return source.substr(idx, tail - idx);
+    }
+
+    static void* defaultStream = nullptr;
+}
+
 
 int dxInit(int flags)
 {
-    static bool inited = false;
-    if (!inited)
+    if (!defaultStream)
     {
-        inited = true;
         device.Init();
 #ifdef _USE_DESCRIPTOR_HEAP_
-        printf("D3D12: Use descriptor heap.\n");
+        fprintf(stderr, "[INFO] D3D12: Descriptor heap is enabled.\n\n");
 #else
-        printf("D3D12: Don't use descriptor heap.\n");
+        fprintf(stderr, "[INFO] D3D12: Descriptor heap is disabled.\n\n");
 #endif
+        defaultStream = (void*)1LU;
+        defaultStream = dxStreamCreate();
     }
     return 0;
 }
 
-void* dxAllocateBuffer(size_t bytes)
+void* dxMemAlloc(size_t bytes)
 {
     if (dxInit(0) != 0)
         return nullptr;
@@ -190,16 +212,16 @@ void* dxAllocateBuffer(size_t bytes)
     return buffers.back().get();
 }
 
-void dxReleaseBuffer(void* dptr)
+int dxMemFree(void* dptr)
 {
     auto _buff = (dx_buffer_t*)(dptr);
     bufferDict[_buff->size].push_back(dptr);
+    return 0;
 }
 
-
-void dxGetShaderArgumentProperty(void* handle, int arg_index, size_t* num_elements, size_t* type_size, const char** dtype_name)
+int dxShaderGetProperty(void* hShader, int arg_index, size_t* num_elements, size_t* type_size, const char** dtype_name)
 {
-    auto hd = (dx_shader_t*)handle;
+    auto hd = (dx_shader_t*)hShader;
     size_t count, tsize;
     std::string dtype;
     if (arg_index < hd->inputs.size())
@@ -224,30 +246,18 @@ void dxGetShaderArgumentProperty(void* handle, int arg_index, size_t* num_elemen
         strncpy_s(lastDtypeName, dtype.c_str(), sizeof(lastDtypeName));
         *dtype_name = lastDtypeName;
     }
+    return 0;
 }
 
-static std::string get_between(const std::string& source, const std::string& begin, const std::string& end, const char* def = "")
-{
-    std::string ret;
-    int idx = (int)source.find(begin);
-    if (idx < 0)
-        return def;
-    idx += (int)begin.size();
-    int tail = (int)source.find(end, idx);
-    if (idx < 0)
-        return def;
-    return source.substr(idx, tail - idx);
-}
-
-void* dxCreateShader(const char* _source, int* num_inputs, int* num_outputs)
+void* dxShaderLoad(const char* src, int* num_inputs, int* num_outputs)
 {
     if (dxInit(0) != 0)
         return nullptr;
 
-    std::string source = _source;
+    std::string source = src;
     const char proto[] = "file://";
     if (strncmp(source.c_str(), proto, sizeof(proto) - 1) == 0) {
-        std::ifstream t(_source + sizeof(proto) - 1, ios_base::binary);
+        std::ifstream t(src + sizeof(proto) - 1, ios_base::binary);
         if (t.fail())
             return nullptr;
         std::string _((std::istreambuf_iterator<char>(t)), std::istreambuf_iterator<char>());
@@ -360,13 +370,14 @@ void* dxCreateShader(const char* _source, int* num_inputs, int* num_outputs)
     return handle;
 }
 
-void dxDestroyShader(void* shader)
+int dxShaderUnload(void* hShader)
 {
-    if (shader != nullptr)
-        delete (dx_shader_t*)shader;
+    if (hShader != nullptr)
+        delete (dx_shader_t*)hShader;
+    return 0;
 }
 
-void* dxCreateStream()
+void* dxStreamCreate()
 {
     if (dxInit(0) != 0)
         return nullptr;
@@ -396,15 +407,19 @@ void* dxCreateStream()
     return pStream;
 }
 
-void dxDestroyStream(void* stream)
+int dxStreamDestroy(void* hStream)
 {
-    if (stream != nullptr)
-        delete (dx_stream_t*)stream;
+    if (hStream != nullptr)
+        delete (dx_stream_t*)hStream;
+    return 0;
 }
 
-void dxSubmitStream(void* stream)
+int dxStreamSubmit(void* hStream)
 {
-    auto pStream = (dx_stream_t*)stream;
+    if (!hStream)
+        hStream = defaultStream;
+
+    auto pStream = (dx_stream_t*)hStream;
     if (pStream->state == dx_stream_t::State::INRECORD)
     {
         pStream->state = dx_stream_t::State::SUBMITTED;
@@ -423,26 +438,39 @@ void dxSubmitStream(void* stream)
         // Signal fence.
         pStream->fenceVal = device.SignalFence();
     }
+    return 0;
 }
 
-void dxSynchronize(void* stream)
+int dxStreamSynchronize(void* hStream)
 {
-    auto pStream = (dx_stream_t*)stream;
+    if (!hStream)
+        hStream = defaultStream;
+
+    auto pStream = (dx_stream_t*)hStream;
 
     if (pStream->state == dx_stream_t::State::INRECORD)
     {
-        dxSubmitStream(stream);
+        dxStreamSubmit(hStream);
     }
     // Wait for fence value.
     device.WaitForFence(pStream->fenceVal);
 
     // Reset stream to record state
     pStream->Reset();
+    return 0;
 }
 
 
-void dxMemcpyHostToDeviceSync(void* dst, void* src, size_t bytes)
+int dxMemcpyHtoDAsync(void* dst, void* src, size_t bytes, void *hStream)
 {
+    if (!hStream)
+        hStream = defaultStream;
+
+    // Currently work in synchronizing way to hide API differences
+    int ret = dxStreamSynchronize(hStream);
+    if (ret != 0)
+        return ret;
+
     // TODO: reuse D3D resources and not to create new resources in every call.
     ComPtr<ID3D12Resource> deviceCPUSrcX;
     device.CreateUploadBuffer(bytes, &deviceCPUSrcX);
@@ -467,10 +495,19 @@ void dxMemcpyHostToDeviceSync(void* dst, void* src, size_t bytes)
     ID3D12CommandList* cmdlists[] = { pCmdList.Get() };
     device.pCommandQueue->ExecuteCommandLists(1, cmdlists);
     device.AwaitExecution();
+    return 0;
 }
 
-void dxMemcpyDeviceToHostSync(void* dst, void* src, size_t bytes)
+int dxMemcpyDtoHAsync(void* dst, void* src, size_t bytes, void* hStream)
 {
+    if (!hStream)
+        hStream = defaultStream;
+
+    // Currently work in synchronizing way to hide API differences
+    int ret = dxStreamSynchronize(hStream);
+    if (ret != 0)
+        return ret;
+
     // Conservatively ensure all things have been done, though currently not necessary.
     device.AwaitExecution();
 
@@ -493,13 +530,17 @@ void dxMemcpyDeviceToHostSync(void* dst, void* src, size_t bytes)
 
     // CPU copy
     device.MapCopyFromResource(deviceCPUSrcX.Get(), dst, bytes);
+    return 0;
 }
 
-void dxLaunchShaderAsync(void* handle, void** buffers, void* stream)
+int dxShaderLaunchAsync(void* hShader, void** buffers, void* hStream)
 {
-    auto pStream = (dx_stream_t*)stream;
+    if (!hStream)
+        hStream = defaultStream;
+
+    auto hd = (dx_shader_t*)hShader;
+    auto pStream = (dx_stream_t*)hStream;
     assert(pStream->state == dx_stream_t::State::INRECORD);
-    auto hd = (dx_shader_t*)handle;
 
     // Handle state transition.
     for (int i = 0; i < hd->inputs.size(); ++i)
@@ -570,10 +611,10 @@ void dxLaunchShaderAsync(void* handle, void** buffers, void* stream)
 #ifdef _USE_GPU_TIMER_
     device.StopTimer(pStream->pCmdList.Get(), m_nTimerIndex);
 #endif
-
+    return 0;
 }
 
-void* dxCreateQuery()
+void* dxEventCreate()
 {
     if (dxInit(0) != 0)
         return nullptr;
@@ -635,21 +676,25 @@ void* dxCreateQuery()
     return ret;
 }
 
-void dxDestroyQuery(void* query)
+int dxEventDestroy(void* hEvent)
 {
-    if (query == nullptr)
-        return;
+    if (hEvent == nullptr)
+        return -1;
 
     // We just push queries for reuse.
     // Since queries only consume little memory, we only actually release them when app exits.
-    std::unique_ptr<dx_query_t> q((dx_query_t*)query);
+    std::unique_ptr<dx_query_t> q((dx_query_t*)hEvent);
     globalFreeQueries.push_back(std::move(q));
+    return 0;
 }
 
-void dxRecordQuery(void* query, void* stream)
+int dxEventRecord(void* hEvent, void* hStream)
 {
-    auto pQuery = (dx_query_t*)query;
-    auto pStream = (dx_stream_t*)stream;
+    if (!hStream)
+        hStream = defaultStream;
+
+    auto pQuery = (dx_query_t*)hEvent;
+    auto pStream = (dx_stream_t*)hStream;
     // Record commandlist.
     pStream->pCmdList->EndQuery(
         globalQueryHeaps[pQuery->heapIdx].pHeap.Get(),
@@ -660,15 +705,16 @@ void dxRecordQuery(void* query, void* stream)
     for (auto q : pStream->queryHeapsNeedToResolve)
     {
         if (q == pQuery->heapIdx)
-            return;
+            return 0;
     }
     pStream->queryHeapsNeedToResolve.push_back(pQuery->heapIdx);
+    return 0;
 }
 
-double dxQueryElapsedTime(void* queryStart, void* queryEnd)
+float dxEventElapsedTime(void* hStart, void* hStop)
 {
-    auto pQueryStart = (dx_query_t*)queryStart;
-    auto pQueryEnd = (dx_query_t*)queryEnd;
+    auto pQueryStart = (dx_query_t*)hStart;
+    auto pQueryEnd = (dx_query_t*)hStop;
 
     // Map readback buffer and read out data, assume the query heaps have already been resolved.
     uint64_t* pData;
@@ -694,9 +740,5 @@ double dxQueryElapsedTime(void* queryStart, void* queryEnd)
 
     uint64_t GpuFrequency;
     IFE(device.pCommandQueue->GetTimestampFrequency(&GpuFrequency));
-    double delta = 1.0 / static_cast<double>(GpuFrequency);
-
-    return static_cast<double>(timeStampEnd - timeStampStart) * delta;
+    return static_cast<float>(timeStampEnd - timeStampStart) / static_cast<float>(GpuFrequency);
 }
-
-#endif

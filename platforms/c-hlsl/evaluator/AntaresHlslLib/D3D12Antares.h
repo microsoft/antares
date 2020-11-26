@@ -3,10 +3,6 @@
 
 #pragma once
 
-#define _USE_GPU_TIMER_
-//#define _USE_DXC_
-//#define _USE_DECRIPTOR_HEAP_
-
 #include <stdio.h>
 #include <stdint.h>
 #include <dxgi1_5.h>
