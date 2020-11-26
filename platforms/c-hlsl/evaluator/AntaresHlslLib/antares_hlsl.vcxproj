@@ -56,11 +56,10 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="D3D12APIWrapper.h" />
-    <ClInclude Include="d3dx12_antares.h" />
+    <ClInclude Include="D3D12Antares.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="D3D12APIWrapper.cpp" />
-    <ClCompile Include="dllmain.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
