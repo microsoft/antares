@@ -53,7 +53,8 @@
     <PostBuildEvent>
       <Command>copy /Y "$(TargetDir)$(ProjectName).exe" "$(ProjectDir)$(ProjectName).exe"
 copy /Y "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\$(PlatformTarget)\dxil.dll" "$(ProjectDir)dxil.dll"
-copy /Y "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\$(PlatformTarget)\dxcompiler.dll" "$(ProjectDir)dxcompiler.dll"</Command>
+copy /Y "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\$(PlatformTarget)\dxcompiler.dll" "$(ProjectDir)dxcompiler.dll"
+copy /Y "$(TargetDir)antares_hlsl.dll" "$(ProjectDir)antares_hlsl_x64_v0.1.dll"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>

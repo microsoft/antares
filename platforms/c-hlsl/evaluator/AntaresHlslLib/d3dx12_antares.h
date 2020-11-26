@@ -4,8 +4,8 @@
 #pragma once
 
 #define _USE_GPU_TIMER_
-// #define _USE_DXC_
-// #define _USE_DECRIPTOR_HEAP_
+//#define _USE_DXC_
+//#define _USE_DECRIPTOR_HEAP_
 
 #include <stdio.h>
 #include <stdint.h>
@@ -705,18 +705,29 @@ namespace antares {
 #endif
         }
 
-        void AwaitExecution()
+        // Added fence related functions.
+        uint64_t SignalFence()
         {
+            // Signal
             ++fenceValue;
             IFE(pCommandQueue->Signal(pFence.Get(), fenceValue));
-
-            IFE(pFence->SetEventOnCompletion(fenceValue, event));
-
+            return fenceValue;
+        }
+        void WaitForFence(uint64_t val)
+        {
+            if (pFence->GetCompletedValue() >= val)
+                return;
+            IFE(pFence->SetEventOnCompletion(val, event));
             DWORD retVal = WaitForSingleObject(event, INFINITE);
             if (retVal != WAIT_OBJECT_0)
             {
                 DebugBreak();
             }
+        }
+        void AwaitExecution()
+        {
+            auto f = SignalFence();
+            WaitForFence(f);
         }
 
         inline void CreateCommittedResource(
@@ -954,7 +965,7 @@ namespace antares {
                         if (pErrorsBlob)
                         {
                             printf("Compilation Error:\n%s\n", (const char*)pErrorsBlob->GetBufferPointer());
-                            return null;
+                            return nullptr;
                         }
                     }
                 }

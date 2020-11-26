@@ -1,6 +1,159 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
 
+#define _API_WRAPPER_V2_
+
+#ifdef _API_WRAPPER_V2_
+#include <windows.h>
+#include <cstdio>
+#include <vector>
+#include <string>
+#include <chrono>
+
+#define FATAL_ERROR(msg) \
+    fprintf(stderr, "[Error] %s", msg), _exit(1);
+
+int main(int argc, char** argv)
+{
+    HINSTANCE hAntaresHlslLib = LoadLibrary(L"antares_hlsl_x64_v0.2.dll");
+    if (hAntaresHlslLib == nullptr)
+        FATAL_ERROR("Cannot load antares hlsl DLL library.");
+
+    auto dxCreateStream = (void* (*)())::GetProcAddress(hAntaresHlslLib, "dxCreateStream");
+    auto dxDestroyStream = (void (*)(void*))::GetProcAddress(hAntaresHlslLib, "dxDestroyStream");
+    auto dxSubmitStream = (void (*)(void*))::GetProcAddress(hAntaresHlslLib, "dxSubmitStream");
+    auto dxCreateShader = (void* (*)(const char*, int*, int*))::GetProcAddress(hAntaresHlslLib, "dxCreateShader");
+    auto dxDestroyShader = (void (*)(void*))::GetProcAddress(hAntaresHlslLib, "dxDestroyShader");
+    auto dxGetShaderArgumentProperty = (void (*)(void*, int, size_t*, size_t*, const char**))::GetProcAddress(hAntaresHlslLib, "dxGetShaderArgumentProperty");
+    auto dxLaunchShaderAsync = (void (*)(void*, void**, void*))::GetProcAddress(hAntaresHlslLib, "dxLaunchShaderAsync");
+    auto dxCreateQuery = (void* (*)())::GetProcAddress(hAntaresHlslLib, "dxCreateQuery");
+    auto dxDestroyQuery = (void (*)(void*))::GetProcAddress(hAntaresHlslLib, "dxDestroyQuery");
+    auto dxRecordQuery = (void (*)(void*, void*))::GetProcAddress(hAntaresHlslLib, "dxRecordQuery");
+    auto dxQueryElapsedTime = (double (*)(void*, void*))::GetProcAddress(hAntaresHlslLib, "dxQueryElapsedTime");
+    auto dxAllocateBuffer = (void* (*)(size_t))::GetProcAddress(hAntaresHlslLib, "dxAllocateBuffer");
+    auto dxReleaseBuffer = (void (*)(void*))::GetProcAddress(hAntaresHlslLib, "dxReleaseBuffer"); 
+    auto dxMemcpyHostToDeviceSync = (void (*)(void*, void*, size_t))::GetProcAddress(hAntaresHlslLib, "dxMemcpyHostToDeviceSync");
+    auto dxMemcpyDeviceToHostSync = (void (*)(void*, void*, size_t))::GetProcAddress(hAntaresHlslLib, "dxMemcpyDeviceToHostSync");   
+    auto dxSynchronize = (void (*)(void*))::GetProcAddress(hAntaresHlslLib, "dxSynchronize");
+
+    // Exec.
+    auto stream = dxCreateStream();
+
+    int num_inputs, num_outputs;
+    auto shader = dxCreateShader("file://dx_kernel.hlsl", &num_inputs, &num_outputs);
+    if (shader == nullptr)
+        FATAL_ERROR("Invalid hlsl source code in complation.");
+
+    std::vector<void*> kargs(size_t(num_inputs) + size_t(num_outputs));
+    std::vector<size_t> counts(kargs.size());
+    std::vector<std::string> dtypes(kargs.size());
+
+    for (int i = 0; i < kargs.size(); ++i) {
+        const char* dtype_ptr;
+        size_t type_size;
+        dxGetShaderArgumentProperty(shader, i, &counts[i], &type_size, &dtype_ptr);
+        dtypes[i] = dtype_ptr;
+        kargs[i] = dxAllocateBuffer(counts[i] * type_size);
+
+        if (i < num_inputs)
+        {
+            if (dtypes[i] == "float32")
+            {
+                std::vector<float> h_input(counts[i]);
+                for (int k = 0; k < h_input.size(); ++k)
+                    h_input[k] = (i + k + 1) % 71;
+                dxMemcpyHostToDeviceSync(kargs[i], h_input.data(), h_input.size() * sizeof(h_input[0]));
+                //dxSynchronize();
+            }
+            else if (dtypes[i] == "int32")
+            {
+                std::vector<int> h_input(counts[i]);
+                for (int k = 0; k < h_input.size(); ++k)
+                    h_input[k] = (i + k + 1) % 71;
+                dxMemcpyHostToDeviceSync(kargs[i], h_input.data(), h_input.size() * sizeof(h_input[0]));
+                //dxSynchronize();
+            }
+            else
+                FATAL_ERROR(("Unhandled value initialization for dtype name: " + dtypes[i]).c_str());
+
+            printf("InputArg %d: NumElements = %zd, TypeBytes = %zd, TypeName = %s\n", i, counts[i], type_size, dtypes[i].c_str());
+        }
+        else
+        {
+            printf("OutputArg %d: NumElements = %zd, TypeBytes = %zd, TypeName = %s\n", i - num_inputs, counts[i], type_size, dtypes[i].c_str());
+        }
+    }
+    printf("\n");
+
+    dxLaunchShaderAsync(shader, kargs.data(), stream);
+    dxSynchronize(stream);
+
+    if (num_outputs <= 0)
+        FATAL_ERROR("No output result for evaluation.");
+
+    for (int i = num_inputs; i < kargs.size(); ++i)
+    {
+        double digest = 0.0;
+        int output_id = i - num_inputs;
+        if (dtypes[output_id] == "float32")
+        {
+            std::vector<float> h_output(counts[i]);
+            dxMemcpyDeviceToHostSync(h_output.data(), kargs[i], h_output.size() * sizeof(h_output[0]));
+            for (int k = 0; k < h_output.size(); ++k)
+                digest += double((k + output_id + 1) % 83) * h_output[k];
+        }
+        else if (dtypes[output_id] == "int32")
+        {
+            std::vector<int> h_output(counts[i]);
+            dxMemcpyDeviceToHostSync(h_output.data(), kargs[i], h_output.size() * sizeof(h_output[0]));
+            for (int k = 0; k < h_output.size(); ++k)
+                digest += double((k + output_id + 1) % 83) * h_output[k];
+        }
+        else
+            FATAL_ERROR(("Unhandled result digest calculation for dtype name: " + dtypes[i]).c_str());
+        printf("- K/%d = %.6e\n", output_id, digest);
+    }
+
+    auto start = std::chrono::high_resolution_clock::now();
+    dxLaunchShaderAsync(shader, kargs.data(), stream);
+    dxSynchronize(stream);
+    auto stop = std::chrono::high_resolution_clock::now();
+
+    double elasped_sec = std::chrono::duration_cast<std::chrono::duration<double>>(stop - start).count();
+
+    int num_runs = int(1 / (elasped_sec > 1e-3 ? elasped_sec : 1e-3));
+    num_runs = num_runs > 3 ? num_runs : 3;
+    start = std::chrono::high_resolution_clock::now();
+    std::vector<void*> queries;
+    for (int i = 0; i < num_runs; ++i)
+    {
+        auto q = dxCreateQuery();
+        dxRecordQuery(q, stream);
+        dxLaunchShaderAsync(shader, kargs.data(), stream);
+        queries.push_back(q);
+    }
+    dxSynchronize(stream);
+
+    for (size_t i = 0; i < queries.size() - 1; ++i)
+    {
+        double t = dxQueryElapsedTime(queries[i], queries[i + 1]);
+        printf("%.6e\n", t);
+    }
+
+    stop = std::chrono::high_resolution_clock::now();
+
+    elasped_sec = std::chrono::duration_cast<std::chrono::duration<double>>(stop - start).count() / num_runs;
+    printf("- TPR = %.6e\n", elasped_sec);
+
+    dxDestroyShader(shader);
+    dxDestroyStream(stream);
+    for (auto q : queries)
+        dxDestroyQuery(q);
+    for (auto b : kargs)
+        dxReleaseBuffer(b);
+    return 0;
+}
+#else
 #if 1
 
 #include <windows.h>
@@ -110,7 +263,6 @@ int main(int argc, char** argv)
 
     int num_runs = int(1 / (elasped_sec > 1e-3 ? elasped_sec : 1e-3));
     num_runs = num_runs > 3 ? num_runs : 3;
-
     start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < num_runs; ++i)
     {
@@ -310,4 +462,5 @@ int main(int argc, char** argv)
     }
     return 0;
 }
+#endif
 #endif
