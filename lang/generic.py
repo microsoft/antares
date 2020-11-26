@@ -110,7 +110,7 @@ def output(shape, func=None, flops=None, name='output0', topi=None, dtype=None, 
 
 def traverse_inline(s, final_op, callback):
     visited = set()
-    explicit_ops = set()
+    explicit_ops = []
 
     def _traverse(op):
         if op in visited:
@@ -120,15 +120,14 @@ def traverse_inline(s, final_op, callback):
           if isinstance(tensor.op, te.tensor.ComputeOp):
             _traverse(tensor.op)
         if op.reduce_axis:
-          explicit_ops.add(op)
+          explicit_ops.append(op)
         elif op not in s.outputs:
           s[op].compute_inline()
     _traverse(final_op)
 
     if not explicit_ops:
-      explicit_ops.add(final_op)
-    for op in explicit_ops:
-      callback(op)
+      explicit_ops.append(final_op)
+    callback(explicit_ops[-1], explicit_ops)
 
 def do_native_scheduling(attrs):
 
@@ -188,7 +187,7 @@ def get_template_op(**kwargs):
     AntaresGlobal.local_arg_pros['_out'].sort(key=lambda x: x['name'])
 
     inputs = sorted(list(placeholders.values()), key=lambda x: x.name)
-    outputs = output_saver["outputs"]
+    outputs = sorted(output_saver["outputs"], key=lambda x: x.op.name)
     cfg = autotvm.get_config()
     cfg.flop = output_saver["flops"]
 
@@ -204,11 +203,11 @@ def get_template_op(**kwargs):
       outputs = te.compute(outputs[0].shape, lambda *X: [v[X] for v in outputs], name=intermediate_output)
     sch = te.create_schedule([outputs[i].op for i in range(len(outputs))])
 
-    def _callback(op):
-        output_spec = op.output(0)
+    def _callback(op, explicit_ops):
         attrs = Mock()
         attrs.inputs = inputs
-        attrs.outputs = [output_spec]
+        attrs.explicit_ops = explicit_ops
+        attrs.outputs = [op.output(0)]
         attrs.scheduler = sch
         attrs.auto_config = cfg
         attrs.backend = backend
