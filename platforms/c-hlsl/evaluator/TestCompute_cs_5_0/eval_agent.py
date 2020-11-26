@@ -3,6 +3,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
+import os
 import sys
 import logging
 import subprocess
@@ -10,6 +11,10 @@ import subprocess
 if sys.platform == 'win32':
     import asyncio
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    cs_compiler_path = 'C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe'
+else:
+    # Assum this script is running in WSL 1.0
+    cs_compiler_path = '/mnt/c/Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe'
 
 import tornado.ioloop
 import tornado.web
@@ -58,6 +63,9 @@ class POSTHandler(tornado.web.RequestHandler):
 
 if __name__ == "__main__":
     port = 6000
+    logging.info("Service is compiling the evaluator ..")
+    assert 0 == os.system("%s /out:TestCompute.exe TestCompute.cs" % cs_compiler_path), "Failed to compile `TestCompute.cs` for HLSL shader evaluation."
+    logging.info("HLSL evaluator is created successfully.")
     
     app = tornado.web.Application([(r"/post", POSTHandler), (r"/(.*)", PUTHandler)])
     app.listen(port)

@@ -1,42 +1,31 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
 
-#define _API_WRAPPER_V2_
+#ifndef __ANTARES_D3D12_WRAPPER__
+#define __ANTARES_D3D12_WRAPPER__
 
-#ifdef _API_WRAPPER_V2_
 #define __EXPORT__ extern "C" __declspec(dllexport)
 
-__EXPORT__ int dxInit(int flags);
+__EXPORT__ int    dxInit(int flags);
 
-__EXPORT__ void* dxAllocateBuffer(size_t bytes);
+__EXPORT__ void*  dxStreamCreate();
+__EXPORT__ int    dxStreamDestroy(void* hStream);
+__EXPORT__ int    dxStreamSubmit(void* hStream);
+__EXPORT__ int    dxStreamSynchronize(void* hStream);
 
-__EXPORT__ void dxReleaseBuffer(void* dptr);
+__EXPORT__ void*  dxMemAlloc(size_t bytes);
+__EXPORT__ int    dxMemFree(void* dptr);
+__EXPORT__ int    dxMemcpyHtoDAsync(void* dst, void* src, size_t bytes, void* hStream);
+__EXPORT__ int    dxMemcpyDtoHAsync(void* dst, void* src, size_t bytes, void* hStream);
 
-__EXPORT__ void dxGetShaderArgumentProperty(void* handle, int arg_index, size_t* num_elements, size_t* type_size, const char** dtype_name);
+__EXPORT__ void*  dxShaderLoad(const char* src, int* num_inputs, int* num_outputs);
+__EXPORT__ int    dxShaderUnload(void* hShader);
+__EXPORT__ int    dxShaderGetProperty(void* hShader, int arg_index, size_t* num_elements, size_t* type_size, const char** dtype_name);
+__EXPORT__ int    dxShaderLaunchAsync(void* hShader, void** buffers, void* hStream);
 
-__EXPORT__ void* dxCreateShader(const char* _source, int* num_inputs, int* num_outputs);
+__EXPORT__ void*  dxEventCreate();
+__EXPORT__ int    dxEventRecord(void* hEvent, void* hStream);
+__EXPORT__ float  dxEventElapsedTime(void* hStart, void* hStop);
+__EXPORT__ int    dxEventDestroy(void* hEvent);
 
-__EXPORT__ void dxDestroyShader(void* shader);
-
-__EXPORT__ void* dxCreateStream();
-
-__EXPORT__ void dxDestroyStream(void* stream);
-
-__EXPORT__ void dxSubmitStream(void* stream);
-
-__EXPORT__ void dxSynchronize(void* stream);
-
-__EXPORT__ void dxMemcpyHostToDeviceSync(void* dst, void* src, size_t bytes);
-
-__EXPORT__ void dxMemcpyDeviceToHostSync(void* dst, void* src, size_t bytes);
-
-__EXPORT__ void dxLaunchShaderAsync(void* handle, void** buffers, void* stream);
-
-__EXPORT__ void* dxCreateQuery();
-
-__EXPORT__ void dxDestroyQuery(void* query);
-
-__EXPORT__ void dxRecordQuery(void* query, void* stream);
-
-__EXPORT__ double dxQueryElapsedTime(void* queryStart, void* queryEnd);
 #endif
