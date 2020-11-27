@@ -123,11 +123,17 @@ def compute_gflops(flop, t):
   except:
     return 0.0
 
-def codehub_db(compute_key, source_code=None):
+def codehub_db(compute_key, source_code=None, erase=False):
   compute_key = compute_key.split('##')[0].strip()
   digest = hashlib.sha256(compute_key.encode()).hexdigest()
   os.system('mkdir -p ./codehub')
   code_path = './codehub/%s.%s' % (digest, backend)
+  if erase:
+    try:
+      os.remove(code_path)
+    except:
+      pass
+    return None
   if not source_code:
     if os.path.exists(code_path):
       print('  >> Codehub Key = %s.%s' % (digest, backend))
@@ -203,7 +209,10 @@ def get_target_source(s, arg_bufs, dir_sid=None):
   kernel_path = local_get_dir_file('my_kernel.cc', dir_sid=dir_sid)
   return device_source, kernel_path
 
-def evaluate_perf(kernel_path, task_flop, dev_id):
+def code_suffix(tpr=-1.0, step_prod=0, step_plan=-1):
+  return '\n// Saved Perf = %.6e sec / run; Step Produced = %d; Planned Steps = %d;' % (tpr, step_prod, step_plan)
+
+def evaluate_perf(kernel_path, task_flop, dev_id, device_source):
   try:
     eval_client = importlib.import_module('platforms.%s.evaluator.client' % backend)
   except ModuleNotFoundError:
@@ -235,7 +244,7 @@ def evaluate_perf(kernel_path, task_flop, dev_id):
             break
           fp.write(str(result[key]) + '\n')
     if os.environ.get('COMMIT', ''):
-      kernel_path = codehub_db(os.environ['COMPUTE_V1'], source_code=device_source + '\n// Saved Perf = %g sec / run' % t)
+      kernel_path = codehub_db(os.environ['COMPUTE_V1'], source_code=device_source + code_suffix(tpr=t))
       print('  >> Update current code to codehub: %s' % kernel_path)
 
   def do_evaluate():
@@ -453,7 +462,7 @@ def main_compute(code_only=False):
             device_source = fp.read()
           with open(local_get_dir_file('result.txt', best_slot), 'r') as fp:
             t = float(fp.read().split()[0])
-          kernel_path = codehub_db(os.environ['COMPUTE_V1'], source_code=device_source + '\n// Saved Perf = %g sec / run; Step Produced = %d; Planned Steps = %d;' % (t, best_slot, num_trials))
+          kernel_path = codehub_db(os.environ['COMPUTE_V1'], source_code=device_source + code_suffix(tpr=t, step_prod=best_slot, step_plan=num_trials))
           print('  >> Update current code to codehub: %s' % kernel_path)
         return results
 
@@ -553,7 +562,7 @@ def main_compute(code_only=False):
     print("====================================\n")
 
   dev_id = int(os.environ.get('DEV_KEY', '0'))
-  result = evaluate_perf(kernel_path, task.flop, dev_id)
+  result = evaluate_perf(kernel_path, task.flop, dev_id, device_source)
   exit(0 if result is not None else 1)
 
 
@@ -586,16 +595,17 @@ if __name__ == '__main__':
           task = (int(num_step), compute_exp)
           if task not in task_lists:
             task_lists.append(task)
+          codehub_db(compute_exp, erase=True)
           code = '[Async Task Has Been Put in Background ..]'
         else:
           code = codehub_db(compute_exp)
           if code is None:
             clear_environ(compute_exp, 0)
-            is_duplicated = len([c for s, c in task_lists if c == compute_exp]) > 0
+            duplicate_items = [(s, c) for s, c in task_lists if c == compute_exp]
             try:
               code = main_compute(code_only=True)
-              if is_duplicated:
-                code += '\n// Antares Tuning is in Pending Status'
+              if duplicate_items:
+                code += code_suffix(tpr=-1.0, step_prod=0, step_plan=duplicate_items[0][0])
             except:
               print('>> Kernel code failed to generate.')
               code = '[ERROR] ' + traceback.format_exc()
