@@ -2,6 +2,7 @@
 # Licensed under the MIT license.
 
 import os
+import re
 import copy
 import json
 import numpy as np
@@ -164,7 +165,7 @@ class OpTensor:
 def parse_to_ast(expr, input_dict={}):
   expr = expr.strip().replace('`', '"')
   if expr.find('[]') >= 0:
-    expr = expr.replace('[]', '[Scaler]')
+    expr = re.sub('\[ *\]', '[Scaler]', expr)
     if expr.rfind('where') == -1:
       expr += ' where Scaler in 1'
     else:
