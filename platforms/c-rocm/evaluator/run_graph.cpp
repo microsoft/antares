@@ -204,7 +204,7 @@ int main(int argc, char** argv)
         for (int i = 0; i < output_byte_size / 4; ++i)
           digest += (i + 1) % 83 * ((float*)h_args[inputs.size() + c])[i];
       }
-      printf("- K/%d: %g\n", c, digest);
+      printf("- K/%d: %.10e\n", c, digest);
     }
 
     CUevent hStart, hStop;
