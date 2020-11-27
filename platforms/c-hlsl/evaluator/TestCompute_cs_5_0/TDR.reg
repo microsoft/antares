@@ -12,5 +12,5 @@ Windows Registry Editor Version 5.00
 [HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\GraphicsDrivers\DCI]
 "Timeout"=dword:0000003c
 
-[HKEY_LOCAL_MACHINE\SOFTWARE\Antares\HLSL]
+[HKEY_CURRENT_USER\SOFTWARE\Antares\HLSL]
 "TdrConfigState"=dword:00000001

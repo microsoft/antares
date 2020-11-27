@@ -21,6 +21,7 @@ def do_native_translation(code, **kwargs):
     for i, buf in enumerate(arg_bufs['_out']):
       registers.append('RWStructuredBuffer<%s> %s: register(u%d);\n' % (type_to_c(buf['dtype']), buf['name'], i))
 
+    code_prefix = '#define long int64_t\n'
     lines, lds = [], []
     numthreads = {}
     for line in code.split('\n'):
@@ -75,5 +76,5 @@ def do_native_translation(code, **kwargs):
     default_thread_count = 1
     code = '[numthreads(%d, %d, %d)]\nvoid CSMain(uint3 threadIdx: SV_GroupThreadID, uint3 blockIdx: SV_GroupID, uint3 dispatchIdx: SV_DispatchThreadID) ' % (numthreads.get('threadIdx.x', default_thread_count), numthreads.get('threadIdx.y', default_thread_count), numthreads.get('threadIdx.z', default_thread_count)) + code[code.index('{'):]
     code = re.sub(r'\b__syncthreads\b', 'GroupMemoryBarrierWithGroupSync', code);
-    code = '\n'.join(lds) + ('\n\n' if lds else '') + ''.join(registers) + '\n' + kwargs['attrs'].blend + '\n' + code
+    code = code_prefix + '\n'.join(lds) + ('\n\n' if lds else '') + ''.join(registers) + '\n' + kwargs['attrs'].blend + '\n' + code
     return code
