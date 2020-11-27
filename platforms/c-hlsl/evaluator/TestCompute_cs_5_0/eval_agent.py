@@ -23,7 +23,6 @@ import tornado.web
 from tornado import options
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
-cmd = ["sh", "-c", "./TestCompute.exe || true"]
 
 @tornado.web.stream_request_body
 class PUTHandler(tornado.web.RequestHandler):
@@ -47,8 +46,8 @@ class PUTHandler(tornado.web.RequestHandler):
             self.fp.write(chunk)
         self.fp.close()
         
-        logging.info("Starting execute: '%s'", str(cmd))
-        output = subprocess.check_output(cmd, timeout=20)
+        logging.info("Starting execute: 'TestCompute.exe'")
+        output = subprocess.check_output(['sh', '-c', './TestCompute.exe || true'], timeout=20)
         self.write(output)
         
 
@@ -76,8 +75,7 @@ if __name__ == "__main__":
     assert 0 == os.system("%s /out:TestCompute.exe TestCompute.cs" % cs_compiler_path), "Failed to compile `TestCompute.cs` for HLSL shader evaluation."
     logging.info("HLSL evaluator is created successfully.")
     assert 0 == os.system("/bin/chmod a+x TestCompute.exe")
-    assert 0 == os.system("rm -f dx_kernel.hlsl")
-    subprocess.check_output(cmd, timeout=20)
+    assert 0 == os.system('./TestCompute.exe init')
     
     app = tornado.web.Application([(r"/post", POSTHandler), (r"/(.*)", PUTHandler)])
     app.listen(port)

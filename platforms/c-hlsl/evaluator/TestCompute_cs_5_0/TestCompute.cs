@@ -71,40 +71,77 @@ namespace AntaresHelloWorldExample
         [DllImport(@"antares_hlsl_v0.1_x64.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern int dxMemcpyDtoHAsync(IntPtr hptr, IntPtr dptr, long bytes, IntPtr hStream);
 
-        static void initRegistryForSafeTDR()
+        static bool isSafeTDRConfigured()
         {
-            const int timeout = 70;
             try
             {
-                using (RegistryKey key = Registry.LocalMachine.CreateSubKey(@"SYSTEM\CurrentControlSet\Control\GraphicsDrivers"))
+                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(@"SOFTWARE\Antares\HLSL"))
                 {
-                    key.SetValue("TdrLevel", 3);
-                    key.SetValue("TdrDelay", timeout);
-                    key.SetValue("TdrDdiDelay", timeout);
-                    key.SetValue("TdrTestMode", 0);
-                    key.SetValue("TdrDebugMode", 2);
-                    key.SetValue("TdrLimitTime", timeout);
-                    key.SetValue("TdrLimitCount", 0x1000000);
+                    var value = key.GetValue("TdrConfigState");
                     key.Close();
-                }
-                using (RegistryKey key = Registry.LocalMachine.CreateSubKey(@"SYSTEM\CurrentControlSet\Control\GraphicsDrivers\DCI"))
-                {
-                    key.SetValue("Timeout", timeout);
-                    key.Close();
+                    if (value == null || Convert.ToInt32(value) != 1)
+                        return false;
+                    return true;
                 }
             }
             catch (UnauthorizedAccessException)
             {
-                Console.WriteLine("[WARN] Failed to add safe TDR settings into Windows registry.");
-                Console.WriteLine("[WARN] Super privilege is required for safe TDR settings.");
-                Console.WriteLine("[WARN] Otherwrise, invalid shaders might trigger Win10's blue screen.");
-                Console.WriteLine();
+                return false;
             }
+        }
+
+        static bool initRegistryForSafeTDR()
+        {
+            if (!isSafeTDRConfigured())
+            {
+                string tdr_path = AppDomain.CurrentDomain.BaseDirectory;
+                if (!tdr_path.EndsWith(@"\"))
+                    tdr_path += @"\";
+                tdr_path += "TDR.reg";
+
+                Console.WriteLine("Safe TDR settings is not configured. Trying to configure this session by registry file:\n\t" + tdr_path);
+
+                ProcessStartInfo processInfo = new ProcessStartInfo();
+                processInfo.FileName = @"powershell.exe";
+                processInfo.Arguments = @"Start-Process -Verb runas -FilePath regedit.exe -ArgumentList '/s', '" + tdr_path + "'";
+                processInfo.RedirectStandardError = true;
+                processInfo.RedirectStandardOutput = true;
+                processInfo.UseShellExecute = false;
+                processInfo.CreateNoWindow = true;
+
+                //start powershell process using process start info
+                Process process = new Process();
+                process.StartInfo = processInfo;
+                process.Start();
+                process.WaitForExit();
+                process.Close();
+
+                Console.WriteLine();
+                if (!isSafeTDRConfigured())
+                {
+                    Console.WriteLine("[WARN] No access to initialize safe TDR settings from Windows registry.");
+                    Console.WriteLine("[WARN] Super privilege is recommended for the first run of this program.");
+                    Console.WriteLine("[WARN] Otherwrise, invalid shader execution might trigger Win10's blue screen.");
+                    Console.WriteLine();
+                    return false;
+                }
+                else
+                {
+                    Console.WriteLine("[INFO] Successfully adding configuration for safe TDR.");
+                    Console.WriteLine();
+                }
+            }
+            return true;
         }
 
         static int Main(string[] args)
         {
-            initRegistryForSafeTDR();
+            bool configured = initRegistryForSafeTDR();
+            if (args.Length == 1 && args[0] == "init") {
+                Console.WriteLine("Config initialization finished: status = " + configured);
+                return configured ? 0 : 1;
+            }
+
             var shader_file = @".\dx_kernel.hlsl";
             if (!File.Exists(shader_file))
             {
