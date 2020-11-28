@@ -62,7 +62,7 @@ def get_global_arg_props():
     global_arg_props = json.loads(global_arg_props)
   return global_arg_props
 
-def translate_code(code):
+def translate_code(code, config):
   assert(len(code.split('extern "C"')) == 2)
   global_arg_props = get_global_arg_props()
 
@@ -79,7 +79,7 @@ def translate_code(code):
       outp_args.append('-'.join([str(x) for x in buf['shape']]) + '/' + buf['dtype'] + '/' + buf['name'])
 
     header_meta = '///' + ','.join(inp_args) + ':' + ','.join(outp_args) + '\n// BACKEND = %s\n' % backend
-    properties = "// CONFIG: %s\n// COMPUTE_V1: %s\n" % (os.environ['CONFIG'].strip(), os.environ['COMPUTE_V1'])
+    properties = "// CONFIG: %s\n// COMPUTE_V1: %s\n" % (config.strip(), os.environ['COMPUTE_V1'])
     return header_meta + properties
 
   code = refactor_multiple_names(code, global_arg_props)
@@ -168,13 +168,10 @@ def get_target_source(best_config, dir_sid=None):
       fp.write(json.dumps(origin_cfg))
     origin_cfg = tvm.auto_scheduler.measure_record.load_records(origin_cfg_file)
  
-    @auto_scheduler.register_workload
-    def auto_template():
-      _, arg_bufs = default_tune_op.get_template_op()
-      return arg_bufs
-
+    from tuner.AutoTVM2.main import create_auto_task
     target = tvm.target.Target(tvm_target)
-    auto_task = auto_scheduler.create_task(auto_template, (), target)
+    auto_task = create_auto_task(target)
+
     for inp, res in origin_cfg:
       s, arg_bufs = auto_task.compute_dag.apply_steps_from_state(inp.state)
       break
@@ -243,7 +240,7 @@ def get_target_source(best_config, dir_sid=None):
       func = build_template()
 
   assert(len(func.imported_modules) == 1)
-  device_source = translate_code(func.imported_modules[0].get_source())
+  device_source = translate_code(func.imported_modules[0].get_source(), best_config)
   kernel_path = local_get_dir_file('my_kernel.cc', dir_sid=dir_sid)
   with open(kernel_path, 'w') as fp:
     fp.write(device_source)
@@ -311,9 +308,12 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
       return None
 
   exec_fd, _ = system_lock([dev_id])
-  results = wait_for(do_evaluate, eval_program_timeout if int(os.environ.get('STEP', '0')) > 0 else None)
-  if results is not None:
-    handle_result(results)
+  try:
+    results = wait_for(do_evaluate, eval_program_timeout if int(os.environ.get('STEP', '0')) > 0 else None)
+    if results is not None:
+      handle_result(results)
+  except:
+    pass
   exec_fd()
   return results
 
@@ -422,7 +422,10 @@ def main_compute(code_only=False):
     tuner_type = os.environ.get('TUNER', '')
     if not tuner_type:
       explicit_ops = AntaresGlobal.attrs.explicit_ops
-      if len(explicit_ops) == 1 and len(explicit_ops[-1].reduce_axis) > 0 and backend in ['c-rocm', 'c-cuda', 'c-hlsl', 'c-ocl']:
+      if ('|plan/' not in ('|' + '|'.join(AntaresGlobal.attrs.options)) and
+          len(explicit_ops) == 1 and
+          len(explicit_ops[-1].reduce_axis) > 0 and
+          backend in ['c-rocm', 'c-cuda', 'c-hlsl', 'c-ocl']):
         tuner_type = 'AutoTVM2'
       else:
         tuner_type = 'XGBoost'
@@ -453,6 +456,7 @@ def main_compute(code_only=False):
           try:
             target_source = get_target_source(config_strs[i], dir_sid)
           except:
+            # traceback.print_exc()
             target_source = None
           target_sources.append(target_source)
 
