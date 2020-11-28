@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 using System.Runtime.InteropServices;
@@ -17,16 +18,16 @@ using System.Threading;
 using Microsoft.Win32;
 using System.Diagnostics;
 
-namespace AntaresHelloWorldExample
+namespace AntaresHlslEvalAgent
 {
     class Program
     {
         [DllImport(@"antares_hlsl_v0.1_x64.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern IntPtr dxStreamCreate();
-        
+
         [DllImport(@"antares_hlsl_v0.1_x64.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern int dxStreamSubmit(IntPtr hStream);
-        
+
         [DllImport(@"antares_hlsl_v0.1_x64.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern int dxStreamDestroy(IntPtr hStream);
 
@@ -49,19 +50,19 @@ namespace AntaresHelloWorldExample
 
         [DllImport(@"antares_hlsl_v0.1_x64.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern IntPtr dxEventCreate();
-        
+
         [DllImport(@"antares_hlsl_v0.1_x64.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern int dxEventDestroy(IntPtr hEvent);
-        
+
         [DllImport(@"antares_hlsl_v0.1_x64.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern int dxEventRecord(IntPtr hEvent, IntPtr hStream);
-        
+
         [DllImport(@"antares_hlsl_v0.1_x64.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern float dxEventElapsedTime(IntPtr hStart, IntPtr hStop);
 
         [DllImport(@"antares_hlsl_v0.1_x64.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern IntPtr dxMemAlloc(long bytes);
-        
+
         [DllImport(@"antares_hlsl_v0.1_x64.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern int dxMemFree(IntPtr dptr);
 
@@ -90,7 +91,32 @@ namespace AntaresHelloWorldExample
             }
         }
 
-        static bool initRegistryForSafeTDR()
+        static string runSystemCommand(string program, string args, int timeout_in_ms = -1)
+        {
+            ProcessStartInfo processInfo = new ProcessStartInfo();
+            processInfo.FileName = program;
+            processInfo.Arguments = args;
+            processInfo.RedirectStandardError = true;
+            processInfo.RedirectStandardOutput = true;
+            processInfo.UseShellExecute = false;
+            processInfo.CreateNoWindow = true;
+
+            Process process = new Process();
+            process.StartInfo = processInfo;
+            process.Start();
+
+            string output = "";
+            if (!process.WaitForExit(timeout_in_ms))
+                process.Kill();
+            else
+                output = process.StandardOutput.ReadToEnd();
+            process.Close();
+            return output;
+        }
+
+        public const int LISTEN_PORT = 8860;
+
+        static bool initEnvironment()
         {
             if (!isSafeTDRConfigured())
             {
@@ -99,22 +125,8 @@ namespace AntaresHelloWorldExample
                     tdr_path += @"\";
                 tdr_path += "TDR.reg";
 
-                Console.WriteLine("Safe TDR settings is not configured. Trying to configure this session by registry file:\n\t" + tdr_path);
-
-                ProcessStartInfo processInfo = new ProcessStartInfo();
-                processInfo.FileName = @"powershell.exe";
-                processInfo.Arguments = @"Start-Process -Verb runas -FilePath regedit.exe -ArgumentList '/s', '" + tdr_path + "'";
-                processInfo.RedirectStandardError = true;
-                processInfo.RedirectStandardOutput = true;
-                processInfo.UseShellExecute = false;
-                processInfo.CreateNoWindow = true;
-
-                //start powershell process using process start info
-                Process process = new Process();
-                process.StartInfo = processInfo;
-                process.Start();
-                process.WaitForExit();
-                process.Close();
+                Console.WriteLine("[INFO] Safe TDR settings is not configured. Trying to configure this session by registry file:\n\t" + tdr_path);
+                runSystemCommand(@"powershell.exe", @"Start-Process -Verb runas -FilePath regedit.exe -ArgumentList '/s', '" + tdr_path + "'");
 
                 Console.WriteLine();
                 if (!isSafeTDRConfigured())
@@ -131,15 +143,92 @@ namespace AntaresHelloWorldExample
                     Console.WriteLine();
                 }
             }
+            if (!File.Exists(@".\antares_hlsl_v0.1_x64.dll"))
+            {
+                Console.WriteLine("[INFO] Downloading required DLL dependencies..");
+                runSystemCommand("curl.exe", "-LOs https://github.com/microsoft/antares/raw/library/antares_hlsl_v0.1_x64.dll");
+            }
+
+            runSystemCommand("netsh", "advfirewall firewall add rule name=\"TCP Port for Antares\" dir=in action=allow protocol=TCP localport=" + LISTEN_PORT);
             return true;
+        }
+
+        static string GetBetween(string source, string begin, string end)
+        {
+            int start = source.IndexOf(begin);
+            if (start < 0)
+                return "";
+            start += begin.Length;
+            int stop = source.IndexOf(end, start);
+            if (stop < 0)
+                return "";
+            return source.Substring(start, stop - start);
+        }
+
+        static async Task HandleIncomingConnections(HttpListener listener)
+        {
+            bool runServer = true;
+            while (runServer)
+            {
+                HttpListenerContext ctx = await listener.GetContextAsync();
+                HttpListenerRequest req = ctx.Request;
+                HttpListenerResponse resp = ctx.Response;
+
+                Console.WriteLine("[INFO] ============================================");
+                Console.WriteLine("[INFO] Receive a request from " + req.RemoteEndPoint + " through HTTP " + req.HttpMethod);
+
+                if (req.HttpMethod == "PUT" && req.HasEntityBody)
+                {
+                    using (System.IO.Stream body = req.InputStream)
+                    {
+                        using (System.IO.StreamReader reader = new System.IO.StreamReader(body, req.ContentEncoding))
+                        {
+                            string source = reader.ReadToEnd();
+                            System.IO.File.WriteAllText(@".\dx_kernel.hlsl", source);
+                            string expected_timeout = req.Headers.Get("ET").Trim();
+
+                            string result = runSystemCommand(@".\" + System.Diagnostics.Process.GetCurrentProcess().ProcessName, expected_timeout, 5000);
+
+                            byte[] buffer = System.Text.Encoding.UTF8.GetBytes(result);
+                            resp.OutputStream.Write(buffer, 0, buffer.Length);
+                            resp.OutputStream.Close();
+                        }
+                    }
+                }
+                resp.Close();
+            }
+        }
+
+        static int loopServerForever()
+        {
+            Console.WriteLine("[INFO] Antares HLSL Evaluator Agent is listening on TCP port :" + LISTEN_PORT);
+            Console.WriteLine("[INFO] Possible valid AGENT_URL for Antares HLSL client includes:");
+            Console.WriteLine(runSystemCommand("cmd.exe", "/c \"ipconfig | findstr IPv4\""));
+
+            var listener = new HttpListener();
+            listener.Prefixes.Add("http://*:" + LISTEN_PORT + "/");
+            listener.Start();
+
+            Task listenTask = HandleIncomingConnections(listener);
+            listenTask.GetAwaiter().GetResult();
+            listener.Close();
+            return 0;
         }
 
         static int Main(string[] args)
         {
-            bool configured = initRegistryForSafeTDR();
-            if (args.Length == 1 && args[0] == "init") {
-                Console.WriteLine("Config initialization finished: status = " + configured);
-                return configured ? 0 : 1;
+            bool configured = initEnvironment();
+            float expected_timeout = -1.0f;
+
+            if (args.Length >= 1)
+            {
+                if (args[0] == "server")
+                {
+                    Console.WriteLine("[INFO] Config initialization finished: status = " + configured);
+                    return loopServerForever();
+                }
+                else
+                    expected_timeout = (float)Double.Parse(args[0]);
             }
 
             var shader_file = @".\dx_kernel.hlsl";
@@ -168,7 +257,7 @@ namespace AntaresHelloWorldExample
                 IntPtr dtype_ptr = IntPtr.Zero;
                 dxShaderGetProperty(hShader, i, out num_elements[i], out type_size[i], out dtype_ptr);
                 dtype_name[i] = Marshal.PtrToStringAnsi(dtype_ptr);
-                
+
                 if (i < num_inputs)
                     Console.WriteLine("InputArg " + i + ": NumElements = " + num_elements[i] + ", TypeBytes = " + type_size[i] + ", TypeName = " + dtype_name[i]);
                 else
@@ -201,6 +290,7 @@ namespace AntaresHelloWorldExample
             // compute results in background
             dxShaderLaunchAsync(hShader, kargs, IntPtr.Zero);
 
+            Console.Write("\n- {");
             // read results back and compute digest
             for (int i = num_inputs; i < num_elements.Length; ++i)
             {
@@ -224,8 +314,7 @@ namespace AntaresHelloWorldExample
                     for (int x = 0; x < h_output.Length; ++x)
                         digest += (x + 1) % 83 * h_output[x];
                 }
-
-                Console.WriteLine("- K/" + output_id + " = " + digest);
+                Console.Write("\"K/" + output_id + "\": " + digest + ", ");
             }
 
             var hStart = dxEventCreate();
@@ -238,6 +327,10 @@ namespace AntaresHelloWorldExample
             float time_in_sec = dxEventElapsedTime(hStart, hStop);
             var num_runs = Math.Max(3, Math.Min(10000, Convert.ToInt32(1.0 / time_in_sec)));
 
+            if (expected_timeout > 0 && time_in_sec >= expected_timeout)
+                num_runs = 1;
+
+
             dxEventRecord(hStart, IntPtr.Zero);
             for (int i = 0; i < num_runs; ++i)
                 dxShaderLaunchAsync(hShader, kargs, IntPtr.Zero);
@@ -245,7 +338,7 @@ namespace AntaresHelloWorldExample
             dxStreamSynchronize(IntPtr.Zero);
 
             float tpr = dxEventElapsedTime(hStart, hStop) / num_runs;
-            Console.WriteLine("- TPR = " + tpr);
+            Console.WriteLine("\"TPR\": " + tpr + "}");
             return 0;
         }
     }
