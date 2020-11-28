@@ -3,7 +3,6 @@
 
 import os, time, math
 import numpy as np
-import tvm
 import subprocess
 
 from antares.common import backend
@@ -15,14 +14,14 @@ def eval(kernel_path, **kwargs):
     source_file = '%s/run_graph.cpp' % os.path.dirname(__file__)
 
     evaluator_path = '%s/evaluator.%s' % (os.environ['ANTARES_DRIVER_PATH'], backend)
-    if True or not os.path.exists(evaluator_path):
+    if not os.path.exists(evaluator_path):
       if backend == 'c-rocm':
         assert 0 == os.system('/opt/rocm/bin/hipcc %s -std=c++17 -o %s.tmp' % (source_file, evaluator_path)), "ROCm SDK is not found, please setup the graphcore environment."
       elif backend == 'c-cuda':
         assert 0 == os.system('g++ %s -std=c++17 -lcuda -lcudart -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -o %s.tmp' % (source_file, evaluator_path)), "CUDA SDK is not found, please setup the graphcore environment."
       else:
         raise Exception("Unrecognized backend type for `%s`" % backend)
-      os.system('mv %s.tmp %s' % (evaluator_path, evaluator_path))
+      os.system('mv %s.tmp %s >/dev/null 2>&1' % (evaluator_path, evaluator_path))
       assert os.path.exists(evaluator_path)
 
     exec_cmd = "sh -c 'cd %s && CUDA_VISIBLE_DEVICES=%d EXPECTED_TIMEOUT=%s %s'" % (os.path.dirname(kernel_path), dev_id, kwargs['expected_timeout'], evaluator_path)
