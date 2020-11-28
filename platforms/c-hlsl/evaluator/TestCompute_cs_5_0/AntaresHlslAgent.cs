@@ -80,7 +80,7 @@ namespace AntaresHlslEvalAgent
                 {
                     var value = key.GetValue("TdrConfigState");
                     key.Close();
-                    if (value == null || Convert.ToInt32(value) != 2)
+                    if (value == null || Convert.ToInt32(value) != 3)
                         return false;
                     return true;
                 }
@@ -129,6 +129,8 @@ namespace AntaresHlslEvalAgent
                 runSystemCommand(@"powershell.exe", @"Start-Process -Verb runas -FilePath regedit.exe -ArgumentList '/s', '" + tdr_path + "'");
 
                 Console.WriteLine();
+                Thread.Sleep(2000);
+
                 if (!isSafeTDRConfigured())
                 {
                     Console.WriteLine("[WARN] No access to initialize safe TDR settings from Windows registry.");
