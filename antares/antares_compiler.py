@@ -88,6 +88,9 @@ def translate_code(code):
   return '%s\n%s%s' % (get_kernel_metadata(), defs, code)
 
 def device_properties():
+  if hasattr(AntaresGlobal, 'device_props'):
+    return AntaresGlobal.device_props
+
   props = tvm.runtime.ndarray.gpu(0)
   with open('%s/device_properties.cfg' % os.environ['ANTARES_DRIVER_PATH'], 'r') as fp:
     mem_bandwith = []
@@ -100,6 +103,8 @@ def device_properties():
         mem_bandwith.append(float(val))
     mem_bandwith = 'inf' if not mem_bandwith else np.product(mem_bandwith) * 2.5e-7
     props.mem_bandwith = float(mem_bandwith)
+
+  AntaresGlobal.device_props = props
   return props
 
 def compile_source(code):
@@ -273,6 +278,9 @@ def evaluate_perf(kernel_path, task_flop, dev_id, device_source):
   return results
 
 def compute_mem_ratio(tpr):
+  if math.isinf(float(device_properties().mem_bandwith)):
+    return -1
+
   global_arg_props = get_global_arg_props()
   access_bytes = 0
   for buf in global_arg_props['_in']:
