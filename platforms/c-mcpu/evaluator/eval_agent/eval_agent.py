@@ -219,7 +219,7 @@ def execute(rank):
     for i in range(rank):
         mask += "1"
     cmd = ["taskset", str(hex(int(mask, 2))), "./main"]
-    logging.info("Starting execute: '%s'", ' '.join(cmd))
+    # logging.info("Starting execute: '%s'", ' '.join(cmd))
     output = b''
     try:
         output = subprocess.check_output(cmd, timeout=10)

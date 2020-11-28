@@ -80,7 +80,7 @@ namespace AntaresHlslEvalAgent
                 {
                     var value = key.GetValue("TdrConfigState");
                     key.Close();
-                    if (value == null || Convert.ToInt32(value) != 1)
+                    if (value == null || Convert.ToInt32(value) != 2)
                         return false;
                     return true;
                 }
