@@ -422,7 +422,7 @@ def main_compute(code_only=False):
     tuner_type = os.environ.get('TUNER', '')
     if not tuner_type:
       explicit_ops = AntaresGlobal.attrs.explicit_ops
-      if len(explicit_ops) == 1 and len(explicit_ops[-1].reduce_axis) > 1 and backend in ['c-rocm', 'c-cuda', 'c-hlsl', 'c-ocl']:
+      if len(explicit_ops) == 1 and len(explicit_ops[-1].reduce_axis) > 0 and backend in ['c-rocm', 'c-cuda', 'c-hlsl', 'c-ocl']:
         tuner_type = 'AutoTVM2'
       else:
         tuner_type = 'XGBoost'
