@@ -5,7 +5,7 @@ import os
 import json
 import tvm
 from tvm import auto_scheduler
-from antares.common import local_get_dir_file
+from antares.common import local_get_dir_file, AntaresGlobal
 
 GLOBAL_TUNER = None
 
@@ -42,18 +42,20 @@ def local_run(inputs, build_results, key, host, port, priority=1, n_parallel=1, 
     measure_results.append(tvm.auto_scheduler.measure.MeasureResult(results[i].costs, results[i].error_no, '', results[i].all_cost, results[i].timestamp))
   return measure_results
 
+@auto_scheduler.register_workload
+def auto_template():
+  _, arg_bufs = AntaresGlobal.default_tune_op.get_template_op()
+  return arg_bufs
+
+def create_auto_task(tvm_target):
+  return auto_scheduler.create_task(auto_template, (), tvm_target)
 
 class MainTuner(object):
 
   def __init__(self, task, **kwargs):
     self.task = task
     self.measure_ctx = auto_scheduler.LocalRPCMeasureContext(min_repeat_ms=300)
-
-    @auto_scheduler.register_workload
-    def auto_template():
-      _, arg_bufs = task.func()
-      return arg_bufs
-    self.auto_task = auto_scheduler.create_task(auto_template, (), task.target)
+    self.auto_task = create_auto_task(task.target)
 
   def cleanup(self):
     del self.measure_ctx

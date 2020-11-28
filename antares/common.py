@@ -13,8 +13,7 @@ def wait_for(func, timeout=None, args=[]):
   if not timeout:
     return func(*args)
   def timeout_handler():
-    print("Error: Timeout during Kernel warmup")
-    os._exit(1)
+    raise Exception("Error: Timeout during Kernel warmup")
   from threading import Timer
   my_timer = Timer(timeout, timeout_handler, [])
   my_timer.start()
