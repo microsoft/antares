@@ -477,6 +477,7 @@ def main_compute(code_only=False):
 
         best_slot = -1
         for i in range(len(inputs)):
+          dir_sid = AntaresGlobal.current_step + i + 1
           t = futures[i].result()
           if t < tuner.task.best.timecost:
             best_slot = dir_sid
