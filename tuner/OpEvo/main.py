@@ -3,9 +3,9 @@
 
 import math
 import logging
-import copy
 import random
 import json
+import pickle
 import time
 import numpy as np
 from itertools import combinations, permutations
@@ -51,9 +51,9 @@ class Choice(Parameter):
         self.value = random.choice(self.choices)
 
     def mutate(self):
-        child = copy.deepcopy(self)
+        child = pickle.loads(pickle.dumps(self, -1))
         while random.uniform(0, 1) < child.mutate_rate:
-            choices = copy.deepcopy(child.choices)
+            choices = pickle.loads(pickle.dumps(child.choices, -1))
             choices.remove(child.value)
             if choices:
                 child.value = random.choice(choices)
@@ -85,7 +85,7 @@ class Discrete(Parameter):
         self.value = random.choice(self.numbers)
 
     def mutate(self):
-        child = copy.deepcopy(self)
+        child = pickle.loads(pickle.dumps(self, -1))
         while random.uniform(0, 1) < child.mutate_rate:
             idx = child.numbers.index(child.value)
             if idx == 0 and idx + 1 < len(child.numbers):
@@ -124,7 +124,8 @@ class Permutation(Parameter):
         self.value = random.choice(self.perms)
 
     def mutate(self):
-        child = copy.deepcopy(self)
+        # child = copy.deepcopy(self)
+        child = pickle.loads(pickle.dumps(self, -1))
         while len(self.value) > 1 and random.uniform(0, 1) < child.mutate_rate:
             idx = list(range(len(self.value)))
             idx1 = random.choice(idx)
@@ -140,6 +141,9 @@ class Permutation(Parameter):
     def pick_out(self):
         return self.value
 
+    def __repr__(self):
+        return self.value.__repr__()
+
 
 class Factor(Parameter):
     """factor type parameter
@@ -147,18 +151,19 @@ class Factor(Parameter):
     def __init__(self, value, mutate_rate, init=None):
         self.product, self.num = value
         self.mutate_rate = mutate_rate
+        self.prime_factors = self._get_prime_factors(self.product, False)
         if init is not None:
             self.partition = init
         else:
-            self.all_partitions = \
-                self._get_all_partitions(self.product, self.num)
-            self.partition = random.choice(self.all_partitions)
+            self.reset()
 
     def reset(self):
-        if not hasattr(self, 'all_partitions'):
-            self.all_partitions = \
-                self._get_all_partitions(self.product, self.num)
-        self.partition = random.choice(self.all_partitions)
+        idx = random.choice(range(self.num))
+        self.partition = [1] * self.num
+        self.partition[idx] = self.product
+        for _ in range(100):
+            action = random.choice(self._get_actions())
+            self._step(action)
 
     def get_cardinality(self):
         if not hasattr(self, 'all_partitions'):
@@ -167,8 +172,7 @@ class Factor(Parameter):
         return len(self.all_partitions)
 
     def mutate(self):
-        child = copy.deepcopy(self)
-        # print(child)
+        child = pickle.loads(pickle.dumps(self, -1))
         while random.uniform(0, 1) < self.mutate_rate:
             action = random.choice(child._get_actions())
             child._step(action)
@@ -184,14 +188,13 @@ class Factor(Parameter):
 
     def _get_actions(self):
         actions = []
-        prime_factors = self._get_prime_factors(self.product, False)
         for i in range(self.num):
             for j in range(self.num):
                 if i != j:
-                    for k in range(len(prime_factors)):
+                    for k in range(len(self.prime_factors)):
                         action = [i]
                         action.append(j)
-                        action.append(prime_factors[k])
+                        action.append(self.prime_factors[k])
                         if self.partition[action[0]] % action[2] == 0:
                             actions.append(action)
         return actions
@@ -244,7 +247,8 @@ class Factor(Parameter):
             for key, group in groups.items():
                 for partition in group:
                     mul.append(partition)
-                    tmp = copy.deepcopy(groups)
+                    # tmp = copy.deepcopy(groups)
+                    tmp = pickle.loads(pickle.dumps(groups, -1))
                     del tmp[key]
                     part(tmp, mul)
                     mul.pop()
@@ -323,19 +327,18 @@ class Individual(object):
 
     def __eq__(self, other):
         if isinstance(other, self.__class__):
-            return self.__dict__ == other.__dict__
+            return self.__hash__() == hash(other)
         else:
             return False
 
     def __repr__(self):
-        string = ""
-        for param in self.params:
-            string += param.__repr__() + '\n'
+        return self.params.__repr__()
 
-        return string
+    def __hash__(self):
+        return hash(self.__repr__())
 
     def mutate(self):
-        child = copy.deepcopy(self)
+        child = pickle.loads(pickle.dumps(self, -1))
         for key in child.params.keys():
             child.params[key] = child.params[key].mutate()
 
@@ -371,7 +374,7 @@ class Population(object):
             if search_space.keys():
                 key = list(search_space.keys())[0]
             else:
-                self.search_spaces.append(copy.deepcopy(ss))
+                self.search_spaces.append(pickle.loads(pickle.dumps(ss, -1)))
                 return
             ss[key] = {}
             ss[key]['_type'] = search_space[key]['_type']
@@ -390,9 +393,9 @@ class Population(object):
         self.individual = Individual(
             self.search_spaces[0], self.mutate_rate)
 
-        self.volume = 1
-        for key, value in self.individual.params.items():
-            self.volume *= self.individual.params[key].get_cardinality()
+        # self.volume = 1
+        # for key, value in self.individual.params.items():
+        #     self.volume *= self.individual.params[key].get_cardinality()
 
     def append(self, individual, fitness):
         if self.opt_mode == "minimize":
@@ -417,13 +420,13 @@ class Population(object):
                 ss = self.search_spaces.pop()
                 children.append(Individual(ss, self.mutate_rate))
             for _ in range(offspring_size - len(children)):
-                child = copy.deepcopy(self.individual.reset())
+                child = pickle.loads(pickle.dumps(self.individual.reset(), -1))
                 while child in self.population or child in children:
                     child = child.mutate()
                 children.append(child)
         elif self.fitness[0] < 1e-3:
             for _ in range(offspring_size):
-                child = copy.deepcopy(self.individual.reset())
+                child = pickle.loads(pickle.dumps(self.individual.reset(), -1))
                 while child in self.population or child in children:
                     child = child.mutate()
                 children.append(child)
@@ -431,8 +434,8 @@ class Population(object):
             prob = np.array(self.fitness[:parents_size]) / \
                 np.sum(self.fitness[:parents_size])
 
-            for _ in range(offspring_size):
-                child = copy.deepcopy(self.population[0])
+            for i in range(offspring_size):
+                child = pickle.loads(pickle.dumps(self.individual.reset(), -1))
                 for key in child.params.keys():
                     idx = np.random.choice(range(parents_size), p=prob)
                     child.params[key] = self.population[idx].params[key]
@@ -520,10 +523,11 @@ class MainTuner(Tuner):
             self.mutate_rate,
             self.optimize_mode
         )
-        self.logger.debug('Total search space volume: '
-                          + str(self.population.volume))
-        self.logger.info('Total search space volume: '
-                          + str(self.population.volume))
+        # self.logger.debug('Total search space volume: '
+        #                   + str(self.population.volume))
+        # self.logger.info('Total search space volume: '
+        #                   + str(self.population.volume))
+        # print('Total search space volume: ' + str(self.population.volume))
 
         if not self.serve_list:
             self.serve_list = self.population.get_offspring(
@@ -534,7 +538,7 @@ class MainTuner(Tuner):
         self.batch_size = batch_size
         res = []
         for candidate in self.serve_list[:self.batch_size]:
-            cand_final = copy.deepcopy(candidate.pick_out())
+            cand_final = pickle.loads(pickle.dumps(candidate.pick_out(), -1))
             for key in cand_final:
                 if self.search_space[key]['_type'] == 'factor':
                     cand_final[key][0] = -1
@@ -545,6 +549,11 @@ class MainTuner(Tuner):
             res.append(self.task.antares_helper.json_to_config(cand_final, code_hash=cand_json))
 
         self.serve_list = self.serve_list[self.batch_size:]
+        try:
+            self.expected_timecost = self.task.flop / self.population.fitness[15]
+        except:
+            self.expected_timecost = np.inf
+
         return res
 
     def update(self, inputs, results):
