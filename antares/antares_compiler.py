@@ -22,10 +22,17 @@ from tvm.autotvm.task import ConfigEntity
 from antares.common import *
 from lang.generic import custom_dtypes, refactor_multiple_names
 
-def release_on_exit(signum, frame):
+AntaresGlobal.cleanup_funcs = []
+
+def cleanup_on_exit(signum, frame):
+  for func in AntaresGlobal.cleanup_funcs:
+    try:
+      func()
+    except:
+      pass
   sys.exit(1)
 
-signal.signal(signal.SIGINT, release_on_exit)
+signal.signal(signal.SIGINT, cleanup_on_exit)
 
 tvm_target = 'cuda'
 eval_program_timeout = 30
@@ -79,7 +86,7 @@ def translate_code(code, config):
       outp_args.append('-'.join([str(x) for x in buf['shape']]) + '/' + buf['dtype'] + '/' + buf['name'])
 
     header_meta = '///' + ','.join(inp_args) + ':' + ','.join(outp_args) + '\n// BACKEND = %s\n' % backend
-    properties = "// CONFIG: %s\n// COMPUTE_V1: %s\n" % (config.strip(), os.environ['COMPUTE_V1'])
+    properties = "// CONFIG: %s\n// COMPUTE_V1: %s\n" % (config.strip() if isinstance(config, str) else '', os.environ['COMPUTE_V1'])
     return header_meta + properties
 
   code = refactor_multiple_names(code, global_arg_props)
@@ -444,6 +451,9 @@ def main_compute(code_only=False):
     except:
       raise Exception('>> Cannot import Antares Tuner: %s' % tuner_type)
 
+    if hasattr(tuner, 'cleanup'):
+      AntaresGlobal.cleanup_funcs.append(tuner.cleanup)
+
     if tuner is not None:
       AntaresGlobal.current_step = 0
 
@@ -529,8 +539,7 @@ def main_compute(code_only=False):
         num_trials,
         tuner.task.best.timecost))
 
-      if hasattr(tuner, 'cleanup'):
-        tuner.cleanup()
+      cleanup_on_exit(0, 0)
     else:
       raise Exception('Unrecognized tuner type: `%s`' % tuner_type)
     exit(0)
@@ -545,8 +554,6 @@ def main_compute(code_only=False):
     best_config = ''
 
   assert isinstance(best_config, str)
-  if verbose:
-    print("====>> [Current Config Option]", best_config)
 
   best_config = best_config if best_config else task.config_space
   device_source, kernel_path, compile_args = get_target_source(best_config)
