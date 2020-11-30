@@ -5,68 +5,8 @@ import os
 import json
 import itertools
 import numpy as np
-from common import backend
+from common import backend, AntaresGlobal
 from lang.einstein_v2 import walk_in_ast, OpTensor
-
-def infer_range(root, ax_rank):
-  if root._op == 'get_item':
-    return '*'
-  if root._op == 'const':
-    ival = int(root._value)
-    return [0, None, ival, ival]
-  if root._op == 'axis':
-    if root._value['name'] in ax_rank:
-      return [1, root._value['name'], 0, 0]
-    else:
-      return [0, None, 0, root._value['range'] - 1]
-  if root._op == 'op':
-    if root._value['name'] == '*' and len(root._value['inputs']) == 2:
-      ll, rr = infer_range(root._value['inputs'][0], ax_rank), infer_range(root._value['inputs'][1], ax_rank)
-      if ll == '*' or rr == '*':
-        return '*'
-      if rr[1] is not None:
-        ll, rr = rr, ll
-      if rr[1] is not None:
-        return '*'
-      a0, a1, a2, a3 = ll[2] * rr[2], ll[2] * rr[3], ll[3] * rr[2], ll[3] * rr[3]
-      amin, amax = min(a0, a1, a2, a3), max(a0, a1, a2, a3)
-      if ll[1] is None:
-        return [ll[0], ll[1], amin, amax]
-      elif rr[2] != rr[3]:
-        return '*'
-      else:
-        return [ll[0] * rr[2], ll[1], amin, amax]
-    if root._value['name'] == '+' and len(root._value['inputs']) == 2:
-      ll, rr = infer_range(root._value['inputs'][0], ax_rank), infer_range(root._value['inputs'][1], ax_rank)
-      if ll == '*' or rr == '*':
-        return '*'
-      if rr[1] is not None:
-        ll, rr = rr, ll
-      if rr[1] is not None:
-        if ll[1] != rr[1]:
-          return '*'
-        return [ll[0] + rr[0], ll[1], ll[2] + rr[2], ll[3] + rr[3]]
-      return [ll[0], ll[1], ll[2] + rr[2], ll[3] + rr[3]]
-    if root._value['name'] == '-' and len(root._value['inputs']) == 2:
-      ll, rr = infer_range(root._value['inputs'][0], ax_rank), infer_range(root._value['inputs'][1], ax_rank)
-      if ll == '*' or rr == '*':
-        return '*'
-      if ll[1] == rr[1]:
-        return [ll[0] - rr[0], ll[1], ll[2] - rr[3], ll[3] - rr[2]]
-      if ll[1] == None:
-        return [- rr[0], rr[1], ll[2] - rr[3], ll[3] - rr[2]]
-      if rr[1] == None:
-        return [ll[0], ll[1], ll[2] - rr[3], ll[3] - rr[2]]
-      return '*'
-    if root._value['name'] == '%' and len(root._value['inputs']) == 2:
-      ll, rr = infer_range(root._value['inputs'][0], ax_rank), infer_range(root._value['inputs'][1], ax_rank)
-      if ll == '*' or rr == '*':
-        return '*'
-      if rr[1] != None or rr[2] != rr[3]:
-        return '*'
-      return [0, None, 0, rr[2] - 1]
-
-  raise Exception('Unhandled infer_range op type: %s' % root)
 
 def get_daxis_range(name, ast):
   for k in ast['props']['data_axes']:
@@ -186,18 +126,17 @@ def eliminate_trivial_axis(ast):
       ast['props']['output_dict'][k]['shape'] = [1]
   # print(ast['props'])
 
-def compute(ast):
+def run_pass_v2(ast_seq, global_input_dict, global_output_dict):
   if os.environ.get('SIMPLE', '1') == '0':
     return
-  if 'injective' in ast or 'shard' in ast['props']:
-    # FIXME: Unhandled case yet
+  if len(ast_seq) > 1:
+    return
+  # Just a rough check
+  anno = os.environ.get('COMPUTE_V1', '').split('##')[-1]
+  if 'plan/' in anno and 'default' not in anno:
     return
 
-  annotation = os.environ.get('COMPUTE_V1', '').split('##')[-1]
-  # FIXME: Just a rough check
-  if 'plan/' in annotation and 'default' not in annotation:
-    return
-
+  ast = ast_seq[0]
   eliminate_trivial_axis(ast)
 
   access_book, tensor_nodes = {}, []
@@ -232,6 +171,11 @@ def compute(ast):
         for x in k:
           visited.add(x)
         update_ast_axis(ast, k, tensor_nodes)
-      # print(k, this_pattern, access_pattern, can_simplify)
+  for k in ast['props']['input_dict']:
+    if k in global_input_dict:
+      global_input_dict[k] = ast['props']['input_dict'][k]
+  for k in ast['props']['output_dict']:
+    if k in global_output_dict:
+      global_output_dict[k] = ast['props']['output_dict'][k]
   return
 

@@ -251,15 +251,6 @@ def parse_to_ast(expr, input_dict={}):
 
   output_name = lval[:lval.index('[')].strip()
   props['output_dict'][output_name] = {"dtype": _root._dtype, "shape": [x["range"] for x in props['data_axes']]}
-  
-  '''
-  print('\nProp:', props)
-  print('\nLval:', lval)
-  print('\nRval:', rval)
-  print('\nAxis:', explicit_range)
-  print('\nRoot:', _root)
-  print()
-  '''
   return {'props': props, 'root': _root}
 
 
@@ -373,74 +364,10 @@ def apply_fusion(ast, top_ast):
   walk_in_ast(ast['root'], _replace_tensor, [], ast, 'root')
   return ast
 
-def build_fused_ast(statements, input_dict):
-  core_comp = None
-  statements = [x.strip() for x in statements.split(';')]
-  prev_ast, inputs = {}, copy.deepcopy(input_dict)
-  for stat in statements:
-    single_stat = stat.strip()
-    if not single_stat:
-      continue
-    ast = parse_to_ast(single_stat, input_dict=inputs)
-    if prev_ast:
-      ast = apply_fusion(ast, prev_ast)
-    outputs = ast['props']['output_dict']
-    if ast['props']['reduce_type'] is None:
-      prev_ast[next(iter(outputs))] = ast
-    elif core_comp is None:
-      core_comp = ast
-    else:
-      raise Exception("At most 1 reduce computation is allowed within 1 fused kernel.")
-
-    for k in outputs:
-      inputs[k] = outputs[k]
-    '''
-    for k in prev_ast:
-      # print(">>", k, hash(str(prev_ast[k])))
-      print("\n>>", k, prev_ast[k])
-    print("=====>", core_comp)
-    '''
-
-  # Cleanup input_dict
-  ast['props']['input_dict'] = copy.deepcopy(input_dict)
-
-  if core_comp is None:
-    return ast
-
-  core_name = next(iter(core_comp['props']['output_dict']))
-  ast_name = next(iter(ast['props']['output_dict']))
-
-  core_comp['props']['input_dict'] = copy.deepcopy(input_dict)
-  ast['props']['input_dict'][core_name] = copy.deepcopy(core_comp['props']['output_dict'][core_name])
-
-  # Align naming for injective axis and core axis
-  if core_name != ast_name:
-    replace_maps = {}
-    if core_comp['props']['output_dict'][core_name]['shape'] != ast['props']['output_dict'][ast_name]['shape']:
-      raise Exception("Injective computation doesn't match with core computation in shape.")
-    for i in range(len(ast['props']['data_axes'])):
-      replace_maps[ast['props']['data_axes'][i]['name']] = core_comp['props']['data_axes'][i]['name']
-    ast['props']['data_axes'] = core_comp['props']['data_axes']
-
-    visited = set()
-    def _replace_axis(node, replace_maps, visited):
-      if node._op == 'axis' and id(node._value) not in visited:
-        node._value['name'] = replace_maps[node._value['name']]
-        visited.add(id(node._value))
-      return None
-    walk_in_ast(ast['root'], _replace_axis, [replace_maps, visited], ast, 'root')
-
-    core_comp['injective'] = ast
-    ast = core_comp
-
-  ast['props']['input_dict'] = copy.deepcopy(input_dict)
-  if 'injective' in ast:
-    ast['injective']['props']['input_dict'] = ast['props']['input_dict']
-  return ast
-
 def emit_tvm_ir_v2(exprss, input_dict, extra_outputs):
   statements = [s_.strip() for s_ in exprss.split(';')]
   inputs = copy.deepcopy(input_dict)
+  output_dict = {}
   ast_seq = []
   for s in statements:
     if not s:
@@ -451,14 +378,36 @@ def emit_tvm_ir_v2(exprss, input_dict, extra_outputs):
     for k in ast_outputs_dict:
       inputs[k] = ast_outputs_dict[k]
       if k in extra_outputs:
-        ast['as_result'] = True
+        output_dict[k] = ast_outputs_dict[k]
     ast_seq.append(ast)
 
-  # Also appending the last output
-  full_outputs = extra_outputs
-  if k not in full_outputs:
-    full_outputs.append(k)
+  # Also include the last output
+  if k not in extra_outputs:
+    output_dict[k] = ast_outputs_dict[k]
 
+  # Registry Global Argument Properties
+  arg_props = {'_in': [], '_out': []}
+  for k in input_dict:
+    prop = copy.deepcopy(input_dict[k])
+    prop['name'] = k
+    arg_props['_in'].append(prop)
+  for k in output_dict:
+    prop = copy.deepcopy(output_dict[k])
+    prop['name'] = k
+    arg_props['_out'].append(prop)
+  arg_props['_in'].sort(key=lambda x: x['name'])
+  arg_props['_out'].sort(key=lambda x: x['name'])
+  os.environ['GLOBAL_ARG_PROPS'] = json.dumps(arg_props)
+
+  import importlib
+  passes = os.listdir('lang/pass')
+  passes.sort()
+  for pas in passes:
+    if pas.endswith('.py'):
+      pass_stage = importlib.import_module('lang.pass.%s' % pas[:-3])
+      pass_stage.run_pass_v2(ast_seq, input_dict, output_dict)
+
+  # Generate LL_IR body for ast_seq
   def emit_input_body(input_dict):
     input_body = ''
     for key in input_dict:
@@ -495,7 +444,7 @@ def emit_tvm_ir_v2(exprss, input_dict, extra_outputs):
     all_axis_range = np.product(output_shape) * np.product([x['range'] for x in props['reduce_axes']])
     output_begin = '%s = output(shape=%s, flops=(%d * %d), func=lambda %s: ' % (output_name, output_shape, props['flopbase'], all_axis_range, ', '.join([warp_axis(x['name']) for x in props['data_axes']]))
     basic_body = emit_tvm_body(root, props)
-    output_end = ', dtype="%s", tag="%s", name="%s", final_output=%s); ' % (props['output_dict'][output_name]['dtype'], '', output_name, output_name in full_outputs)
+    output_end = ', dtype="%s", tag="%s", name="%s", final_output=%s); ' % (props['output_dict'][output_name]['dtype'], '', output_name, output_name in output_dict)
     return output_begin + reduce_pattern % basic_body + output_end
 
   ll_irs = [emit_input_body(input_dict)]
@@ -507,74 +456,3 @@ def emit_tvm_ir_v2(exprss, input_dict, extra_outputs):
 
 def emit_tvm_ir(exprss, input_dict, extra_outputs):
   return emit_tvm_ir_v2(exprss, input_dict, extra_outputs)
-
-  # Deprecated injective handling
-  ast = build_fused_ast(exprss, input_dict)
-  arg_props = {'_in': [], '_out': []}
-  for k in ast['props']['input_dict']:
-    prop = copy.deepcopy(ast['props']['input_dict'][k])
-    prop['name'] = k
-    arg_props['_in'].append(prop)
-  for k in ast['props']['output_dict']:
-    prop = copy.deepcopy(ast['props']['output_dict'][k])
-    prop['name'] = k
-    arg_props['_out'].append(prop)
-  arg_props['_in'].sort(key=lambda x: x['name'])
-  arg_props['_out'].sort(key=lambda x: x['name'])
-  os.environ['GLOBAL_ARG_PROPS'] = json.dumps(arg_props)
-
-  from lang import auto_shard
-  auto_shard.compute(ast)
-
-  from lang import simplify
-  simplify.compute(ast)
-
-  bias_axis_body = ''
-
-  def emit_input_body(input_dict):
-    input_body = ''
-    for key in input_dict:
-      input_info = input_dict[key]
-      input_body += '%s = input("%s", %s, dtype="%s"); ' % (key, key, input_info['shape'], input_info['dtype'])
-    return input_body
-
-  def emit_reduce_body(ast):
-    reduce_body, reduce_set = '', []
-    props = ast['props']
-    if props['reduce_axes']:
-      for x in props['reduce_axes']:
-        axis_name = warp_axis(x['name'])
-        reduce_set.append(axis_name)
-        reduce_body += '%s = loop(%d); ' % (axis_name, x['range'])
-      reduce_maps = {'+': 'te.sum', '>': 'te.max', '<': 'te.min'}
-      if props['reduce_type'] in reduce_maps:
-        reduce_func = reduce_maps[props['reduce_type']]
-      else:
-        spec_idx = props['reduce_type'].find('(')
-        if spec_idx >= 0:
-          reduce_func = 'common_reduce("%s", %s)' % (props['reduce_type'][:spec_idx], props['reduce_type'][spec_idx:])
-        else:
-          reduce_func = 'common_reduce("%s")' % props['reduce_type']
-      reduce_pattern = '%s(' % reduce_func + '%s' + ', axis=[%s])' % ', '.join(reduce_set)
-    else:
-      reduce_pattern = '%s'
-    return reduce_body, reduce_pattern
-
-  def emit_output_body(ast, reduce_pattern, final_output=True, injective=False):
-    root, props = ast['root'], ast['props']
-    output_shape = [x['range'] for x in props['data_axes']]
-    output_name = next(iter(props['output_dict']))
-    all_axis_range = np.product(output_shape) * np.product([x['range'] for x in props['reduce_axes']])
-    output_begin = '%s = output(shape=%s, flops=(%d * %d), func=lambda %s: ' % (output_name, output_shape, props['flopbase'], all_axis_range, ', '.join([warp_axis(x['name']) for x in props['data_axes']]))
-    basic_body = emit_tvm_body(root, props)
-    output_end = ', dtype="%s", tag="%s", name="%s", final_output=%s); ' % (props['output_dict'][output_name]['dtype'], '', output_name, final_output)
-    return output_begin + reduce_pattern % basic_body + output_end
-
-  final_body = bias_axis_body + emit_input_body(ast['props']['input_dict'])
-
-  has_injective = 'injective' in ast
-  reduce_body, reduce_pattern = emit_reduce_body(ast)
-  final_body += reduce_body + emit_output_body(ast, reduce_pattern, final_output=(not has_injective), injective=False)
-  if has_injective:
-    final_body += emit_output_body(ast['injective'], '%s', final_output=True, injective=True)
-  return final_body
