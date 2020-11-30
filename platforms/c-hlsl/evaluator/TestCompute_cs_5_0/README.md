@@ -1,20 +1,15 @@
-# Configure HLSL evaluator listener
+# How to evaluate and tuning kernels written in HLSL shader
 
-DirectX12 is natively supported by WinOS. Since Antares works in LinuxOS, we use a remote tuning way to connect the evaluator deployed on a remote WinOS. Here is a tutorial on how to set up an HLSL evaluator listener on WinOS.
+1) First, you need a Win10 (64-bit) OS with DirectX12 enabled, and this host is used to activate the Antares HLSL Agent.
 
-If this is the first time build on the target machine:
+2) Then, you also need a Linux environment with docker service, which is used to launch the main Antares engine. Ensure the Linux environment and Win10 host can interact with each other via network.
 
-1) Compile [TestCompute](TestCompute.vcxproj) in Visual Studio
+3) Launch the Antares HLSL Agent on Win10 OS: Just by executing `eval_agent.bat` and waiting for the service daemon to start up successfully.
 
-    It's recommended to compile the project with Visual Studio 2019. If the build is succeeded, you could find `TestCompute.exe` in your current folder. 
+4) In the Linux environment, run a single test with Antares engine using command `AGENT_URL=<win10-ip-addr> BACKEND=c-hlsl make`, and this is to test whether the main Antares engine can connect and utilize remote HLSL Agent on Win10.
 
-2) Register [TDR.reg](TDR.reg)
+5) For tuning workloads, just run standard Antares tuning commands with just an additional environment variable `AGENT_URL` in Linux side, e.g.:
 
-    To avoid the failure caused by TDR, You need to execute the registry to make the WinOS waiting for the GPU execution longer than 5s.
-
-Start the listener:
-``` 
-python eval_agent.py
+```sh
+  AGENT_URL=<win10-ip-addr> STEP=50 COMPUTE_V1='<some-expression>' make
 ```
-
-After the agent is started, the `Host_IP` and `Host_PORT` will be shown in the command line, which will be used in remote tuning requests by the client.

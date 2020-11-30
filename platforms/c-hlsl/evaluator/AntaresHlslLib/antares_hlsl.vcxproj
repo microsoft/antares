@@ -8,14 +8,14 @@
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
-    <ProjectGuid>{38E1DCE3-5652-4456-BDD2-DE0CD06805AC}</ProjectGuid>
+    <ProjectGuid>{F69F47ED-7892-46C7-A303-19DDC6032D52}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
-    <RootNamespace>TestCompute</RootNamespace>
+    <RootNamespace>antareshlsl</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v142</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
@@ -35,32 +35,32 @@
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
-      <PrecompiledHeader>
-      </PrecompiledHeader>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;ANTARESHLSL_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <PrecompiledHeaderFile>
+      </PrecompiledHeaderFile>
+      <PrecompiledHeaderOutputFile />
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>Windows</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableUAC>false</EnableUAC>
     </Link>
-    <PostBuildEvent>
-      <Command>copy /Y "$(TargetDir)$(ProjectName).exe" "$(ProjectDir)$(ProjectName).exe"
-copy /Y "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\$(PlatformTarget)\dxil.dll" "$(ProjectDir)dxil.dll"
-copy /Y "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\$(PlatformTarget)\dxcompiler.dll" "$(ProjectDir)dxcompiler.dll"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="run_graph.cpp" />
+    <ClInclude Include="D3D12APIWrapper.h" />
+    <ClInclude Include="D3D12Antares.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="d3dx12_antares.h" />
+    <ClCompile Include="D3D12APIWrapper.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

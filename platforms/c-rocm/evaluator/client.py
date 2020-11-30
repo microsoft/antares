@@ -3,81 +3,36 @@
 
 import os, time, math
 import numpy as np
-import tvm
-from tvm.runtime import ndarray as runtime
-from threading import Timer
+import subprocess
 
-from antares.common import AntaresGlobal
+from antares.common import backend
 
 def eval(kernel_path, **kwargs):
-    func = kwargs['func']
-    arg_bufs = AntaresGlobal.current_arg_bufs
+    dev_id = kwargs['dev_id']
+    curr_dir = os.getcwd()
+    os.chdir(os.path.dirname(kernel_path))
+    source_file = '%s/run_graph.cpp' % os.path.dirname(__file__)
 
-    check_result = True
-    visible_dev_id = 0
-    ctx = tvm.context('cuda', visible_dev_id)
-    ins, outs = [], []
+    evaluator_path = '%s/evaluator.%s' % (os.environ['ANTARES_DRIVER_PATH'], backend)
+    if not os.path.exists(evaluator_path):
+      if backend == 'c-rocm':
+        assert 0 == os.system('/opt/rocm/bin/hipcc %s -std=c++17 -o %s.tmp' % (source_file, evaluator_path)), "ROCm SDK is not found, please setup the graphcore environment."
+      elif backend == 'c-cuda':
+        assert 0 == os.system('g++ %s -std=c++17 -lcuda -lcudart -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -o %s.tmp' % (source_file, evaluator_path)), "CUDA SDK is not found, please setup the graphcore environment."
+      else:
+        raise Exception("Unrecognized backend type for `%s`" % backend)
+      os.system('mv %s.tmp %s >/dev/null 2>&1' % (evaluator_path, evaluator_path))
+      assert os.path.exists(evaluator_path)
 
-    def parse_buf_array(buf):
-      idx = buf['dtype'].find('@')
-      if idx >= 0:
-        bits = int(buf['dtype'][idx + 1:])
-        if bits == 8:
-          return np.dtype('uint8')
-        elif bits in [16, 32, 64, 128]:
-          return np.dtype('float%d' % bits)
-        else:
-          raise Exception("Unhandled custom dtype `%s` for this backend." % buf['dtype'])
-      return np.dtype(buf['dtype'])
+    exec_cmd = "sh -c 'cd %s && CUDA_VISIBLE_DEVICES=%d EXPECTED_TIMEOUT=%s %s'" % (os.path.dirname(kernel_path), dev_id, kwargs['expected_timeout'], evaluator_path)
+    st, output = subprocess.getstatusoutput(exec_cmd)
+    os.chdir(curr_dir)
+    if st != 0:
+        raise Exception("Invalid runtime kernel execution: %s\n\nReason: %s" % (exec_cmd, output))
 
-    for rank, buf in enumerate(arg_bufs['_in']):
-      np_dtype, np_shape = parse_buf_array(buf), buf['shape']
-      np_val = np.reshape(((np.arange(np.product(np_shape)) + rank + 1) % 71).astype(np_dtype), np_shape)
-      ins.append(runtime.array(np_val, ctx))
-
-    for rank, buf in enumerate(arg_bufs['_out']):
-      np_dtype, np_shape = parse_buf_array(buf), buf['shape']
-      np_val = np.zeros(np_shape, dtype=np_dtype)
-      outs.append(runtime.array(np_val, ctx))
-
-    def timeout_handler():
-      print("Error: Timeout during Kernel warmup")
-      os._exit(1)
-
-    my_timer = Timer(20, timeout_handler, [])
-    my_timer.start()
-
-    # Warmup
-    tensors = ins + outs
-    func(*tensors)
-    runtime.gpu(visible_dev_id).sync()
-    # Estimate
-    t_start = time.time()
-    func(*tensors)
-    runtime.gpu(visible_dev_id).sync()
-    t_diff = time.time() - t_start
-    my_timer.cancel()
-    del my_timer
-
-    expected_diff = kwargs['expected_timeout']
-
-    if expected_diff is not None and t_diff > expected_diff:
-      raise Exception("Current kernel is not faster than expected timecost: %g > %g" % (t_diff, expected_diff))
-
-    if check_result:
-      for out in outs:
-        output_vals = np.reshape(out.asnumpy(), -1)
-        ceof = (np.arange(len(output_vals)) + 1) % 83
-        digest = np.sum(ceof * output_vals)
-
-    num_runs = max(3, min(1000000, math.floor(3.0 / t_diff)))
-    timeout_seconds = math.ceil((num_runs + 5) * t_diff)
-    # print(" >> Per run is around", t_diff, num_runs, timeout_seconds)
-    my_timer = Timer(timeout_seconds, timeout_handler, [])
-    my_timer.start()
-    timer_f = func.time_evaluator(func.entry_name, ctx, number=num_runs)
-    t = timer_f(*tensors).mean
-    my_timer.cancel()
-
-    results = {"TPR": t, "K/0": float(digest)}
+    results = {}
+    for line in output.split('\n'):
+        if line.startswith('- '):
+            key, val = line[2:].split(': ')
+            results[key] = float(val)
     return results

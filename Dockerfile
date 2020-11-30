@@ -25,16 +25,18 @@ RUN curl -sL http://repo.radeon.com/rocm/apt/debian/rocm.gpg.key | apt-key add -
 
 RUN /bin/echo -e "set nocindent\nset noautoindent\nset ts=4" > /root/.vimrc
 
-RUN pip3 install --upgrade pip tornado psutil xgboost==0.80 numpy decorator attrs cmake pytest typed_ast && rm -rf ~/.cache
-RUN git clone https://github.com/apache/incubator-tvm $TVM_HOME
-
-RUN cd $TVM_HOME && git checkout b8474c8 && git submodule init && git submodule update && \
+RUN pip3 install --upgrade pip cmake && \
+    pip3 install --upgrade tornado psutil xgboost==1.2.1 numpy decorator attrs pytest typed_ast && \
+    rm -rf ~/.cache
+RUN git clone https://github.com/apache/incubator-tvm $TVM_HOME && \
+    cd $TVM_HOME && git checkout 73f425d && \
+    git submodule init && git submodule update && \
     mkdir -p build && cd build && cp ../cmake/config.cmake . && \
     sed -i 's/LLVM OFF/LLVM ON/g' config.cmake && sed -i 's/CUDA OFF/CUDA ON/g' config.cmake && \
     cmake .. && make -j16
 
 ADD engine/tvm_v0.7.patch $TVM_HOME/tvm_v0.7.patch
-RUN cd $TVM_HOME && git apply tvm_v0.7.patch && cd build && make -j16
+RUN cd $TVM_HOME && git apply tvm_v0.7.patch
 RUN cd $TVM_HOME && cd build && make -j16
 
 RUN [ -e /usr/lib/x86_64-linux-gnu/libcuda.so.1 ] || ln -s /host/usr/lib/x86_64-linux-gnu/libcuda.so.1 /usr/lib/x86_64-linux-gnu

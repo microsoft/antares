@@ -1,21 +1,79 @@
 diff --git a/python/tvm/autotvm/tuner/tuner.py b/python/tvm/autotvm/tuner/tuner.py
-index 9864ba005..3819bb923 100644
+index ba54291ad..fe21a3f20 100644
 --- a/python/tvm/autotvm/tuner/tuner.py
 +++ b/python/tvm/autotvm/tuner/tuner.py
-@@ -128,7 +128,7 @@ class Tuner(object):
-             configs = self.next_batch(min(n_parallel, n_trial - i))
- 
-             inputs = [MeasureInput(self.task.target, self.task, config) for config in configs]
--            results = measure_batch(inputs)
-+            results = self.measure_batch(inputs) if hasattr(self, 'measure_batch') else measure_batch(inputs)
- 
-             # keep best config
-             for k, (inp, res) in enumerate(zip(inputs, results)):
+@@ -109,7 +109,7 @@ class Tuner(object):
+         si_prefix: str
+             One of tvm.autotvm.utils.SI_PREFIXES. The SI prefix to use when reporting FLOPS.
+         """
+-        measure_batch = create_measure_batch(self.task, measure_option)
++        measure_batch = self.measure_batch if hasattr(self, 'measure_batch') else create_measure_batch(self.task, measure_option)
+         n_parallel = getattr(measure_batch, "n_parallel", 1)
+         early_stopping = early_stopping or 1e9
+         self.n_trial = n_trial
+diff --git a/src/auto_scheduler/search_policy/utils.h b/src/auto_scheduler/search_policy/utils.h
+index f0c4cbca9..347163278 100644
+--- a/src/auto_scheduler/search_policy/utils.h
++++ b/src/auto_scheduler/search_policy/utils.h
+@@ -524,7 +524,8 @@ inline Iterator GetLastReduceIteratorInOutermostReduceTile(const Stage& stage) {
+         }
+       }
+     }
+-  } else {
++  }
++  if (reduce_axis_size) {
+     // Return the first reduce iterator
+     for (const auto& iter : stage->iters) {
+       if (iter->iter_kind == IteratorKind::kReduction) {
+diff --git a/src/runtime/cuda/cuda_common.h b/src/runtime/cuda/cuda_common.h
+index 471fefb23..9a6d9c033 100644
+--- a/src/runtime/cuda/cuda_common.h
++++ b/src/runtime/cuda/cuda_common.h
+@@ -65,4 +65,39 @@ class CUDAThreadEntry {
+ };
+ }  // namespace runtime
+ }  // namespace tvm
++
++#include <fstream>
++#define cudaDeviceGetAttribute antaresDeviceGetAttribute
++#define DEF_ATTR(key_attr)  attr2sattr[cudaDevAttr ## key_attr] = # key_attr
++
++inline cudaError_t cudaDeviceGetAttribute(int *value, cudaDeviceAttr attr, int device) {
++  static std::unordered_map<std::string, int> sattr2val;
++  static std::unordered_map<cudaDeviceAttr, std::string> attr2sattr;
++  if (!attr2sattr.size()) {
++    std::ifstream fin(getenv("ANTARES_DRIVER_PATH") + std::string("/device_properties.cfg"));
++    std::string key, val;
++    while (getline(fin, key, ':') && getline(fin, val))
++      sattr2val[key] = std::atoi(val.c_str());
++    DEF_ATTR(MaxThreadsPerBlock);
++    DEF_ATTR(WarpSize);
++    DEF_ATTR(MaxSharedMemoryPerBlock);
++    DEF_ATTR(ComputeCapabilityMajor);
++    DEF_ATTR(ComputeCapabilityMinor);
++    DEF_ATTR(ClockRate);
++    DEF_ATTR(MultiProcessorCount);
++    DEF_ATTR(MaxBlockDimX);
++    DEF_ATTR(MaxBlockDimY);
++    DEF_ATTR(MaxBlockDimZ);
++    DEF_ATTR(MaxRegistersPerBlock);
++    if (!sattr2val["MaxRegistersPerBlock"])
++      sattr2val["MaxRegistersPerBlock"] = 64 << 10;
++  }
++  auto sattr = attr2sattr.find(attr);
++  assert(sattr != attr2sattr.end());
++  auto pvalue = sattr2val.find(sattr->second);
++  assert(pvalue != sattr2val.end());
++  *value = pvalue->second;
++  return cudaSuccess;
++}
++
+ #endif  // TVM_RUNTIME_CUDA_CUDA_COMMON_H_
 diff --git a/src/target/source/codegen_c.cc b/src/target/source/codegen_c.cc
-index 2f19d6e12..f966da6fd 100644
+index ca9b80564..8242c129a 100644
 --- a/src/target/source/codegen_c.cc
 +++ b/src/target/source/codegen_c.cc
-@@ -159,7 +159,7 @@ std::string CodeGenC::GetBufferRef(DataType t, const VarNode* buffer, PrimExpr i
+@@ -160,7 +160,7 @@ std::string CodeGenC::GetBufferRef(DataType t, const VarNode* buffer, PrimExpr i
    }
    bool is_vol = IsVolatile(buffer);
    if (t.lanes() == 1) {
@@ -24,7 +82,7 @@ index 2f19d6e12..f966da6fd 100644
        os << "((";
        if (is_vol) {
          os << "volatile ";
-@@ -849,6 +849,9 @@ void CodeGenC::VisitStmt_(const AttrStmtNode* op) {
+@@ -850,6 +850,9 @@ void CodeGenC::VisitStmt_(const AttrStmtNode* op) {
      IterVar iv = Downcast<IterVar>(op->node);
      if (iv->thread_tag.length() != 0) {
        if (!var_idmap_.count(iv->var.get())) {
@@ -35,7 +93,7 @@ index 2f19d6e12..f966da6fd 100644
        }
      }
 diff --git a/src/target/source/codegen_cuda.cc b/src/target/source/codegen_cuda.cc
-index 7dc63d4ac..e4abfddc3 100644
+index 51fcbb633..ccdade699 100644
 --- a/src/target/source/codegen_cuda.cc
 +++ b/src/target/source/codegen_cuda.cc
 @@ -22,7 +22,7 @@
@@ -67,10 +125,10 @@ index 7dc63d4ac..e4abfddc3 100644
  }
  
 diff --git a/src/tir/op/op.cc b/src/tir/op/op.cc
-index 6dc485fc4..05a0fd35c 100644
+index 71321d2a3..7c2af1c3b 100644
 --- a/src/tir/op/op.cc
 +++ b/src/tir/op/op.cc
-@@ -332,9 +332,9 @@ PrimExpr operator/(PrimExpr a, PrimExpr b) { return div(a, b); }
+@@ -343,9 +343,9 @@ PrimExpr operator/(PrimExpr a, PrimExpr b) { return div(a, b); }
  PrimExpr operator%(PrimExpr a, PrimExpr b) { return truncmod(a, b); }
  
  // TODO(tqchen): switch to floordiv
@@ -81,9 +139,9 @@ index 6dc485fc4..05a0fd35c 100644
 +PrimExpr indexmod(PrimExpr a, PrimExpr b) { return truncmod(a, b); }
  
  PrimExpr floordiv(PrimExpr a, PrimExpr b) {
-   CHECK(a.dtype().is_int() || a.dtype().is_uint()) << a;
+   ICHECK(a.dtype().is_int() || a.dtype().is_uint()) << a;
 diff --git a/src/tir/transforms/arg_binder.cc b/src/tir/transforms/arg_binder.cc
-index b88d2980b..d9d8f1212 100644
+index 1b58bfa38..d6b30f8e9 100644
 --- a/src/tir/transforms/arg_binder.cc
 +++ b/src/tir/transforms/arg_binder.cc
 @@ -163,7 +163,9 @@ void ArgBinder::BindDLTensor(const Buffer& buffer, const PrimExpr& device_type,
@@ -98,7 +156,7 @@ index b88d2980b..d9d8f1212 100644
                     TVMArrayGet(DataType::UInt(8), handle, builtin::kArrTypeBits) ==
                         IntImm(DataType::UInt(8), dtype.bits()) &&
 diff --git a/src/tir/transforms/split_host_device.cc b/src/tir/transforms/split_host_device.cc
-index 5298added..8fd7309ee 100644
+index 921c7ad79..bc86a265a 100644
 --- a/src/tir/transforms/split_host_device.cc
 +++ b/src/tir/transforms/split_host_device.cc
 @@ -94,6 +94,7 @@ class VarUseDefAnalysis : public StmtExprMutator {

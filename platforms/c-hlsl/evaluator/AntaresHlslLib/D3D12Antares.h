@@ -2,8 +2,6 @@
 // Licensed under the MIT license.
 
 #pragma once
-#define _USE_GPU_TIMER_
-//#define _USE_DXC_
 
 #include <stdio.h>
 #include <stdint.h>
@@ -37,7 +35,7 @@ using namespace std;
 using namespace Microsoft::WRL;
 
 
-#define IFE(x)  ((FAILED(x)) ? (printf("Error-line: (%s) %d\n", __FILE__, __LINE__), _exit(1), 0): 1)
+#define IFE(x)  ((FAILED(x)) ? (printf("Error-line: (%s) %d\n", __FILE__, __LINE__), abort(), 0): 1)
 
 namespace {
 
@@ -698,24 +696,34 @@ namespace antares {
             IFE(pDevice->CreateFence(fenceValue, D3D12_FENCE_FLAG_SHARED, IID_PPV_ARGS(&pFence)));
 
 #ifdef _USE_GPU_TIMER_
-            const UINT nMaxTimers = 65536; // Just a big enough number
-            // Profiling related resources
-            InitProfilingResources(nMaxTimers);
+#define _MAX_GPU_TIMER_ 65536
+            InitProfilingResources(_MAX_GPU_TIMER_);
 #endif
         }
 
-        void AwaitExecution()
+        // Added fence related functions.
+        uint64_t SignalFence()
         {
+            // Signal
             ++fenceValue;
             IFE(pCommandQueue->Signal(pFence.Get(), fenceValue));
-
-            IFE(pFence->SetEventOnCompletion(fenceValue, event));
-
+            return fenceValue;
+        }
+        void WaitForFence(uint64_t val)
+        {
+            if (pFence->GetCompletedValue() >= val)
+                return;
+            IFE(pFence->SetEventOnCompletion(val, event));
             DWORD retVal = WaitForSingleObject(event, INFINITE);
             if (retVal != WAIT_OBJECT_0)
             {
                 DebugBreak();
             }
+        }
+        void AwaitExecution()
+        {
+            auto f = SignalFence();
+            WaitForFence(f);
         }
 
         inline void CreateCommittedResource(
@@ -791,10 +799,11 @@ namespace antares {
             range.End = 0;
             pResource->Unmap(0, &range);
         }
+
 #ifdef _USE_GPU_TIMER_
         // Profiling related resources
     public:
-        uint32_t AllocTimerIndex() { return m_nTimers++; }
+        uint32_t AllocTimerIndex() { return (m_nTimers++) % _MAX_GPU_TIMER_; }
         void StartTimer(ID3D12GraphicsCommandList* pCmdList, uint32_t nTimerIdx)
         {
             pCmdList->EndQuery(m_pQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, nTimerIdx * 2);
@@ -952,6 +961,7 @@ namespace antares {
                         if (pErrorsBlob)
                         {
                             printf("Compilation Error:\n%s\n", (const char*)pErrorsBlob->GetBufferPointer());
+                            return nullptr;
                         }
                     }
                 }
@@ -976,269 +986,4 @@ namespace antares {
 
     };
 #endif
-
-	template<class T>
-	std::vector<char> load_data(int rank, size_t num_elements, const T defval = 1) {
-		std::vector<char> ret(num_elements * sizeof(T));
-		auto hptr = (T*)ret.data();
-		for (int i = 0; i < num_elements; ++i)
-			hptr[i] = (rank + 1 + i) % 71;
-		return std::move(ret);
-	}
-
-	class NNfusionTensor {
-		ComPtr<ID3D12Resource> deviceGPUSrcX;
-		std::vector<size_t> shape;
-		size_t type_size;
-
-	public:
-		NNfusionTensor(D3DDevice& device, const std::vector<size_t>& shape, size_t type_size): shape(shape), type_size(type_size) {
-			device.CreateGPUOnlyResource(type_size * NumElements(), &deviceGPUSrcX);
-		}
-
-
-		size_t NumElements() const {
-			return std::accumulate(
-				shape.begin(), shape.end(), 1LU, std::multiplies<size_t>());
-		}
-
-		size_t TypeSize() const {
-			return type_size;
-		}
-
-		ComPtr<ID3D12Resource> Data() const {
-			return deviceGPUSrcX;
-		}
-
-		std::vector<size_t> Shape() const {
-			return shape;
-		}
-	};
-
-	class NNfusionMemcpy {
-		ComPtr<ID3D12Resource> deviceGPUSrcX;
-		ComPtr<ID3D12Resource> deviceCPUSrcX;
-		ComPtr<ID3D12CommandAllocator> pCommandAllocator;
-		ComPtr<ID3D12GraphicsCommandList> m_computeCommandList;
-		size_t bufferSize;
-
-	public:
-		NNfusionMemcpy(D3DDevice& device, std::vector<ID3D12CommandList*>& cmdQueue, NNfusionTensor& dst, const std::vector<char> &src) {
-			bufferSize = dst.TypeSize() * dst.NumElements();
-
-			deviceGPUSrcX = dst.Data();
-			device.CreateUploadBuffer(bufferSize, &deviceCPUSrcX);
-			assert(src.size() <= bufferSize);
-			device.MapAndCopyToResource(deviceCPUSrcX.Get(), src.data(), src.size());
-
-			IFE(device.pDevice->CreateCommandAllocator(device.CommandListType, IID_PPV_ARGS(&pCommandAllocator)));
-			IFE(device.pDevice->CreateCommandList(0, device.CommandListType, pCommandAllocator.Get(), nullptr, IID_PPV_ARGS(&m_computeCommandList)));
-			m_computeCommandList->CopyResource(deviceGPUSrcX.Get(), deviceCPUSrcX.Get());
-			m_computeCommandList->Close();
-
-			cmdQueue.push_back(Launch());
-		}
-
-		NNfusionMemcpy(D3DDevice& device, std::vector<ID3D12CommandList*>& cmdQueue, void *dst, NNfusionTensor& src) {
-			bufferSize = src.TypeSize() * src.NumElements();
-
-			deviceGPUSrcX = src.Data();
-			device.CreateReadbackBuffer(bufferSize, &deviceCPUSrcX);
-
-			IFE(device.pDevice->CreateCommandAllocator(device.CommandListType, IID_PPV_ARGS(&pCommandAllocator)));
-			IFE(device.pDevice->CreateCommandList(0, device.CommandListType, pCommandAllocator.Get(), nullptr, IID_PPV_ARGS(&m_computeCommandList)));
-			m_computeCommandList->CopyResource(deviceCPUSrcX.Get(), deviceGPUSrcX.Get());
-			m_computeCommandList->Close();
-
-			cmdQueue.push_back(Launch());
-		}
-
-		ID3D12GraphicsCommandList* Launch() {
-			return m_computeCommandList.Get();
-		}
-
-		template <class T>
-		double PrintStageBuffer(D3DDevice& device)
-		{
-			assert(bufferSize % sizeof(T) == 0);
-			std::vector<T> dst(bufferSize / sizeof(T));
-			device.MapCopyFromResource(deviceCPUSrcX.Get(), dst.data(), bufferSize);
-			double ans = 0;
-			for (int i = 0, ceof = 1; i < dst.size(); ++i, ceof = (ceof + 1) % 83) {
-				ans += double(dst[i]) * ceof;
-			}
-			return ans;
-		}
-	};
-
-	class NNfusionOperator {
-		ComPtr<ID3D12GraphicsCommandList> m_computeCommandList;
-
-		ComPtr<ID3D12RootSignature> m_computeRootSignature;
-#ifdef _USE_DXC_
-        ComPtr<IDxcBlob> computeShader;
-#else
-		ComPtr<ID3DBlob> computeShader;
-#endif
-		ComPtr<ID3D12PipelineState> m_computeState;
-		ComPtr<ID3D12CommandAllocator> computeCommandAllocator;
-		D3D12_COMPUTE_PIPELINE_STATE_DESC computePsoDesc;
-
-		LPCSTR hlsl_source;
-#ifdef _USE_GPU_TIMER_
-		int m_nTimerIndex = -1;
-#endif
-
-	public:
-		NNfusionOperator(D3DDevice& device, std::vector<ID3D12CommandList*>& cmdQueue, const std::vector<NNfusionTensor>& inputs, const std::vector<NNfusionTensor>& outputs, const std::vector<size_t> &threads, LPCSTR hlsl_source)
-				: hlsl_source(hlsl_source) {
-
-#define _USE_DECRIPTOR_HEAP_
-
-#ifdef _USE_DECRIPTOR_HEAP_
-
-			struct DescHeap {
-				ComPtr<ID3D12DescriptorHeap> heap;
-				D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
-				UINT nDescStep, offsetRecord;
-			};
-
-			static DescHeap globalDescHeap;
-			if (!globalDescHeap.nDescStep) {
-				auto InitDescriptorHeap = [](ID3D12Device* pDevice, D3D12_DESCRIPTOR_HEAP_TYPE type, UINT nDescriptors)
-				{
-					D3D12_DESCRIPTOR_HEAP_DESC desc;
-					memset(&desc, 0, sizeof(desc));
-					ZeroMemory(&desc, sizeof(desc));
-					desc.NumDescriptors = nDescriptors;
-					desc.Type = type;
-					desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-					ComPtr<ID3D12DescriptorHeap> pDescHeap;
-					IFE(pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&pDescHeap)));
-
-					globalDescHeap.nDescStep = pDevice->GetDescriptorHandleIncrementSize(type);
-					globalDescHeap.heap = pDescHeap;
-					globalDescHeap.cpuHandle = pDescHeap->GetCPUDescriptorHandleForHeapStart();
-					globalDescHeap.offsetRecord = 0;
-				};
-
-				// const UINT MAX_HEAP_SIZE = (1U << 20);
-				// Resource binding tier1/2 devices and some of the tier3 devices (e.g. NVIDIA Turing GPUs) DO-NOT support descriptor heap size larger than 1000000.
-				const UINT MAX_HEAP_SIZE = 65536;
-				InitDescriptorHeap(device.pDevice.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, MAX_HEAP_SIZE);
-				assert(globalDescHeap.nDescStep > 0);
-			}
-
-			std::vector<UINT> argsOffset;
-			// Prepare Heap Argument Offset
-			for (int i = 0; i < inputs.size(); ++i) {
-				D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
-				ZeroMemory(&srvDesc, sizeof(srvDesc));
-				srvDesc.Format = DXGI_FORMAT_UNKNOWN;
-				srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-				srvDesc.Buffer.FirstElement = 0;
-				srvDesc.Buffer.NumElements = inputs[i].NumElements();
-				srvDesc.Buffer.StructureByteStride = inputs[i].TypeSize();
-				srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-
-				device.pDevice->CreateShaderResourceView(inputs[i].Data().Get(), &srvDesc, globalDescHeap.cpuHandle);
-				globalDescHeap.cpuHandle.ptr += globalDescHeap.nDescStep;
-				argsOffset.push_back(globalDescHeap.offsetRecord++);
-				assert(globalDescHeap.offsetRecord <= MAX_HEAP_SIZE);
-			}
-			for (int i = 0; i < outputs.size(); ++i) {
-				D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc;
-				ZeroMemory(&uavDesc, sizeof(uavDesc));
-				uavDesc.Format = DXGI_FORMAT_UNKNOWN;
-				uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
-				uavDesc.Buffer.FirstElement = 0;
-				uavDesc.Buffer.NumElements = outputs[i].NumElements();
-				uavDesc.Buffer.StructureByteStride = outputs[i].TypeSize();
-				device.pDevice->CreateUnorderedAccessView(outputs[i].Data().Get(), nullptr, &uavDesc, globalDescHeap.cpuHandle);
-				globalDescHeap.cpuHandle.ptr += globalDescHeap.nDescStep;
-				argsOffset.push_back(globalDescHeap.offsetRecord++);
-				assert(globalDescHeap.offsetRecord <= MAX_HEAP_SIZE);
-			}
-
-			// Prepare Root
-			std::vector<CD3DX12_ROOT_PARAMETER1> computeRootParameters(1);
-			CD3DX12_DESCRIPTOR_RANGE1 ranges[2];
-			// D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE is needed to disable unproper driver optimization.
-			ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, inputs.size(), 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE, argsOffset[0]);
-			ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, outputs.size(), 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE, argsOffset[inputs.size()]);
-
-			computeRootParameters[0].InitAsDescriptorTable(2, ranges);
-			CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC computeRootSignatureDesc;
-			computeRootSignatureDesc.Init_1_1((UINT)computeRootParameters.size(),
-				computeRootParameters.data());
-#else
-			// Prepare Root
-			std::vector<CD3DX12_ROOT_PARAMETER1> computeRootParameters(inputs.size() + outputs.size());
-			for (int i = 0; i < inputs.size(); ++i)
-				computeRootParameters[i].InitAsShaderResourceView(i);
-			for (int i = 0; i < outputs.size(); ++i)
-				computeRootParameters[inputs.size() + i].InitAsUnorderedAccessView(i);
-
-			CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC computeRootSignatureDesc;
-			computeRootSignatureDesc.Init_1_1(computeRootParameters.size(), computeRootParameters.data());
-#endif
-
-			ComPtr<ID3DBlob> signature;
-			ComPtr<ID3DBlob> error;
-
-			IFE(D3DX12SerializeVersionedRootSignature(&computeRootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1_1, &signature, &error));
-			IFE(device.pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_computeRootSignature)));
-
-#ifdef _USE_DXC_
-            // Use cs_6_0 since dxc only supports cs_6_0 or higher shader models.
-            computeShader = DXCompiler::Get()->Compile(hlsl_source, strlen(hlsl_source), L"CSMain", L"cs_6_0");
-            computePsoDesc.CS = CD3DX12_SHADER_BYTECODE(computeShader->GetBufferPointer(), computeShader->GetBufferSize());
-#else
-            IFE(D3DCompile(hlsl_source, strlen(hlsl_source), NULL, NULL, NULL, "CSMain", "cs_5_1", 0, 0, &computeShader, NULL));
-            computePsoDesc.CS = CD3DX12_SHADER_BYTECODE(computeShader.Get());
-#endif
-            computePsoDesc.pRootSignature = m_computeRootSignature.Get();
-
-			IFE(device.pDevice->CreateComputePipelineState(&computePsoDesc, IID_PPV_ARGS(&m_computeState)));
-			IFE(device.pDevice->CreateCommandAllocator(device.CommandListType, IID_PPV_ARGS(&computeCommandAllocator)));
-			IFE(device.pDevice->CreateCommandList(0, device.CommandListType, computeCommandAllocator.Get(), m_computeState.Get(), IID_PPV_ARGS(&m_computeCommandList)));
-
-
-			m_computeCommandList->SetComputeRootSignature(m_computeRootSignature.Get());
-
-
-#ifdef _USE_DECRIPTOR_HEAP_
-			ID3D12DescriptorHeap* pHeaps[] = { globalDescHeap.heap.Get() };
-			m_computeCommandList->SetDescriptorHeaps(1, pHeaps);
-			m_computeCommandList->SetComputeRootDescriptorTable(0, globalDescHeap.heap->GetGPUDescriptorHandleForHeapStart());
-#else
-			for (int i = 0; i < inputs.size(); ++i)
-				m_computeCommandList->SetComputeRootShaderResourceView(i, inputs[i].Data()->GetGPUVirtualAddress());
-			for (int i = 0; i < outputs.size(); ++i)
-				m_computeCommandList->SetComputeRootUnorderedAccessView(inputs.size() + i, outputs[i].Data()->GetGPUVirtualAddress());
-#endif
-
-#ifdef _USE_GPU_TIMER_
-			m_nTimerIndex = device.AllocTimerIndex();
-			// Set StartTimer here to only consider kernel execution time.
-			device.StartTimer(m_computeCommandList.Get(), m_nTimerIndex);
-#endif
-			m_computeCommandList->Dispatch(threads[0], threads[1], threads[2]);
-#ifdef _USE_GPU_TIMER_
-			device.StopTimer(m_computeCommandList.Get(), m_nTimerIndex);
-#endif
-
-			IFE(m_computeCommandList->Close());
-
-			cmdQueue.push_back(Launch());
-		}
-
-		ID3D12GraphicsCommandList* Launch() {
-			return m_computeCommandList.Get();
-		}
-
-#ifdef _USE_GPU_TIMER_
-		int TimerIndex() { return m_nTimerIndex; }
-#endif
-	};
 }
