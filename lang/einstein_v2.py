@@ -270,7 +270,7 @@ def emit_tvm_body(node, props):
     tensor = node._value['tensor']
     index = node._value['index']
     _str = tensor._value['name'] + '['
-    if len(index) > 1:
+    if len(index) > 0:
       for i, it in enumerate(index):
         _str += emit_tvm_body(it, props) + ', '
       _str = _str[:-2] + ']'
