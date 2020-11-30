@@ -781,21 +781,21 @@ namespace antares {
             );
         }
 
-        void MapAndCopyToResource(ID3D12Resource* pResource, const void* pSrc, UINT64 numBytes)
+        void MapAndCopyToResource(ID3D12Resource* pResource, const void* pSrc, UINT64 numBytes, UINT64 offset = 0)
         {
             D3D12_RANGE range = { 0, static_cast<SIZE_T>(numBytes) };
             void* pData;
             IFE(pResource->Map(0, &range, reinterpret_cast<void**>(&pData)));
-            memcpy(pData, pSrc, static_cast<SIZE_T>(numBytes));
+            memcpy(static_cast<char*>(pData) + offset, pSrc, static_cast<SIZE_T>(numBytes));
             pResource->Unmap(0, &range);
         }
 
-        void MapCopyFromResource(ID3D12Resource* pResource, void* pDest, UINT64 numBytes)
+        void MapCopyFromResource(ID3D12Resource* pResource, void* pDest, UINT64 numBytes, UINT64 offset = 0)
         {
             D3D12_RANGE range = { 0, static_cast<SIZE_T>(numBytes) };
             void* pData;
             IFE(pResource->Map(0, &range, reinterpret_cast<void**>(&pData)));
-            memcpy(pDest, pData, static_cast<SIZE_T>(numBytes));
+            memcpy(pDest, static_cast<char*>(pData) + offset, static_cast<SIZE_T>(numBytes));
             range.End = 0;
             pResource->Unmap(0, &range);
         }

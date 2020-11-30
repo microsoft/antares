@@ -4,6 +4,7 @@
 #include <cassert>
 #include <unordered_map>
 #include <vector>
+#include <map>
 
 #define _USE_GPU_TIMER_
 // #define _USE_DESCRIPTOR_HEAP_
@@ -171,6 +172,19 @@ namespace {
     }
 
     static void* defaultStream = nullptr;
+
+    static std::map<void*, size_t> memBlocks;
+
+    static std::map<void*, size_t>::const_iterator map_device_ptr(void* dPtr)
+    {
+        assert(memBlocks.empty() == false);
+        auto nextIter = memBlocks.upper_bound(dPtr);
+        assert(nextIter != memBlocks.begin());
+        auto iter = std::prev(nextIter);
+        INT64 offset = static_cast<char*>(dPtr) - static_cast<char*>(iter->first);
+        assert(offset >= 0 && offset < iter->second);
+        return iter;
+    }
 }
 
 
@@ -196,26 +210,32 @@ void* dxMemAlloc(size_t bytes)
         return nullptr;
 
     auto buffs = bufferDict[bytes];
+    void* ret = nullptr;
     if (buffs.size() > 0)
     {
-        void* ret = buffs.back();
+        ret = buffs.back();
         buffs.pop_back();
-        return ret;
     }
-    std::unique_ptr<dx_buffer_t> buff = std::make_unique<dx_buffer_t>();
-    buff->size = bytes;
-    device.CreateGPUOnlyResource(bytes, &buff->handle);
-    assert(buff->handle.Get() != nullptr);
-    buff->state = D3D12_RESOURCE_STATE_COMMON;
+    else
+    {
+        std::unique_ptr<dx_buffer_t> buff = std::make_unique<dx_buffer_t>();
+        buff->size = bytes;
+        device.CreateGPUOnlyResource(bytes, &buff->handle);
+        assert(buff->handle.Get() != nullptr);
+        buff->state = D3D12_RESOURCE_STATE_COMMON;
 
-    buffers.push_back(std::move(buff));
-    return buffers.back().get();
+        buffers.push_back(std::move(buff));
+        ret = buffers.back().get();
+    }
+    memBlocks[ret] = bytes;
+    return ret;
 }
 
 int dxMemFree(void* dptr)
 {
     auto _buff = (dx_buffer_t*)(dptr);
     bufferDict[_buff->size].push_back(dptr);
+    memBlocks.erase(dptr);
     return 0;
 }
 
@@ -470,13 +490,16 @@ int dxMemcpyHtoDAsync(void* dst, void* src, size_t bytes, void *hStream)
     int ret = dxStreamSynchronize(hStream);
     if (ret != 0)
         return ret;
+    
+    auto deviceIter = map_device_ptr(dst);
+    UINT64 offset = static_cast<char*>(dst) - static_cast<char*>(deviceIter->first);
 
     // TODO: reuse D3D resources and not to create new resources in every call.
     ComPtr<ID3D12Resource> deviceCPUSrcX;
-    device.CreateUploadBuffer(bytes, &deviceCPUSrcX);
+    device.CreateUploadBuffer(deviceIter->second, &deviceCPUSrcX);
 
     // CPU copy
-    device.MapAndCopyToResource(deviceCPUSrcX.Get(), src, bytes);
+    device.MapAndCopyToResource(deviceCPUSrcX.Get(), src, bytes, offset);
 
     // GPU copy
     auto dst_buffer = (dx_buffer_t*)dst;
@@ -511,8 +534,11 @@ int dxMemcpyDtoHAsync(void* dst, void* src, size_t bytes, void* hStream)
     // Conservatively ensure all things have been done, though currently not necessary.
     device.AwaitExecution();
 
+    auto deviceIter = map_device_ptr(src);
+    UINT64 offset = static_cast<char*>(src) - static_cast<char*>(deviceIter->first);
+
     ComPtr<ID3D12Resource> deviceCPUSrcX;
-    device.CreateReadbackBuffer(bytes, &deviceCPUSrcX);
+    device.CreateReadbackBuffer(deviceIter->second, &deviceCPUSrcX);
 
     // GPU copy
     auto src_buffer = (dx_buffer_t*)src;
@@ -529,7 +555,7 @@ int dxMemcpyDtoHAsync(void* dst, void* src, size_t bytes, void* hStream)
     device.AwaitExecution();
 
     // CPU copy
-    device.MapCopyFromResource(deviceCPUSrcX.Get(), dst, bytes);
+    device.MapCopyFromResource(deviceCPUSrcX.Get(), dst, bytes, offset);
     return 0;
 }
 
@@ -542,14 +568,27 @@ int dxShaderLaunchAsync(void* hShader, void** buffers, void* hStream)
     auto pStream = (dx_stream_t*)hStream;
     assert(pStream->state == dx_stream_t::State::INRECORD);
 
-    // Handle state transition.
+    std::vector<void*> devicePtrs;
+    devicePtrs.reserve(hd->inputs.size() + hd->outputs.size());
     for (int i = 0; i < hd->inputs.size(); ++i)
     {
-        ((dx_buffer_t*)buffers[i])->StateTransition(pStream->pCmdList.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        auto deviceIter = map_device_ptr(buffers[i]);
+        devicePtrs.push_back(deviceIter->first);
     }
     for (int i = 0; i < hd->outputs.size(); ++i)
     {
-        ((dx_buffer_t*)buffers[hd->inputs.size() + i])->StateTransition(pStream->pCmdList.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        auto deviceIter = map_device_ptr(buffers[hd->inputs.size() + i]);
+        devicePtrs.push_back(deviceIter->first);
+    }
+
+    // Handle state transition.
+    for (int i = 0; i < hd->inputs.size(); ++i)
+    {
+        ((dx_buffer_t*)devicePtrs[i])->StateTransition(pStream->pCmdList.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    }
+    for (int i = 0; i < hd->outputs.size(); ++i)
+    {
+        ((dx_buffer_t*)devicePtrs[hd->inputs.size() + i])->StateTransition(pStream->pCmdList.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     }
 
     pStream->pCmdList->SetComputeRootSignature(hd->pRootSignature.Get());
@@ -577,7 +616,7 @@ int dxShaderLaunchAsync(void* hShader, void** buffers, void* hStream)
         srvDesc.Buffer.StructureByteStride = (uint32_t)hd->inputs[i].TypeSize();
         srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 
-        device.pDevice->CreateShaderResourceView(((dx_buffer_t*)buffers[i])->handle.Get(), &srvDesc, handleCPU);
+        device.pDevice->CreateShaderResourceView(((dx_buffer_t*)devicePtrs[i])->handle.Get(), &srvDesc, handleCPU);
         handleCPU.ptr += nStep;
     }
     for (size_t i = 0; i < hd->outputs.size(); ++i)
@@ -589,7 +628,7 @@ int dxShaderLaunchAsync(void* hShader, void** buffers, void* hStream)
         uavDesc.Buffer.FirstElement = 0;
         uavDesc.Buffer.NumElements = (uint32_t)hd->outputs[i].NumElements();
         uavDesc.Buffer.StructureByteStride = (uint32_t)hd->outputs[i].TypeSize();
-        device.pDevice->CreateUnorderedAccessView(((dx_buffer_t*)buffers[hd->inputs.size() + i])->handle.Get(), nullptr, &uavDesc, handleCPU);
+        device.pDevice->CreateUnorderedAccessView(((dx_buffer_t*)devicePtrs[hd->inputs.size() + i])->handle.Get(), nullptr, &uavDesc, handleCPU);
         handleCPU.ptr += nStep;
     }
 
@@ -597,9 +636,9 @@ int dxShaderLaunchAsync(void* hShader, void** buffers, void* hStream)
 #else
 
     for (uint32_t i = 0; i < hd->inputs.size(); ++i)
-        pStream->pCmdList->SetComputeRootShaderResourceView(i, ((dx_buffer_t*)buffers[i])->handle.Get()->GetGPUVirtualAddress());
+        pStream->pCmdList->SetComputeRootShaderResourceView(i, ((dx_buffer_t*)devicePtrs[i])->handle.Get()->GetGPUVirtualAddress());
     for (uint32_t i = 0; i < hd->outputs.size(); ++i)
-        pStream->pCmdList->SetComputeRootUnorderedAccessView((UINT)hd->inputs.size() + i, ((dx_buffer_t*)buffers[hd->inputs.size() + i])->handle.Get()->GetGPUVirtualAddress());
+        pStream->pCmdList->SetComputeRootUnorderedAccessView((UINT)hd->inputs.size() + i, ((dx_buffer_t*)devicePtrs[hd->inputs.size() + i])->handle.Get()->GetGPUVirtualAddress());
 #endif
 
 #ifdef _USE_GPU_TIMER_
