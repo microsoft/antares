@@ -270,15 +270,7 @@ def emit_tvm_body(node, props):
     tensor = node._value['tensor']
     index = node._value['index']
     _str = tensor._value['name'] + '['
-    if 'shard' in props:
-      book = props['shard']['book'][tensor._value['name']]
-      for i, it in enumerate(index):
-        if book[i][0] < 0:
-          raise Exception("Unhandled book case:", book[i])
-        _offset = '' if book[i][2] == 0 else ' - %d' % book[i][2]
-        _str += emit_tvm_body(it, props) + '%s, ' % _offset
-      _str = _str[:-2] + ']'
-    else:
+    if len(index) > 1:
       for i, it in enumerate(index):
         _str += emit_tvm_body(it, props) + ', '
       _str = _str[:-2] + ']'
