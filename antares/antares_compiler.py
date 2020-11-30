@@ -432,6 +432,7 @@ def main_compute(code_only=False):
       if ('|plan/' not in ('|' + '|'.join(AntaresGlobal.attrs.options)) and
           len(explicit_ops) == 1 and
           len(explicit_ops[-1].reduce_axis) > 0 and
+          len(get_global_arg_props()['_out']) == 1 and
           backend in ['c-rocm', 'c-cuda', 'c-hlsl', 'c-ocl']):
         tuner_type = 'AutoTVM2'
       else:
