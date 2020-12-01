@@ -16,6 +16,8 @@
 #include <cstring>
 #include <functional>
 #include <numeric>
+#include <pthread.h>
+#include <unistd.h>
 
 #if !defined(__HIPCC__)
 #include <cuda.h>
@@ -102,16 +104,26 @@ std::vector<tensor_property> parse_properties(const std::string &encoded_inputs)
 }
 
 std::pair<void *, void *> create_tensor_memory(const tensor_property &tp) {
-    auto num_elements = tp.element_size();
-    auto type_size = tp.type_size();
+    size_t num_elements = tp.element_size();
+    size_t type_size = tp.type_size();
     void *hptr = nullptr, *dptr = nullptr;
     assert(0 == cuMemAllocHost(&hptr, num_elements * type_size) && hptr != nullptr);
     assert(0 == cuMemAlloc((CUdeviceptr*)&dptr, num_elements * type_size) && dptr != nullptr);
     return {hptr, dptr};
 }
 
+void *timeout_monitor(void *arg) {
+    sleep(30);
+    printf("[FATAL] Time limit exceeded for this evaluation.\n");
+    _exit(1);
+}
+
 int main(int argc, char** argv)
 {
+    pthread_t p_timeout_monitor;
+    pthread_create(&p_timeout_monitor, NULL, timeout_monitor, NULL);
+    pthread_detach(p_timeout_monitor);
+
 #if !defined(__HIPCC__)
     CUcontext ctx;
     if (0 != cuInit(0) || 0 != cuDevicePrimaryCtxRetain(&ctx, 0) || 0 != cuCtxSetCurrent(ctx))
@@ -136,17 +148,17 @@ int main(int argc, char** argv)
       h_args.push_back(ptrs.first);
       d_args.push_back(ptrs.second);
 
-      auto size = it.element_size();
+      size_t size = it.element_size();
       if (it.dtype == "int32") {
-        for (int x = 0; x < size; ++x)
+        for (size_t x = 0; x < size; ++x)
           ((int*)(ptrs.first))[x] = (x + i + 1) % 71;
       } else if (it.dtype == "float32") {
-        for (int x = 0; x < size; ++x)
+        for (size_t x = 0; x < size; ++x)
           ((float*)(ptrs.first))[x] = (x + i + 1) % 71;
       } else {
         size_t byte_size = size * it.type_size();
-        assert(byte_size % 4 == 0);
-        for (int x = 0; x < byte_size / 4; ++x)
+        assert(byte_size % sizeof(int) == 0);
+        for (size_t x = 0; x < byte_size / sizeof(int); ++x)
           ((int*)(ptrs.first))[x] = (x + i + 1) % 71;
       }
       if (ptrs.first != ptrs.second)
@@ -165,12 +177,12 @@ int main(int argc, char** argv)
     auto function_name = get_between(source, " void ", "(", source.find("extern \"C\" __global__ "));
     assert(function_name.size() > 0);
 
-    auto bx = std::atoi(get_between(source, "// [thread_extent] blockIdx.x =", "\n", 0, "1").c_str());
-    auto by = std::atoi(get_between(source, "// [thread_extent] blockIdx.y =", "\n", 0, "1").c_str());
-    auto bz = std::atoi(get_between(source, "// [thread_extent] blockIdx.z =", "\n", 0, "1").c_str());
-    auto tx = std::atoi(get_between(source, "// [thread_extent] threadIdx.x =", "\n", 0, "1").c_str());
-    auto ty = std::atoi(get_between(source, "// [thread_extent] threadIdx.y =", "\n", 0, "1").c_str());
-    auto tz = std::atoi(get_between(source, "// [thread_extent] threadIdx.z =", "\n", 0, "1").c_str());
+    int bx = std::atoi(get_between(source, "// [thread_extent] blockIdx.x =", "\n", 0, "1").c_str());
+    int by = std::atoi(get_between(source, "// [thread_extent] blockIdx.y =", "\n", 0, "1").c_str());
+    int bz = std::atoi(get_between(source, "// [thread_extent] blockIdx.z =", "\n", 0, "1").c_str());
+    int tx = std::atoi(get_between(source, "// [thread_extent] threadIdx.x =", "\n", 0, "1").c_str());
+    int ty = std::atoi(get_between(source, "// [thread_extent] threadIdx.y =", "\n", 0, "1").c_str());
+    int tz = std::atoi(get_between(source, "// [thread_extent] threadIdx.z =", "\n", 0, "1").c_str());
 
     CUmodule hmod;
     CUfunction hfunc;
@@ -196,13 +208,13 @@ int main(int argc, char** argv)
 
     for (int c = 0; c < outputs.size(); ++c) {
       size_t output_byte_size = outputs[c].element_size() * outputs[c].type_size();
-      assert(output_byte_size % 4 == 0);
+      assert(output_byte_size % sizeof(float) == 0);
       double digest = 0.0;
       if (outputs[c].dtype == "int32") {
-        for (int i = 0; i < output_byte_size / 4; ++i)
+        for (size_t i = 0; i < output_byte_size / sizeof(int); ++i)
           digest += (i + 1) % 83 * ((int*)h_args[inputs.size() + c])[i];
       } else {
-        for (int i = 0; i < output_byte_size / 4; ++i)
+        for (size_t i = 0; i < output_byte_size / sizeof(float); ++i)
           digest += (i + 1) % 83 * ((float*)h_args[inputs.size() + c])[i];
       }
       printf("- K/%d: %.10e\n", c, digest);
@@ -225,7 +237,7 @@ int main(int argc, char** argv)
         throw std::runtime_error(("Time limit exceeded: " + std::to_string(tpr) + " v.s. (expected) " + expected_timeout).c_str());
     }
 
-    int num_runs = std::max(3, std::min(10000, int(1.0 / tpr)));
+    int num_runs = std::max(1, std::min(10000, int(1.0 / tpr)));
     bool flush_global_memory = (getenv("FLUSH_MEM") != nullptr);
 
     tpr = 0.0f;
