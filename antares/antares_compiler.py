@@ -175,7 +175,7 @@ def get_target_source(best_config, dir_sid=None):
       fp.write(json.dumps(origin_cfg))
     origin_cfg = tvm.auto_scheduler.measure_record.load_records(origin_cfg_file)
  
-    from tuner.AutoTVM2.main import create_auto_task
+    from tuner.Ansor.main import create_auto_task
     target = tvm.target.Target(tvm_target)
     auto_task = create_auto_task(target)
 
@@ -434,7 +434,7 @@ def main_compute(code_only=False):
           len(explicit_ops[-1].reduce_axis) > 0 and
           len(get_global_arg_props()['_out']) == 1 and
           backend in ['c-rocm', 'c-cuda', 'c-hlsl', 'c-ocl']):
-        tuner_type = 'AutoTVM2'
+        tuner_type = 'Ansor'
       else:
         tuner_type = 'XGBoost'
     print('  >> MAKE_PARA = %d/%d, EXEC_PARA = %d, TUNER = %s' % (worker_size, batch_size, dev_num, tuner_type))
