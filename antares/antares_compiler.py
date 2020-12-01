@@ -170,7 +170,7 @@ def get_target_source(best_config, dir_sid=None):
       "r": [[0], 0, 0, 0],
       "v": "v0.2",
     }
-    origin_cfg_file = local_get_dir_file('my_kernel.cfg')
+    origin_cfg_file = local_get_dir_file('my_kernel.cfg', dir_sid=dir_sid)
     with open(origin_cfg_file, 'w') as fp:
       fp.write(json.dumps(origin_cfg))
     origin_cfg = tvm.auto_scheduler.measure_record.load_records(origin_cfg_file)
@@ -275,7 +275,7 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
       gflops = compute_gflops(AntaresGlobal.default_task.flop, t)
       if verbose:
         print("\n[Antares] Average time cost / run = %g sec, %g gflops." % (t, gflops))
-      with open(local_get_dir_file('result.txt'), 'w') as fp:
+      with open(local_get_dir_file('result.txt', dir_sid=dir_sid), 'w') as fp:
         fp.write(str(t) + '\n')
         for i in range(len(result)):
           key = 'K/%d' % i
