@@ -69,7 +69,7 @@ struct tensor_property {
     std::vector<size_t> shape;
 
     size_t element_size() const {
-        return std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<size_t>());
+        return std::accumulate(shape.begin(), shape.end(), (size_t)1L, std::multiplies<size_t>());
     }
 
     int type_size() const {
@@ -136,20 +136,21 @@ int main(int argc, char** argv)
       h_args.push_back(ptrs.first);
       d_args.push_back(ptrs.second);
 
+      auto size = it.element_size();
       if (it.dtype == "int32") {
-        for (int x = 0; x < it.element_size(); ++x)
+        for (int x = 0; x < size; ++x)
           ((int*)(ptrs.first))[x] = (x + i + 1) % 71;
       } else if (it.dtype == "float32") {
-        for (int x = 0; x < it.element_size(); ++x)
+        for (int x = 0; x < size; ++x)
           ((float*)(ptrs.first))[x] = (x + i + 1) % 71;
       } else {
-        size_t byte_size = it.element_size() * it.type_size();
+        size_t byte_size = size * it.type_size();
         assert(byte_size % 4 == 0);
         for (int x = 0; x < byte_size / 4; ++x)
           ((int*)(ptrs.first))[x] = (x + i + 1) % 71;
       }
       if (ptrs.first != ptrs.second)
-        assert(0 == cuMemcpyHtoDAsync((CUdeviceptr)ptrs.second, ptrs.first, it.element_size() * it.type_size(), nullptr));
+        assert(0 == cuMemcpyHtoDAsync((CUdeviceptr)ptrs.second, ptrs.first, size * it.type_size(), nullptr));
     }
     for (auto it: outputs) {
       auto ptrs = create_tensor_memory(it);

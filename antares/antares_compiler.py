@@ -316,7 +316,7 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
 
   exec_fd, _ = system_lock([dev_id])
   try:
-    results = wait_for(do_evaluate, eval_program_timeout if int(os.environ.get('STEP', '0')) > 0 else None)
+    results = do_evaluate()
     if results is not None:
       handle_result(results)
   except:
