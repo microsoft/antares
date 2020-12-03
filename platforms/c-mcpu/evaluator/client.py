@@ -12,7 +12,7 @@ except ModuleNotFoundError:
     raise Exception('>> eval agent is not found')
 except:
     traceback.print_exc()
-    exit(1)
+    os._exit(1)
 
 def eval(kernel_path, **kwargs):
     with open(kernel_path, 'rb') as fp:

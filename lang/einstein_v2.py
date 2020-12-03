@@ -200,7 +200,7 @@ def parse_to_ast(expr, input_dict={}):
     explicit_range[k.strip()]._value["range"] = int(v.strip())
 
   # Parse compute set-op, get lval & rval
-  props = {'data_axes': [], 'reduce_axes': [], 'input_dict': copy.deepcopy(input_dict), 'output_dict': {}, 'reduce_type': None, 'flopbase': None}
+  props = {'data_axes': [], 'reduce_axes': [], 'input_dict': copy.deepcopy(input_dict), 'output_name': None, 'reduce_type': None, 'flopbase': None}
   at_index = expr.find('=')
   if expr[at_index - 1] != ' ':
     if expr[at_index - 1] in ('<', '>', '+'):
@@ -250,7 +250,7 @@ def parse_to_ast(expr, input_dict={}):
   props['reduce_axes'] = [copy.deepcopy(x._value) for x in props['reduce_axes']]
 
   output_name = lval[:lval.index('[')].strip()
-  props['output_dict'][output_name] = {"dtype": _root._dtype, "shape": [x["range"] for x in props['data_axes']]}
+  props['output_name'] = output_name
   return {'props': props, 'root': _root}
 
 
@@ -365,12 +365,11 @@ def emit_tvm_ir_v2(exprss, input_dict, extra_outputs):
     if not s:
       continue
     ast = parse_to_ast(s, inputs)
-    ast_outputs_dict = ast['props']['output_dict']
-    assert len(ast_outputs_dict) == 1, "Unhandled non-single outputs within single AST expression"
-    for k in ast_outputs_dict:
-      inputs[k] = ast_outputs_dict[k]
-      if k in extra_outputs:
-        output_dict[k] = ast_outputs_dict[k]
+    k = ast['props']['output_name']
+    ast_outputs_dict = {k: {"shape": [x['range'] for x in ast['props']['data_axes']], "dtype": ast['root']._dtype}}
+    inputs[k] = ast_outputs_dict[k]
+    if k in extra_outputs:
+      output_dict[k] = ast_outputs_dict[k]
     ast_seq.append(ast)
 
   # Also include the last output
@@ -432,11 +431,11 @@ def emit_tvm_ir_v2(exprss, input_dict, extra_outputs):
   def emit_output_body(ast, reduce_pattern):
     root, props = ast['root'], ast['props']
     output_shape = [x['range'] for x in props['data_axes']]
-    output_name = next(iter(props['output_dict']))
+    output_name = props['output_name']
     all_axis_range = np.product(output_shape) * np.product([x['range'] for x in props['reduce_axes']])
     output_begin = '%s = output(shape=%s, flops=(%d * %d), func=lambda %s: ' % (output_name, output_shape, props['flopbase'], all_axis_range, ', '.join([warp_axis(x['name']) for x in props['data_axes']]))
     basic_body = emit_tvm_body(root, props)
-    output_end = ', dtype="%s", tag="%s", name="%s", final_output=%s); ' % (props['output_dict'][output_name]['dtype'], '', output_name, output_name in output_dict)
+    output_end = ', dtype="%s", tag="%s", name="%s", final_output=%s); ' % (root._dtype, '', output_name, output_name in output_dict)
     return output_begin + reduce_pattern % basic_body + output_end
 
   ll_irs = [emit_input_body(input_dict)]

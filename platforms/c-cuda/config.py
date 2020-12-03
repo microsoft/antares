@@ -14,5 +14,13 @@ def get_compile_kernel_args(kernel_src, kernel_out, device_props):
 
 def do_native_translation(code, **kwargs):
   headers = ['#include <cuda_runtime.h>', '#include <cuda_fp16.h>', '#include <mma.h>']
-  code = '\n'.join(headers) + '\n' + kwargs['attrs'].blend + '\n' + code
+  code = '''
+#ifndef __HALF_COMPARE_EX__
+#define __HALF_COMPARE_EX__
+inline __device__ half max(half x, half y) { return x > y ? x : y; }
+inline __device__ half min(half x, half y) { return x < y ? x : y; }
+#endif
+
+''' + code
+  code = '\n'.join(headers) + '\n' + kwargs['attrs'].blend + code
   return code

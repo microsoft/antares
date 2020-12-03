@@ -57,9 +57,6 @@ def update_ast_axis(ast, seq, tensor_nodes):
     else:
       new_data_axes.append(x)
   ast['props']['data_axes'] = new_data_axes
-  for k in ast['props']['output_dict']:
-    ast['props']['output_dict'][k]['shape'] = [x['range'] for x in new_data_axes]
-    break
 
   input_shape_alter_info = {}
   for k in tensor_nodes:
@@ -113,18 +110,12 @@ def eliminate_trivial_axis(ast):
   ast['props']['reduce_axes'] = update(ast['props']['reduce_axes'])
   if not ast['props']['reduce_axes']:
     ast['props']['reduce_type'] = None
-  for k in ast['props']['output_dict']:
-    num_outputs = int(np.product(ast['props']['output_dict'][k]['shape']))
-    break
+
+  num_outputs = int(np.product([x['range'] for x in ast['props']['data_axes']]))
   if num_outputs > 1:
     ast['props']['data_axes'] = update(ast['props']['data_axes'])
-    for k in ast['props']['output_dict']:
-      ast['props']['output_dict'][k]['shape'] = [x for x in filter(lambda x: x != 1, ast['props']['output_dict'][k]['shape'])]
   elif len(ast['props']['data_axes']) > 1: 
     ast['props']['data_axes'] = update(ast['props']['data_axes'], 1)
-    for k in ast['props']['output_dict']:
-      ast['props']['output_dict'][k]['shape'] = [1]
-  # print(ast['props'])
 
 def run_pass_v2(ast_seq, global_input_dict, global_output_dict):
   if os.environ.get('SIMPLE', '1') == '0':
@@ -174,8 +165,7 @@ def run_pass_v2(ast_seq, global_input_dict, global_output_dict):
   for k in ast['props']['input_dict']:
     if k in global_input_dict:
       global_input_dict[k] = ast['props']['input_dict'][k]
-  for k in ast['props']['output_dict']:
-    if k in global_output_dict:
-      global_output_dict[k] = ast['props']['output_dict'][k]
-  return
+  k = ast['props']['output_name']
+  if k in global_output_dict:
+    global_output_dict[k] = {"shape": [x['range'] for x in ast['props']['data_axes']], "dtype": ast['root']._dtype}
 
