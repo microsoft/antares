@@ -603,6 +603,7 @@ int dxShaderLaunchAsync(void* hShader, void** buffers, void* hStream)
         ZeroMemory(&srvDesc, sizeof(srvDesc));
         srvDesc.Format = DXGI_FORMAT_UNKNOWN;
         srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+        assert(offsets[i] % (uint32_t)hd->inputs[i].TypeSize() == 0);
         srvDesc.Buffer.FirstElement = offsets[i] / (uint32_t)hd->inputs[i].TypeSize();
         srvDesc.Buffer.NumElements = (uint32_t)hd->inputs[i].NumElements();
         srvDesc.Buffer.StructureByteStride = (uint32_t)hd->inputs[i].TypeSize();
@@ -617,6 +618,7 @@ int dxShaderLaunchAsync(void* hShader, void** buffers, void* hStream)
         ZeroMemory(&uavDesc, sizeof(uavDesc));
         uavDesc.Format = DXGI_FORMAT_UNKNOWN;
         uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+        assert(offsets[hd->inputs.size() + i] % (uint32_t)hd->outputs[i].TypeSize() == 0);
         uavDesc.Buffer.FirstElement = offsets[hd->inputs.size() + i] / (uint32_t)hd->outputs[i].TypeSize();
         uavDesc.Buffer.NumElements = (uint32_t)hd->outputs[i].NumElements();
         uavDesc.Buffer.StructureByteStride = (uint32_t)hd->outputs[i].TypeSize();

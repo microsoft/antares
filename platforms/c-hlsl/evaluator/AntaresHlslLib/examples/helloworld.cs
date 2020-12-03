@@ -70,8 +70,10 @@ void CSMain(uint3 threadIdx: SV_GroupThreadID, uint3 blockIdx: SV_GroupID, uint3
             if (hShader == IntPtr.Zero)
                 throw new Exception("Invalid Shader Source for Compilation.");
 
-            var d_input0 = dxMemAlloc(524288 * sizeof(float));
-            var d_input1 = dxMemAlloc(524288 * sizeof(float));
+            //var d_input0 = dxMemAlloc(524288 * sizeof(float));
+            //var d_input1 = dxMemAlloc(524288 * sizeof(float));
+            var d_input0 = dxMemAlloc(524288 * sizeof(float) * 2);
+            var d_input1 = IntPtr.Add(d_input0, 524288 * sizeof(float));
             var d_output0 = dxMemAlloc(524288 * sizeof(float));
 
             var h_input0 = new float[524288];
