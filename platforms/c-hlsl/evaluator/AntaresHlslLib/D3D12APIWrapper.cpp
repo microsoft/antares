@@ -480,25 +480,24 @@ int dxMemcpyHtoDAsync(void* dst, void* src, size_t bytes, void *hStream)
     int ret = dxStreamSynchronize(hStream);
     if (ret != 0)
         return ret;
-    
-    auto deviceIter = map_device_ptr(dst);
-    UINT64 offset = static_cast<char*>(dst) - static_cast<char*>(deviceIter->first);
 
     // TODO: reuse D3D resources and not to create new resources in every call.
     ComPtr<ID3D12Resource> deviceCPUSrcX;
-    device.CreateUploadBuffer(bytes + offset, &deviceCPUSrcX);
+    device.CreateUploadBuffer(bytes, &deviceCPUSrcX);
 
     // CPU copy
-    device.MapAndCopyToResource(deviceCPUSrcX.Get(), src, bytes, offset);
+    device.MapAndCopyToResource(deviceCPUSrcX.Get(), src, bytes);
 
     // GPU copy
+    auto deviceIter = map_device_ptr(dst);
+    UINT64 offset = static_cast<char*>(dst) - static_cast<char*>(deviceIter->first);
     auto dst_buffer = (dx_buffer_t*)(deviceIter->second);
     ComPtr<ID3D12CommandAllocator> pCommandAllocator;
     ComPtr<ID3D12GraphicsCommandList> pCmdList;
     IFE(device.pDevice->CreateCommandAllocator(device.CommandListType, IID_PPV_ARGS(&pCommandAllocator)));
     IFE(device.pDevice->CreateCommandList(0, device.CommandListType, pCommandAllocator.Get(), nullptr, IID_PPV_ARGS(&pCmdList)));
     dst_buffer->StateTransition(pCmdList.Get(), D3D12_RESOURCE_STATE_COPY_DEST);
-    pCmdList->CopyResource(dst_buffer->handle.Get(), deviceCPUSrcX.Get());
+    pCmdList->CopyBufferRegion(dst_buffer->handle.Get(), offset, deviceCPUSrcX.Get(), 0, bytes);
     dst_buffer->StateTransition(pCmdList.Get(), D3D12_RESOURCE_STATE_COMMON);
     IFE(pCmdList->Close());
 
@@ -524,20 +523,19 @@ int dxMemcpyDtoHAsync(void* dst, void* src, size_t bytes, void* hStream)
     // Conservatively ensure all things have been done, though currently not necessary.
     device.AwaitExecution();
 
-    auto deviceIter = map_device_ptr(src);
-    UINT64 offset = static_cast<char*>(src) - static_cast<char*>(deviceIter->first);
-
     ComPtr<ID3D12Resource> deviceCPUSrcX;
-    device.CreateReadbackBuffer(bytes + offset, &deviceCPUSrcX);
+    device.CreateReadbackBuffer(bytes, &deviceCPUSrcX);
 
     // GPU copy
+    auto deviceIter = map_device_ptr(src);
+    UINT64 offset = static_cast<char*>(src) - static_cast<char*>(deviceIter->first);
     auto src_buffer = (dx_buffer_t*)(deviceIter->second);
     ComPtr<ID3D12CommandAllocator> pCommandAllocator;
     ComPtr<ID3D12GraphicsCommandList> pCmdList;
     IFE(device.pDevice->CreateCommandAllocator(device.CommandListType, IID_PPV_ARGS(&pCommandAllocator)));
     IFE(device.pDevice->CreateCommandList(0, device.CommandListType, pCommandAllocator.Get(), nullptr, IID_PPV_ARGS(&pCmdList)));
     src_buffer->StateTransition(pCmdList.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
-    pCmdList->CopyResource(deviceCPUSrcX.Get(), src_buffer->handle.Get());
+    pCmdList->CopyBufferRegion(deviceCPUSrcX.Get(), 0, src_buffer->handle.Get(), offset, bytes);
     src_buffer->StateTransition(pCmdList.Get(), D3D12_RESOURCE_STATE_COMMON);
     IFE(pCmdList->Close());
     ID3D12CommandList* cmdlists[] = { pCmdList.Get() };
@@ -545,7 +543,7 @@ int dxMemcpyDtoHAsync(void* dst, void* src, size_t bytes, void* hStream)
     device.AwaitExecution();
 
     // CPU copy
-    device.MapCopyFromResource(deviceCPUSrcX.Get(), dst, bytes, offset);
+    device.MapCopyFromResource(deviceCPUSrcX.Get(), dst, bytes);
     return 0;
 }
 
@@ -559,16 +557,20 @@ int dxShaderLaunchAsync(void* hShader, void** buffers, void* hStream)
     assert(pStream->state == dx_stream_t::State::INRECORD);
 
     std::vector<void*> devicePtrs;
+    std::vector<UINT64> offsets;
     devicePtrs.reserve(hd->inputs.size() + hd->outputs.size());
+    offsets.reserve(hd->inputs.size() + hd->outputs.size());
     for (int i = 0; i < hd->inputs.size(); ++i)
     {
         auto deviceIter = map_device_ptr(buffers[i]);
         devicePtrs.push_back(deviceIter->second);
+        offsets.push_back(static_cast<char*>(buffers[i]) - static_cast<char*>(deviceIter->first));
     }
     for (int i = 0; i < hd->outputs.size(); ++i)
     {
         auto deviceIter = map_device_ptr(buffers[hd->inputs.size() + i]);
         devicePtrs.push_back(deviceIter->second);
+        offsets.push_back(static_cast<char*>(buffers[hd->inputs.size() + i]) - static_cast<char*>(deviceIter->first));
     }
 
     // Handle state transition.
@@ -601,7 +603,7 @@ int dxShaderLaunchAsync(void* hShader, void** buffers, void* hStream)
         ZeroMemory(&srvDesc, sizeof(srvDesc));
         srvDesc.Format = DXGI_FORMAT_UNKNOWN;
         srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-        srvDesc.Buffer.FirstElement = 0;
+        srvDesc.Buffer.FirstElement = offsets[i] / (uint32_t)hd->inputs[i].TypeSize();
         srvDesc.Buffer.NumElements = (uint32_t)hd->inputs[i].NumElements();
         srvDesc.Buffer.StructureByteStride = (uint32_t)hd->inputs[i].TypeSize();
         srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
@@ -615,7 +617,7 @@ int dxShaderLaunchAsync(void* hShader, void** buffers, void* hStream)
         ZeroMemory(&uavDesc, sizeof(uavDesc));
         uavDesc.Format = DXGI_FORMAT_UNKNOWN;
         uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
-        uavDesc.Buffer.FirstElement = 0;
+        uavDesc.Buffer.FirstElement = offsets[hd->inputs.size() + i] / (uint32_t)hd->outputs[i].TypeSize();
         uavDesc.Buffer.NumElements = (uint32_t)hd->outputs[i].NumElements();
         uavDesc.Buffer.StructureByteStride = (uint32_t)hd->outputs[i].TypeSize();
         device.pDevice->CreateUnorderedAccessView(((dx_buffer_t*)devicePtrs[hd->inputs.size() + i])->handle.Get(), nullptr, &uavDesc, handleCPU);
@@ -626,9 +628,9 @@ int dxShaderLaunchAsync(void* hShader, void** buffers, void* hStream)
 #else
 
     for (uint32_t i = 0; i < hd->inputs.size(); ++i)
-        pStream->pCmdList->SetComputeRootShaderResourceView(i, ((dx_buffer_t*)devicePtrs[i])->handle.Get()->GetGPUVirtualAddress());
+        pStream->pCmdList->SetComputeRootShaderResourceView(i, ((dx_buffer_t*)devicePtrs[i])->handle.Get()->GetGPUVirtualAddress() + offsets[i]);
     for (uint32_t i = 0; i < hd->outputs.size(); ++i)
-        pStream->pCmdList->SetComputeRootUnorderedAccessView((UINT)hd->inputs.size() + i, ((dx_buffer_t*)devicePtrs[hd->inputs.size() + i])->handle.Get()->GetGPUVirtualAddress());
+        pStream->pCmdList->SetComputeRootUnorderedAccessView((UINT)hd->inputs.size() + i, ((dx_buffer_t*)devicePtrs[hd->inputs.size() + i])->handle.Get()->GetGPUVirtualAddress() + offsets[hd->inputs.size() + i]);
 #endif
 
 #ifdef _USE_GPU_TIMER_
