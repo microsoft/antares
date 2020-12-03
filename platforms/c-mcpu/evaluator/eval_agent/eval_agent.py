@@ -205,7 +205,7 @@ def build_source_file():
     try:
         if platform.system() == 'Linux':
             cmd = ['timeout', '120s', 'g++', 'main.cpp', '-omain', '-std=c++11', '-lpthread', '-O3', '-march=native']
-            output = subprocess.check_output(cmd, timeout=120)
+            output = subprocess.check_output(cmd)
         else:
             pass
     except CalledProcessError as e:
