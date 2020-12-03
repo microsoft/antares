@@ -174,7 +174,7 @@ def get_template_op(**kwargs):
   if 'COMPUTE_V1' not in os.environ:
     raise Exception("Environment variable `COMPUTE_V1` is not set")
   program = os.environ['COMPUTE_V1'].strip()
-  assert(program.startswith('- '))
+  assert program.startswith('- '), "The computing expression doesn't start with proper prefix: - ..."
 
   global placeholders, output_saver
   placeholders, output_saver = {}, {"outputs": [], "flops": 0}

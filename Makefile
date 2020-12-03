@@ -23,7 +23,7 @@ HTTP_NAME ?= $(HTTP_PREF)$(or $(BACKEND), $(BACKEND), default)
 HTTP_EXEC ?= $(PARAMS) -d --name=$(HTTP_NAME) -p $(HTTP_PORT):$(HTTP_PORT) antares
 
 eval: build
-	$(PARAMS) -it --rm antares $(INNER_CMD)
+	$(PARAMS) -it --rm antares $(INNER_CMD) || true
 
 shell: build
 	$(PARAMS) -it --rm --network=host antares bash || true

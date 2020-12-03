@@ -51,7 +51,6 @@ export HIP_PLATFORM=hcc
 export HSA_USERPTR_FOR_PAGED_MEM=0
 
 ldconfig >/dev/null 2>&1 || true
-rm -f ${ANTARES_DRIVER_PATH}/property.cache
 
 [[ "$USING_GDB" == "" ]] || USING_GDB="gdb --ex run --args"
 
