@@ -144,8 +144,6 @@ namespace {
     static antares::D3DDevice device(false, false);
 #endif
 
-    static std::unordered_map<size_t, std::vector<void*>> bufferDict;
-
     // Use unique_ptr to ensure the D3D resources are released when app exits.
     // TODO: Release buffers in somewhere to avoid running out GPU memory.
     static std::vector<std::unique_ptr<dx_buffer_t>> buffers;
@@ -173,16 +171,15 @@ namespace {
 
     static void* defaultStream = nullptr;
 
-    static std::map<void*, size_t> memBlocks;
+    static std::map<void*, void*> memBlocks;
 
-    static std::map<void*, size_t>::const_iterator map_device_ptr(void* dPtr)
+    static std::map<void*, void*>::const_iterator map_device_ptr(void* vPtr)
     {
         assert(memBlocks.empty() == false);
-        auto nextIter = memBlocks.upper_bound(dPtr);
+        auto nextIter = memBlocks.upper_bound(vPtr);
         assert(nextIter != memBlocks.begin());
         auto iter = std::prev(nextIter);
-        INT64 offset = static_cast<char*>(dPtr) - static_cast<char*>(iter->first);
-        assert(offset >= 0 && offset < iter->second);
+        assert(static_cast<char*>(vPtr) - static_cast<char*>(iter->first) >= 0);
         return iter;
     }
 }
@@ -209,33 +206,26 @@ void* dxMemAlloc(size_t bytes)
     if (dxInit(0) != 0)
         return nullptr;
 
-    auto buffs = bufferDict[bytes];
-    void* ret = nullptr;
-    if (buffs.size() > 0)
-    {
-        ret = buffs.back();
-        buffs.pop_back();
-    }
-    else
-    {
-        std::unique_ptr<dx_buffer_t> buff = std::make_unique<dx_buffer_t>();
-        buff->size = bytes;
-        device.CreateGPUOnlyResource(bytes, &buff->handle);
-        assert(buff->handle.Get() != nullptr);
-        buff->state = D3D12_RESOURCE_STATE_COMMON;
+    std::unique_ptr<dx_buffer_t> buff = std::make_unique<dx_buffer_t>();
+    buff->size = bytes;
+    device.CreateGPUOnlyResource(bytes, &buff->handle);
+    assert(buff->handle.Get() != nullptr);
+    buff->state = D3D12_RESOURCE_STATE_COMMON;
 
-        buffers.push_back(std::move(buff));
-        ret = buffers.back().get();
-    }
-    memBlocks[ret] = bytes;
-    return ret;
+    buffers.push_back(std::move(buff));
+    void* devicePtr = buffers.back().get();
+
+    void* virtualPtr = VirtualAlloc(nullptr, bytes, MEM_RESERVE, PAGE_NOACCESS);
+    assert(virtualPtr != nullptr);
+
+    memBlocks[virtualPtr] = devicePtr;
+    return virtualPtr;
 }
 
-int dxMemFree(void* dptr)
+int dxMemFree(void* vPtr)
 {
-    auto _buff = (dx_buffer_t*)(dptr);
-    bufferDict[_buff->size].push_back(dptr);
-    memBlocks.erase(dptr);
+    VirtualFree(vPtr, 0, MEM_RELEASE);
+    memBlocks.erase(vPtr);
     return 0;
 }
 
@@ -496,13 +486,13 @@ int dxMemcpyHtoDAsync(void* dst, void* src, size_t bytes, void *hStream)
 
     // TODO: reuse D3D resources and not to create new resources in every call.
     ComPtr<ID3D12Resource> deviceCPUSrcX;
-    device.CreateUploadBuffer(deviceIter->second, &deviceCPUSrcX);
+    device.CreateUploadBuffer(bytes + offset, &deviceCPUSrcX);
 
     // CPU copy
     device.MapAndCopyToResource(deviceCPUSrcX.Get(), src, bytes, offset);
 
     // GPU copy
-    auto dst_buffer = (dx_buffer_t*)dst;
+    auto dst_buffer = (dx_buffer_t*)(deviceIter->second);
     ComPtr<ID3D12CommandAllocator> pCommandAllocator;
     ComPtr<ID3D12GraphicsCommandList> pCmdList;
     IFE(device.pDevice->CreateCommandAllocator(device.CommandListType, IID_PPV_ARGS(&pCommandAllocator)));
@@ -538,10 +528,10 @@ int dxMemcpyDtoHAsync(void* dst, void* src, size_t bytes, void* hStream)
     UINT64 offset = static_cast<char*>(src) - static_cast<char*>(deviceIter->first);
 
     ComPtr<ID3D12Resource> deviceCPUSrcX;
-    device.CreateReadbackBuffer(deviceIter->second, &deviceCPUSrcX);
+    device.CreateReadbackBuffer(bytes + offset, &deviceCPUSrcX);
 
     // GPU copy
-    auto src_buffer = (dx_buffer_t*)src;
+    auto src_buffer = (dx_buffer_t*)(deviceIter->second);
     ComPtr<ID3D12CommandAllocator> pCommandAllocator;
     ComPtr<ID3D12GraphicsCommandList> pCmdList;
     IFE(device.pDevice->CreateCommandAllocator(device.CommandListType, IID_PPV_ARGS(&pCommandAllocator)));
@@ -573,12 +563,12 @@ int dxShaderLaunchAsync(void* hShader, void** buffers, void* hStream)
     for (int i = 0; i < hd->inputs.size(); ++i)
     {
         auto deviceIter = map_device_ptr(buffers[i]);
-        devicePtrs.push_back(deviceIter->first);
+        devicePtrs.push_back(deviceIter->second);
     }
     for (int i = 0; i < hd->outputs.size(); ++i)
     {
         auto deviceIter = map_device_ptr(buffers[hd->inputs.size() + i]);
-        devicePtrs.push_back(deviceIter->first);
+        devicePtrs.push_back(deviceIter->second);
     }
 
     // Handle state transition.
