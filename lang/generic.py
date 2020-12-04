@@ -199,7 +199,7 @@ def get_template_op(**kwargs):
       def to_list(shape):
         return [int(d) for d in shape]
       for i in range(1, len(outputs)):
-        assert to_list(outputs[0].shape) == to_list(outputs[i].shape), "Shape sizes for multiple outputs should be equal."
+        assert to_list(outputs[0].shape) == to_list(outputs[i].shape), "Shape sizes for multiple outputs should be equal: %s v.s. %s" % (to_list(outputs[0].shape), to_list(outputs[i].shape))
       outputs = te.compute(outputs[0].shape, lambda *X: [v[X] for v in outputs], name=intermediate_output)
     sch = te.create_schedule([outputs[i].op for i in range(len(outputs))])
 
@@ -214,7 +214,7 @@ def get_template_op(**kwargs):
         attrs.ir = program
         attrs.options = options
         attrs.blend = ''
-        attrs.get_extent = lambda axis: int(str(axis).split('ext=')[-1].split(')')[0])
+        attrs.get_extent = lambda axis: int(axis.dom.extent)
 
         AntaresGlobal.attrs = attrs
         do_native_scheduling(attrs)

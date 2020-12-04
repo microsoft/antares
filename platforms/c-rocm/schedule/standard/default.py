@@ -56,10 +56,15 @@ def schedule(attrs):
   s[output].reorder(*plan_order)
 
   if rd_vals:
-    s[output_local].compute_at(s[output], plan_order[-1])
+    comp_ax = plan_order[-1]
+    for m in attrs.explicit_ops[:-1]:
+      s[m.output(0)].compute_at(s[output], comp_ax)
+    s[output_local].compute_at(s[output], comp_ax)
+
     for i in range(len(rd_vals)):
       if rd_vals[i] > 1:
         ax_name = 'reduce_%d' % i
         cfg.define_split(ax_name, cfg.axis(output_local.op.reduce_axis[i]), num_outputs=3)
         ko, kt, ki = cfg[ax_name].apply(s, output_local, output_local.op.reduce_axis[i])
         s[output_local].unroll(kt)
+
