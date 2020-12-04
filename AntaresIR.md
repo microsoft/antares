@@ -88,10 +88,8 @@ COMPUTE_V1='- einstein_v2("temp0[NC, HO, WO] +=! input0[NC, HO * 3 + KH, WO * 3 
 # Tile
 COMPUTE_V1='- einstein_v2("output0[ON, OC] = input0[ON % 2, OC % 16] where ON in 1024, OC in 4096", input_dict={"input0": {"dtype": "float32", "shape": [2, 16]}})' make
 
-# Softmax (3 different kernels)
-COMPUTE_V1='- einstein_v2("temp0[N] >=! input0[N, C]",                                            { "input0": {"dtype": "float32", "shape": [32, 1024]} })' make
-COMPUTE_V1='- einstein_v2("temp1[N] +=! (input0[N, C] - temp0[N]).call(`exp`)",                 { "input0": {"dtype": "float32", "shape": [32, 1024]}, "temp0": {"dtype": "float32", "shape": [32]} })' make
-COMPUTE_V1='- einstein_v2("output0[N, C] = (input0[N, C] - temp0[N]).call(`exp`) / temp1[N]",   { "input0": {"dtype": "float32", "shape": [32, 1024]}, "temp0": {"dtype": "float32", "shape": [32]}, "temp1": {"dtype": "float32", "shape": [32]} })' make
+# Softmax
+COMPUTE_V1='- einstein_v2("temp0[N] >=! input0[N, C]; temp1[N] +=! (input0[N, C] - temp0[N]).call(`exp`); output0[N, C] = (input0[N, C] - temp0[N]).call(`exp`) / temp1[N]", { "input0": {"dtype": "float32", "shape": [32, 1024]} })' make
 
 # BatchNorm Inference
 COMPUTE_V1='- einstein_v2("output0[N, C, H, W] = bias[C] + scale[C] * (input0[N, C, H, W] - mean[C]) / (1e-5 + variance[C]).call(`sqrt`)", input_dict={"input0": {"dtype": "float32", "shape": [16, 256, 16, 16]}, "mean": {"dtype": "float32", "shape": [256]}, "variance": {"dtype": "float32", "shape": [256]}, "scale": {"dtype": "float32", "shape": [256]}, "bias": {"dtype": "float32", "shape": [256]} })' make
