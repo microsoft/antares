@@ -30,7 +30,7 @@ def cleanup_on_exit(signum, frame):
       func()
     except:
       pass
-  os._exit(0 if signum == -1 else 1)
+  exit(0 if signum == -1 else 1)
 
 signal.signal(signal.SIGINT, cleanup_on_exit)
 
@@ -45,7 +45,7 @@ except ModuleNotFoundError:
   raise Exception('>> Platform config for backend %s not found' % backend)
 except:
   traceback.print_exc()
-  os._exit(1)
+  exit(1)
 
 def get_search_space(config_space):
   search_space = {}
@@ -410,7 +410,7 @@ def main_compute(code_only=False):
     search_space = get_search_space(task.config_space)
     json_space = json.dumps(search_space)
     print("\n>> Search Space: %s" % (json_space))
-    os._exit(0)
+    exit(0)
   elif num_trials > 0:
     dev_num = platform_config.get_execution_parallism()
     if dev_num <= 0:
@@ -544,7 +544,7 @@ def main_compute(code_only=False):
       cleanup_on_exit(-1, None)
     else:
       raise Exception('Unrecognized tuner type: `%s`' % tuner_type)
-    os._exit(0)
+    exit(0)
   else:
     saved_code = codehub_db(os.environ['COMPUTE_V1'])
     if saved_code is not None:
@@ -552,7 +552,7 @@ def main_compute(code_only=False):
       print("===========================")
       print(saved_code)
       print("===========================")
-      os._exit(0)
+      exit(0)
     best_config = ''
 
   assert isinstance(best_config, str)
@@ -571,7 +571,7 @@ def main_compute(code_only=False):
   do_compilation(compile_args)
   dev_id = int(os.environ.get('DEV_KEY', '0'))
   result = evaluate_perf(kernel_path, dev_id, device_source)
-  os._exit(0 if result is not None and len(result) > 1 else 1)
+  exit(0 if result is not None and len(result) > 1 else 1)
 
 
 def rest_service():
@@ -658,6 +658,6 @@ if __name__ == '__main__':
     else:
       main_compute()
   except SystemExit:
-    sys.exit(1)
+    cleanup_on_exit(0, None)
   except:
     traceback.print_exc()
