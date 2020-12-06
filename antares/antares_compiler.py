@@ -447,6 +447,7 @@ def main_compute(code_only=False):
       os.environ.pop('COMMIT')
 
     try:
+      task.n_parallel = batch_size
       tuner = importlib.import_module('tuner.%s.main' % tuner_type)
       tuner = tuner.MainTuner(task)
     except:
@@ -523,10 +524,7 @@ def main_compute(code_only=False):
           print('  >>  Loading incremental history from log file: %s ..' % history_log_for_transfer_learning)
           tuner.load_history(autotvm.record.load_from_file(history_log_for_transfer_learning))
 
-      tuner.tune(n_trial=num_trials, measure_option=autotvm.measure_option(
-          builder=autotvm.LocalBuilder(n_parallel=batch_size),
-          runner=autotvm.LocalRunner(repeat=3, min_repeat_ms=100, timeout=4)
-      ), callbacks=callbacks)
+      tuner.tune(n_trial=num_trials, callbacks=callbacks, measure_option=None)
       assert not math.isinf(tuner.task.best.timecost), "Not valid config found in the whole tuning."
       best_config = json.dumps(config_to_json(tuner.task.best.config))
 
