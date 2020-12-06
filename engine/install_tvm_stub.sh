@@ -4,8 +4,8 @@ cd $(dirname $0)/..
 ANTARES_ROOT=$(pwd)
 export TVM_HOME=/opt/tvm
 
-dpkg -L git python3-pip g++ llvm-dev make >/dev/null 2>&1 || \
-  apt-get update && apt-get install -y --no-install-recommends git python3-pip g++ llvm-dev make && rm -rf /var/lib/apt/lists/*
+dpkg -L git python3-dev python3-pip g++ llvm-dev make >/dev/null 2>&1 || \
+  apt-get update && apt-get install -y --no-install-recommends git python3-dev python3-pip g++ llvm-dev make && rm -rf /var/lib/apt/lists/*
 
 pip3 install --upgrade pip cmake==3.18.0 && \
   pip3 install --upgrade tornado psutil xgboost==1.2.1 numpy decorator attrs pytest typed_ast && \
