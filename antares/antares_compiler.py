@@ -309,6 +309,8 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
                   dev_id=dev_id,
                 )
       return results
+    except SystemExit:
+      return None
     except:
       if verbose:
         traceback.print_exc()
