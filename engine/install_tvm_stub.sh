@@ -7,7 +7,7 @@ export TVM_HOME=/opt/tvm
 dpkg -L llvm-dev git python3-pip >/dev/null 2>&1 || \
   apt-get update && apt-get install -y --no-install-recommends git python3-pip g++ llvm-dev && rm -rf /var/lib/apt/lists/*
 
-pip3 install --upgrade pip cmake && \
+pip3 install --upgrade pip cmake==3.18.0 && \
   pip3 install --upgrade tornado psutil xgboost==1.2.1 numpy decorator attrs pytest typed_ast && \
   rm -rf ~/.cache
 
