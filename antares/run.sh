@@ -1,6 +1,7 @@
 #!/bin/bash -e
 
 cd $(dirname $0)/..
+ANTARES_ROOT=$(pwd)
 
 if [[ "$(pwd)" != "/antares" ]]; then
   echo "Please run task in Docker environment."
@@ -8,6 +9,9 @@ if [[ "$(pwd)" != "/antares" ]]; then
 fi
 
 # Valid Backends: c-cuda, c-rocm, c-mcpu, c-hlsl, c-gc
+export PYTHONDONTWRITEBYTECODE=1
+export TVM_HOME=/opt/tvm
+export PYTHONPATH=${TVM_HOME}/python:${TVM_HOME}/topi/python:${TVM_HOME}/nnvm/python:${ANTARES_ROOT}
 
 if [[ "$BACKEND" == "" ]]; then
   if [ -e /dev/nvidia-modeset ]; then
@@ -25,11 +29,11 @@ export ANTARES_DRIVER_PATH=/tmp/libAntares
 mkdir -p ${ANTARES_DRIVER_PATH}
 
 if [[ "$BACKEND" == "c-rocm" ]]; then
-  /opt/rocm/bin/hipcc engine/cuda_properties.cc -o ${ANTARES_DRIVER_PATH}/device_properties
-  ${ANTARES_DRIVER_PATH}/device_properties > ${ANTARES_DRIVER_PATH}/device_properties.cfg || rm -f ${ANTARES_DRIVER_PATH}/device_properties.cfg
+  /opt/rocm/bin/hipcc engine/cuda_properties.cc -o ${ANTARES_DRIVER_PATH}/device_properties >/dev/null 2>&1 || true
+  ${ANTARES_DRIVER_PATH}/device_properties > ${ANTARES_DRIVER_PATH}/device_properties.cfg 2>/dev/null || rm -f ${ANTARES_DRIVER_PATH}/device_properties.cfg
 elif [[ "$BACKEND" == "c-cuda" ]]; then
-  g++ engine/cuda_properties.cc -lcuda -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -o ${ANTARES_DRIVER_PATH}/device_properties
-  ${ANTARES_DRIVER_PATH}/device_properties > ${ANTARES_DRIVER_PATH}/device_properties.cfg || rm -f ${ANTARES_DRIVER_PATH}/device_properties.cfg
+  g++ engine/cuda_properties.cc -lcuda -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -o ${ANTARES_DRIVER_PATH}/device_properties >/dev/null 2>&1 || true
+  ${ANTARES_DRIVER_PATH}/device_properties > ${ANTARES_DRIVER_PATH}/device_properties.cfg 2>/dev/null || rm -f ${ANTARES_DRIVER_PATH}/device_properties.cfg
 else
   rm -f ${ANTARES_DRIVER_PATH}/device_properties.cfg
 fi
