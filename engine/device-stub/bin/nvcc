@@ -1,0 +1,20 @@
+#!/usr/bin/python3
+
+import os, sys, time
+import subprocess
+
+if len(sys.argv) <= 1:
+    exit(1)
+
+_backup_args = [v for v in sys.argv]
+
+if '--version' in sys.argv:
+  # Stub Information for CMake
+  print('''nvcc: NVIDIA (R) Cuda compiler driver
+Copyright (c) 2005-2020 NVIDIA Corporation
+Built on Wed_Jul_22_19:09:09_PDT_2020
+Cuda compilation tools, release 11.0, V11.0.221
+Build cuda_11.0_bu.TC445_37.28845127_0''')
+  exit(0)
+
+os.execl('/bin/false', '/bin/false', *[])
