@@ -10,6 +10,9 @@ import numpy as np
 # Tensor name: the first charactor must be lower case letter, and the following charactors must be within [a-zA-Z_]
 # Axis name: the first charactor must be upper case letter, and the following charactors must be within [a-zA-Z]
 
+ast_props = None
+explicit_range = None
+
 class OpTensor:
     @staticmethod
     def parse(other):
@@ -47,8 +50,8 @@ class OpTensor:
           key[i] = OpTensor.parse(key[i])
           it = key[i]
           _flopbase += it._flopbase
-          if it._op == 'axis' and it._value["range"] is None:
-            it._value["range"] = self._value["shape"][i]
+          if it._op == 'axis' and explicit_range[it._value] is None:
+            explicit_range[it._value] = ast_props['input_dict'][self._value]['shape'][i]
         return OpTensor('get_item', {"tensor": self, "index": key}, self._dtype, _flopbase)
 
     # Calculation Ops
@@ -178,6 +181,7 @@ def parse_to_ast(expr, input_dict={}):
     range_desc = ''
 
   # Parse compute axes & init axis nodes
+  global explicit_range
   explicit_range = {}
   for i in range(1, len(expr)):
     if expr[i].isupper() and (not expr[i - 1].isalpha()) and (not expr[i - 1].isdigit()) and (expr[i - 1] != '_'):
@@ -188,8 +192,7 @@ def parse_to_ast(expr, input_dict={}):
       if ax_name not in explicit_range:
         explicit_range[ax_name] = None
   for k in explicit_range:
-    explicit_range[k] = OpTensor('axis', {"name": k, "range": explicit_range[k]}, 'int32')
-    exec("%s = explicit_range[k]" % k)
+    exec("%s = OpTensor('axis', k, 'int32')" % k)
 
   # Parse where clause
   for x in range_desc.split(','):
@@ -197,10 +200,13 @@ def parse_to_ast(expr, input_dict={}):
     if not x:
       continue
     k, v = x.split(' in ')
-    explicit_range[k.strip()]._value["range"] = int(v.strip())
+    explicit_range[k.strip()] = int(v.strip())
 
   # Parse compute set-op, get lval & rval
   props = {'data_axes': [], 'reduce_axes': [], 'input_dict': copy.deepcopy(input_dict), 'output_name': None, 'reduce_type': None, 'flopbase': None}
+  global ast_props
+  ast_props = props
+
   at_index = expr.find('=')
   if expr[at_index - 1] != ' ':
     if expr[at_index - 1] in ('<', '>', '+'):
@@ -220,41 +226,34 @@ def parse_to_ast(expr, input_dict={}):
     rval = expr[at_index + 1:].strip()
 
   # Distinguish data/reduce axes according to lval
-  data_axes_fifo_set = []
   for x in lval[lval.index('[') + 1:lval.rindex(']')].split(','):
     x = x.strip()
-    data_axes_fifo_set.append(x)
-    props['data_axes'].append(explicit_range[x])
+    props['data_axes'].append(x)
   for x in explicit_range:
-    if x not in data_axes_fifo_set:
-      props['reduce_axes'].append(explicit_range[x])
+    if x not in props['data_axes']:
+      props['reduce_axes'].append(x)
 
   for input_name in input_dict:
-    _temp = input_dict[input_name].copy()
-    _temp["name"] = input_name
     if not input_name[0].islower():
       raise Exception("Tensor variable name must start with lower case letter: %s" % input_name)
-    exec('%s = OpTensor("tensor", _temp, "%s")' % (input_name, _temp["dtype"]))
+    exec('%s = OpTensor("tensor", input_name, "%s")' % (input_name, input_dict[input_name]["dtype"]))
     
   # Build ast according to rval & fill uncertain axis range
   _root = eval(rval)
   for x in explicit_range:
-    each_range = explicit_range[x]._value["range"]
-    if each_range is None:
+    if explicit_range[x] is None:
       raise Exception("The range of axis `%s` is undeterminzed, please use `where` clause to set the range explicitly." % x)
 
   # Collect output inferences & compute flopbase
   props['flopbase'] = max(1, _root._flopbase if props['reduce_type'] is None else _root._flopbase + 1)
 
-  props['data_axes'] = [copy.deepcopy(x._value) for x in props['data_axes']]
-  props['reduce_axes'] = [copy.deepcopy(x._value) for x in props['reduce_axes']]
+  props['data_axes'] = [{'name': x, 'range': explicit_range[x]} for x in props['data_axes']]
+  props['reduce_axes'] = [{'name': x, 'range': explicit_range[x]} for x in props['reduce_axes']]
 
   output_name = lval[:lval.index('[')].strip()
   props['output_name'] = output_name
   return {'props': props, 'root': _root}
 
-
-#####################
 
 def const(other):
   return OpTensor.parse(other)
@@ -269,14 +268,14 @@ def emit_tvm_body(node, props):
   elif node._op == 'get_item':
     tensor = node._value['tensor']
     index = node._value['index']
-    _str = tensor._value['name'] + '['
+    _str = tensor._value + '['
     if len(index) > 0:
       for i, it in enumerate(index):
         _str += emit_tvm_body(it, props) + ', '
       _str = _str[:-2] + ']'
     return _str
   elif node._op == 'axis':
-    return warp_axis(node._value['name'])
+    return warp_axis(node._value)
   elif node._op == 'op':
     op_name = node._value["name"]
     op_input_size = len(node._value["inputs"])
