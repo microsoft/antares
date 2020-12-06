@@ -8,7 +8,7 @@ import urllib.request
 def eval(kernel_path, **kwargs):
     if not os.environ.get('AGENT_URL', ''):
         print("Skip to evaluator performance: env_var `AGENT_URL` not defined (required: e.g. export AGENT_URL=<win10-ip-addr>)")
-        os._exit(1)
+        exit(1)
 
     url_with_port = os.environ['AGENT_URL'].strip()
     if ':' not in url_with_port and not url_with_port.endswith('/'):
