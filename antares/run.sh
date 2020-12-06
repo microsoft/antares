@@ -3,15 +3,12 @@
 cd $(dirname $0)/..
 ANTARES_ROOT=$(pwd)
 
-if [[ "$(pwd)" != "/antares" ]]; then
-  echo "Please run task in Docker environment."
-  exit 1
-fi
-
 # Valid Backends: c-cuda, c-rocm, c-mcpu, c-hlsl, c-gc
 export PYTHONDONTWRITEBYTECODE=1
 export TVM_HOME=/opt/tvm
 export PYTHONPATH=${TVM_HOME}/python:${TVM_HOME}/topi/python:${TVM_HOME}/nnvm/python:${ANTARES_ROOT}
+
+[ -e ${TVM_HOME} ]
 
 if [[ "$BACKEND" == "" ]]; then
   if [ -e /dev/nvidia-modeset ]; then
