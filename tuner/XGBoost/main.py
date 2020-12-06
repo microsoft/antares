@@ -11,3 +11,9 @@ class MainTuner(XGBTuner):
     if 'feature_type' not in kwargs:
       kwargs['feature_type'] = 'knob'
     super(MainTuner, self).__init__(task, **kwargs)
+
+  def cleanup(self):
+    try:
+      self.cost_model._close_pool()
+    except:
+      pass
