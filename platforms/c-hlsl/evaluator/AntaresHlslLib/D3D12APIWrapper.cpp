@@ -7,7 +7,7 @@
 #include <map>
 
 #define _USE_GPU_TIMER_
-// #define _USE_DESCRIPTOR_HEAP_
+#define _USE_DESCRIPTOR_HEAP_
 // #define _USE_DXC_
 
 #include "D3D12Antares.h"
@@ -317,6 +317,8 @@ void* dxShaderLoad(const char* src, int* num_inputs, int* num_outputs)
     auto arr_params = ssplit(str_params, ":");
     assert(arr_params.size() == 2);
     auto in_params = ssplit(arr_params[0], ","), out_params = ssplit(arr_params[1], ",");
+    if (in_params.size() == 1 && !in_params[0].size())
+        in_params.clear();
 
     for (int i = 0; i < in_params.size(); ++i)
         handle->inputs.push_back(parse_tensor(in_params[i]));
