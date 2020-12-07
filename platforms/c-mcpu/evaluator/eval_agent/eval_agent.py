@@ -62,7 +62,7 @@ def generate_source_file(kernel_code):
     type_converter = {
         "int32": "int",
         "float32": "float",
-        "byte": "unsigned char"
+        "int8": "char",
     }
     main_func_body = ""
     input_types = [];
