@@ -8,7 +8,12 @@ export PYTHONDONTWRITEBYTECODE=1
 export TVM_HOME=/opt/tvm
 export PYTHONPATH=${TVM_HOME}/python:${TVM_HOME}/topi/python:${TVM_HOME}/nnvm/python:${ANTARES_ROOT}
 
-[ -e ${TVM_HOME} ]
+[ -e ${TVM_HOME}/build/libtvm.so ]
+
+if [[ "$COMPUTE_V1" == "" ]]; then
+  echo "  >> Using a default computing expression."
+  COMPUTE_V1='- einstein_v2("output0[N] = input0[N] + input1[N]", input_dict={"input0": {"dtype": "float32", "shape": [1024 * 512]}, "input1": {"dtype": "float32", "shape": [1024 * 512]}})'
+fi
 
 if [[ "$BACKEND" == "" ]]; then
   if [ -e /dev/nvidia-modeset ]; then

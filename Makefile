@@ -1,4 +1,4 @@
-COMPUTE_V1 ?= - einstein_v2("output0[N] = input0[N] + input1[N]", input_dict={"input0": {"dtype": "float32", "shape": [1024 * 512]}, "input1": {"dtype": "float32", "shape": [1024 * 512]}})
+COMPUTE_V1 ?=
 BACKEND ?=
 TUNER ?=
 STEP ?= 0
