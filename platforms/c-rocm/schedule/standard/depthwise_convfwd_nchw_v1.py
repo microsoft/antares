@@ -82,7 +82,7 @@ def schedule(attrs):
         s[load].bind(tx, te.thread_axis("threadIdx.x"))
 
     N, CO, OH, OW = get_const_tuple(output.shape)
-    CI, _, KH, KW = get_const_tuple(kernel.shape)
+    KH, KW, CI, _ = get_const_tuple(kernel.shape)
     assert(CI == CO)
 
     cfg.flop = (2 * N * OH * OW * CI * KH * KW)

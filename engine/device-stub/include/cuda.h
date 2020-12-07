@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+
 #ifndef __ANTARES_CUDA_STUB__
 #define __ANTARES_CUDA_STUB__
 
