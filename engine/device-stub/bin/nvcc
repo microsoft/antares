@@ -1,5 +1,8 @@
 #!/usr/bin/python3
 
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT license.
+
 import os, sys, time
 import subprocess
 
