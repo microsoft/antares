@@ -166,8 +166,8 @@ def generate_source_file(kernel_code):
         for dim in dims:
             size *= int(dim)
         main_func_body += ('ans = 0;\n')
-        main_func_body += ('for( int i = 0, ceof = 1; i < ' + str(size) + '; ++i, ceof = (ceof + 1) % 83) {\n')
-        main_func_body += ('    ans += double(output' + str(i) + '[i]) * ceof;\n') 
+        main_func_body += ('for( int i = 0; i < ' + str(size) + '; ++i) {\n')
+        main_func_body += ('    ans += (i + 1) % 83 * float(output' + str(i) + '[i]);\n') 
         main_func_body += ('}\n')
         main_func_body += ('printf("- K/' + str(i) + ' = %.10e\\n", ans);\n')
 
@@ -204,7 +204,7 @@ return 0;
 def build_source_file():
     try:
         if platform.system() == 'Linux':
-            cmd = ['timeout', '120s', 'g++', 'main.cpp', '-omain', '-std=c++11', '-lpthread', '-O3', '-march=native']
+            cmd = ['timeout', '30s', 'g++', 'main.cpp', '-omain', '-std=c++11', '-lpthread', '-O3', '-march=native']
             output = subprocess.check_output(cmd)
         else:
             pass

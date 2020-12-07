@@ -32,4 +32,9 @@ def eval(kernel_path, **kwargs):
     # Incorrect result, deny this result
     if 'K/0' not in results:
         results = {}
+    for i in range(len(results)):
+      key = 'K/%d' % i
+      if key not in results:
+        break
+      results[key] = float('%.10e' % results[key])
     return results
