@@ -316,7 +316,7 @@ namespace AntaresHlslEvalAgent
                     for (int x = 0; x < h_output.Length; ++x)
                         digest += (x + 1) % 83 * h_output[x];
                 }
-                Console.Write("\"K/" + output_id + "\": " + digest + ", ");
+                Console.Write("\"K/" + output_id + "\": " + String.Format("{0:E10}", digest) + ", ");
             }
 
             var hStart = dxEventCreate();
