@@ -35,6 +35,9 @@ def update_global_dict(ast_seq, global_input_dict, global_output_dict):
       global_output_dict[k] = {"shape": [x['range'] for x in ast['props']['data_axes']], "dtype": ast['root']._dtype}
 
 def run_pass_v2(ast_seq, global_input_dict, global_output_dict):
+  # Just a rough check
+  if 'plan/' in os.environ.get('COMPUTE_V1', ''):
+    return
   no_trivial_ax_input(ast_seq)
   update_global_dict(ast_seq, global_input_dict, global_output_dict)
 
