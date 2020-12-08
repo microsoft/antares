@@ -31,5 +31,5 @@ ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/local/cuda/compat:$LD_LIBRARY
 ENV HIP_IGNORE_HCC_VERSION=1
 
 ADD ./engine /antares/engine
-RUN /antares/engine/install_antares_host.sh
+RUN /antares/engine/install_antares_host.sh && rm -rf /var/lib/apt/lists/* ~/.cache
 
