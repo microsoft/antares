@@ -16,6 +16,8 @@ def schedule(attrs):
   # Normal Schedule Plan
   blocks = [te.thread_axis('blockIdx.x'), te.thread_axis('blockIdx.y'), te.thread_axis('blockIdx.z')]
   threads = [te.thread_axis('threadIdx.x'), te.thread_axis('threadIdx.y'), te.thread_axis('threadIdx.z')]
+  if attrs.backend == 'c-hlsl' and int(os.environ.get('STEP', '0')) == 0:
+    blocks[-1] = te.thread_axis('vthread')
 
   if rd_vals:
     if output.op in s.outputs:
