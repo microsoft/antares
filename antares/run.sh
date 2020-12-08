@@ -8,7 +8,10 @@ export PYTHONDONTWRITEBYTECODE=1
 export TVM_HOME=/opt/tvm
 export PYTHONPATH=${TVM_HOME}/python:${TVM_HOME}/topi/python:${TVM_HOME}/nnvm/python:${ANTARES_ROOT}
 
-[ -e ${TVM_HOME}/build/libtvm.so ]
+if [ ! -e ${TVM_HOME}/build/libtvm.so ]; then
+  echo 'Antares dependencies are not fully installed in this environment. Try installing with: `make install_host`'
+  exit 1
+fi
 
 if [[ "$COMPUTE_V1" == "" ]]; then
   echo "  >> Using a default computing expression."
