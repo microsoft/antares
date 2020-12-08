@@ -23,7 +23,7 @@ HTTP_NAME ?= $(HTTP_PREF)$(or $(BACKEND), $(BACKEND), default)
 HTTP_EXEC ?= $(PARAMS) -d --name=$(HTTP_NAME) -p $(HTTP_PORT):$(HTTP_PORT) antares
 
 eval:
-	@sh -cex 'if pgrep dockerd >/dev/null 2>&1; then $(MAKE) install_docker; $(PARAMS) -it --rm antares $(INNER_CMD); else ./antares/$(INNER_CMD); fi'
+	@sh -cex 'if pgrep dockerd >/dev/null 2>&1; then $(MAKE) install_docker; $(PARAMS) -it --rm antares $(INNER_CMD) || true; else ./antares/$(INNER_CMD) || true; fi'
 
 shell: install_docker
 	$(PARAMS) -it --rm --network=host antares bash || true
