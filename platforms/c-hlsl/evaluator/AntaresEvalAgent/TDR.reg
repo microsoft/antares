@@ -2,15 +2,15 @@ Windows Registry Editor Version 5.00
 
 [HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\GraphicsDrivers]
 "TdrLevel"=dword:00000003
-"TdrDelay"=dword:0000003c
-"TdrDdiDelay"=dword:0000003c
+"TdrDelay"=dword:00002710
+"TdrDdiDelay"=dword:00002710
 "TdrTestMode"=dword:00000000
 "TdrDebugMode"=dword:00000002
-"TdrLimitTime"=dword:0000003c
+"TdrLimitTime"=dword:00002710
 "TdrLimitCount"=dword:01000000
 
 [HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\GraphicsDrivers\DCI]
-"Timeout"=dword:0000003c
+"Timeout"=dword:00002710
 
 [HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting]
 "DontShowUI"=dword:00000001

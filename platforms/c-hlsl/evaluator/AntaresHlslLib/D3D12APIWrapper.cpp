@@ -7,13 +7,14 @@
 #include <map>
 
 #define _USE_GPU_TIMER_
-#define _USE_DESCRIPTOR_HEAP_
 // #define _USE_DXC_
 
 #include "D3D12Antares.h"
 #include "D3D12APIWrapper.h"
 
 namespace {
+    static bool _USE_DESCRIPTOR_HEAP_ = false;
+
     struct dx_buffer_t
     {
         size_t size;
@@ -116,9 +117,8 @@ namespace {
         // A stream is a wrapper of cmdlist, cmdallocator and descriptor heap.
         ComPtr<ID3D12GraphicsCommandList> pCmdList;
         ComPtr<ID3D12CommandAllocator> pCmdAllocator;
-#ifdef _USE_DESCRIPTOR_HEAP_
         ComPtr<ID3D12DescriptorHeap> pDescHeap;
-#endif
+
         State state;
         uint32_t descIdxOffset = 0;
 
@@ -128,10 +128,11 @@ namespace {
             pCmdList->Reset(pCmdAllocator.Get(), nullptr);
             descIdxOffset = 0;
             state = State::INRECORD;
-#ifdef _USE_DESCRIPTOR_HEAP_
-            ID3D12DescriptorHeap* pDescHeaps[] = { pDescHeap.Get() };
-            pCmdList->SetDescriptorHeaps(1, pDescHeaps);
-#endif
+            if (_USE_DESCRIPTOR_HEAP_)
+            {
+                ID3D12DescriptorHeap* pDescHeaps[] = { pDescHeap.Get() };
+                pCmdList->SetDescriptorHeaps(1, pDescHeaps);
+            }
             queryHeapsNeedToResolve.clear();
         }
 
@@ -190,11 +191,11 @@ int dxInit(int flags)
     if (!defaultStream)
     {
         device.Init();
-#ifdef _USE_DESCRIPTOR_HEAP_
-        fprintf(stderr, "[INFO] D3D12: Descriptor heap is enabled.\n\n");
-#else
-        fprintf(stderr, "[INFO] D3D12: Descriptor heap is disabled.\n\n");
-#endif
+        _USE_DESCRIPTOR_HEAP_ = flags;
+        if (_USE_DESCRIPTOR_HEAP_)
+            fprintf(stderr, "[INFO] D3D12: Descriptor heap is enabled.\n\n");
+        else
+            fprintf(stderr, "[INFO] D3D12: Descriptor heap is disabled.\n\n");
         defaultStream = (void*)1LU;
         defaultStream = dxStreamCreate();
     }
@@ -345,29 +346,31 @@ void* dxShaderLoad(const char* src, int* num_inputs, int* num_outputs)
     ComPtr<ID3D12PipelineState>& m_computeState = hd->pPSO;
     D3D12_COMPUTE_PIPELINE_STATE_DESC computePsoDesc{};
 
-#ifdef _USE_DESCRIPTOR_HEAP_
-    // Prepare Root
-    std::vector<CD3DX12_ROOT_PARAMETER1> computeRootParameters(1);
-    CD3DX12_DESCRIPTOR_RANGE1 ranges[2];
-    // D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE is needed to disable unproper driver optimization.
-    ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, (uint32_t)hd->inputs.size(), 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE, 0);
-    ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, (uint32_t)hd->outputs.size(), 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE, (uint32_t)hd->inputs.size());
-
-    computeRootParameters[0].InitAsDescriptorTable(2, ranges);
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC computeRootSignatureDesc;
-    computeRootSignatureDesc.Init_1_1((UINT)computeRootParameters.size(),
-        computeRootParameters.data());
-#else
-    // Prepare Root
-    std::vector<CD3DX12_ROOT_PARAMETER1> computeRootParameters(hd->inputs.size() + hd->outputs.size());
-    for (int i = 0; i < hd->inputs.size(); ++i)
-        computeRootParameters[i].InitAsShaderResourceView(i);
-    for (int i = 0; i < hd->outputs.size(); ++i)
-        computeRootParameters[hd->inputs.size() + i].InitAsUnorderedAccessView(i);
+    std::vector<CD3DX12_ROOT_PARAMETER1> computeRootParameters;
+    if (_USE_DESCRIPTOR_HEAP_)
+    {
+        // Prepare Root
+        computeRootParameters.resize(1);
+        CD3DX12_DESCRIPTOR_RANGE1 ranges[2];
+        // D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE is needed to disable unproper driver optimization.
+        ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, (uint32_t)hd->inputs.size(), 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE, 0);
+        ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, (uint32_t)hd->outputs.size(), 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE, (uint32_t)hd->inputs.size());
 
-    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC computeRootSignatureDesc;
-    computeRootSignatureDesc.Init_1_1((UINT)computeRootParameters.size(), computeRootParameters.data());
-#endif
+        computeRootParameters[0].InitAsDescriptorTable(2, ranges);
+        computeRootSignatureDesc.Init_1_1((UINT)computeRootParameters.size(),
+            computeRootParameters.data());
+    }
+    else
+    {
+        // Prepare Root
+        computeRootParameters.resize(hd->inputs.size() + hd->outputs.size());
+        for (int i = 0; i < hd->inputs.size(); ++i)
+            computeRootParameters[i].InitAsShaderResourceView(i);
+        for (int i = 0; i < hd->outputs.size(); ++i)
+            computeRootParameters[hd->inputs.size() + i].InitAsUnorderedAccessView(i);
+        computeRootSignatureDesc.Init_1_1((UINT)computeRootParameters.size(), computeRootParameters.data());
+    }
 
     ComPtr<ID3DBlob> signature;
     ComPtr<ID3DBlob> error;
@@ -401,20 +404,20 @@ void* dxStreamCreate()
     IFE(device.pDevice->CreateCommandList(0, device.CommandListType, pStream->pCmdAllocator.Get(), nullptr, IID_PPV_ARGS(&pStream->pCmdList)));
     pStream->pCmdList->Close(); // Close it and then reset it with pStream->Reset().
 
-#ifdef _USE_DESCRIPTOR_HEAP_
-    // Create per-stream descriptor heap.
-    // const UINT MAX_HEAP_SIZE = (1U << 20);
-    // Resource binding tier1/2 devices and some of the tier3 devices (e.g. NVIDIA Turing GPUs) DO-NOT support descriptor heap size larger than 1000000.
-    const UINT MAX_HEAP_SIZE = 65536;
-    D3D12_DESCRIPTOR_HEAP_DESC desc;
-    memset(&desc, 0, sizeof(desc));
-    ZeroMemory(&desc, sizeof(desc));
-    desc.NumDescriptors = MAX_HEAP_SIZE;
-    desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-    IFE(device.pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&pStream->pDescHeap)));
-#endif
-
+    if (_USE_DESCRIPTOR_HEAP_)
+    {
+        // Create per-stream descriptor heap.
+        // const UINT MAX_HEAP_SIZE = (1U << 20);
+        // Resource binding tier1/2 devices and some of the tier3 devices (e.g. NVIDIA Turing GPUs) DO-NOT support descriptor heap size larger than 1000000.
+        const UINT MAX_HEAP_SIZE = 65536;
+        D3D12_DESCRIPTOR_HEAP_DESC desc;
+        memset(&desc, 0, sizeof(desc));
+        ZeroMemory(&desc, sizeof(desc));
+        desc.NumDescriptors = MAX_HEAP_SIZE;
+        desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+        desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+        IFE(device.pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&pStream->pDescHeap)));
+    }
     pStream->Reset();
     return pStream;
 }
@@ -588,54 +591,58 @@ int dxShaderLaunchAsync(void* hShader, void** buffers, void* hStream)
     pStream->pCmdList->SetComputeRootSignature(hd->pRootSignature.Get());
     pStream->pCmdList->SetPipelineState(hd->pPSO.Get());
 
-#ifdef _USE_DESCRIPTOR_HEAP_
-    auto handleCPU = pStream->pDescHeap->GetCPUDescriptorHandleForHeapStart();
-    auto handleGPU = pStream->pDescHeap->GetGPUDescriptorHandleForHeapStart();
-    auto nStep = device.pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-    handleCPU.ptr += pStream->descIdxOffset * nStep;
-    handleGPU.ptr += pStream->descIdxOffset * nStep;
-    pStream->descIdxOffset += (uint32_t)hd->inputs.size() + (uint32_t)hd->outputs.size();
-
-    // Create SRV and UAVs at shader launch time.
-    // A higher performance solution may be pre-create it in CPU desc heaps and then copy the desc to GPU heaps in realtime.
-    for (size_t i = 0; i < hd->inputs.size(); ++i)
+    if (_USE_DESCRIPTOR_HEAP_)
     {
-        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
-        ZeroMemory(&srvDesc, sizeof(srvDesc));
-        srvDesc.Format = DXGI_FORMAT_UNKNOWN;
-        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-        assert(offsets[i] % (uint32_t)hd->inputs[i].TypeSize() == 0);
-        srvDesc.Buffer.FirstElement = offsets[i] / (uint32_t)hd->inputs[i].TypeSize();
-        srvDesc.Buffer.NumElements = (uint32_t)hd->inputs[i].NumElements();
-        srvDesc.Buffer.StructureByteStride = (uint32_t)hd->inputs[i].TypeSize();
-        srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        auto handleCPU = pStream->pDescHeap->GetCPUDescriptorHandleForHeapStart();
+        auto handleGPU = pStream->pDescHeap->GetGPUDescriptorHandleForHeapStart();
+        auto nStep = device.pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-        device.pDevice->CreateShaderResourceView(((dx_buffer_t*)devicePtrs[i])->handle.Get(), &srvDesc, handleCPU);
-        handleCPU.ptr += nStep;
+        handleCPU.ptr += pStream->descIdxOffset * nStep;
+        handleGPU.ptr += pStream->descIdxOffset * nStep;
+        pStream->descIdxOffset += (uint32_t)hd->inputs.size() + (uint32_t)hd->outputs.size();
+
+        // Create SRV and UAVs at shader launch time.
+        // A higher performance solution may be pre-create it in CPU desc heaps and then copy the desc to GPU heaps in realtime.
+        for (size_t i = 0; i < hd->inputs.size(); ++i)
+        {
+            D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
+            ZeroMemory(&srvDesc, sizeof(srvDesc));
+            srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+            assert(offsets[i] % (uint32_t)hd->inputs[i].TypeSize() == 0);
+            srvDesc.Buffer.FirstElement = offsets[i] / (uint32_t)hd->inputs[i].TypeSize();
+            srvDesc.Buffer.NumElements = (uint32_t)hd->inputs[i].NumElements();
+            srvDesc.Buffer.StructureByteStride = (uint32_t)hd->inputs[i].TypeSize();
+            srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+            device.pDevice->CreateShaderResourceView(((dx_buffer_t*)devicePtrs[i])->handle.Get(), &srvDesc, handleCPU);
+            handleCPU.ptr += nStep;
+        }
+        for (size_t i = 0; i < hd->outputs.size(); ++i)
+        {
+            D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc;
+            ZeroMemory(&uavDesc, sizeof(uavDesc));
+            uavDesc.Format = DXGI_FORMAT_UNKNOWN;
+            uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+            assert(offsets[hd->inputs.size() + i] % (uint32_t)hd->outputs[i].TypeSize() == 0);
+            uavDesc.Buffer.FirstElement = offsets[hd->inputs.size() + i] / (uint32_t)hd->outputs[i].TypeSize();
+            uavDesc.Buffer.NumElements = (uint32_t)hd->outputs[i].NumElements();
+            uavDesc.Buffer.StructureByteStride = (uint32_t)hd->outputs[i].TypeSize();
+            device.pDevice->CreateUnorderedAccessView(((dx_buffer_t*)devicePtrs[hd->inputs.size() + i])->handle.Get(), nullptr, &uavDesc, handleCPU);
+            handleCPU.ptr += nStep;
+        }
+
+        pStream->pCmdList->SetComputeRootDescriptorTable(0, handleGPU);
     }
-    for (size_t i = 0; i < hd->outputs.size(); ++i)
+    else
     {
-        D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc;
-        ZeroMemory(&uavDesc, sizeof(uavDesc));
-        uavDesc.Format = DXGI_FORMAT_UNKNOWN;
-        uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
-        assert(offsets[hd->inputs.size() + i] % (uint32_t)hd->outputs[i].TypeSize() == 0);
-        uavDesc.Buffer.FirstElement = offsets[hd->inputs.size() + i] / (uint32_t)hd->outputs[i].TypeSize();
-        uavDesc.Buffer.NumElements = (uint32_t)hd->outputs[i].NumElements();
-        uavDesc.Buffer.StructureByteStride = (uint32_t)hd->outputs[i].TypeSize();
-        device.pDevice->CreateUnorderedAccessView(((dx_buffer_t*)devicePtrs[hd->inputs.size() + i])->handle.Get(), nullptr, &uavDesc, handleCPU);
-        handleCPU.ptr += nStep;
+
+        for (uint32_t i = 0; i < hd->inputs.size(); ++i)
+            pStream->pCmdList->SetComputeRootShaderResourceView(i, ((dx_buffer_t*)devicePtrs[i])->handle.Get()->GetGPUVirtualAddress() + offsets[i]);
+        for (uint32_t i = 0; i < hd->outputs.size(); ++i)
+            pStream->pCmdList->SetComputeRootUnorderedAccessView((UINT)hd->inputs.size() + i, ((dx_buffer_t*)devicePtrs[hd->inputs.size() + i])->handle.Get()->GetGPUVirtualAddress() + offsets[hd->inputs.size() + i]);
     }
-
-    pStream->pCmdList->SetComputeRootDescriptorTable(0, handleGPU);
-#else
-
-    for (uint32_t i = 0; i < hd->inputs.size(); ++i)
-        pStream->pCmdList->SetComputeRootShaderResourceView(i, ((dx_buffer_t*)devicePtrs[i])->handle.Get()->GetGPUVirtualAddress() + offsets[i]);
-    for (uint32_t i = 0; i < hd->outputs.size(); ++i)
-        pStream->pCmdList->SetComputeRootUnorderedAccessView((UINT)hd->inputs.size() + i, ((dx_buffer_t*)devicePtrs[hd->inputs.size() + i])->handle.Get()->GetGPUVirtualAddress() + offsets[hd->inputs.size() + i]);
-#endif
 
 #ifdef _USE_GPU_TIMER_
     int m_nTimerIndex = device.AllocTimerIndex();
