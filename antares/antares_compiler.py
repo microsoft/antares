@@ -22,6 +22,8 @@ from tvm.autotvm.task import ConfigEntity
 from antares.common import *
 from lang.generic import custom_dtypes, refactor_multiple_names
 
+compiler_path = os.path.dirname(os.path.abspath(__file__))
+
 AntaresGlobal.cleanup_funcs = []
 
 def cleanup_on_exit(signum, frame):
@@ -132,8 +134,8 @@ def do_compilation(compile_args, verbose=True):
 def codehub_db(compute_key, source_code=None, erase=False):
   compute_key = compute_key.split('##')[0].strip()
   digest = hashlib.sha256(compute_key.encode()).hexdigest()
-  os.system('mkdir -p ./codehub')
-  code_path = './codehub/%s.%s' % (digest, backend)
+  os.system('mkdir -p %s/../codehub' % compiler_path)
+  code_path = '%s/../codehub/%s.%s' % (compiler_path, digest, backend)
   if erase:
     try:
       os.remove(code_path)
@@ -643,7 +645,7 @@ def rest_service():
           task_step, task_expr = task_lists[0]
           clear_environ(task_expr, task_step)
           os.environ['HTTP_SERVICE'], _ = '', os.environ['HTTP_SERVICE']
-          os.spawnlp(os.P_NOWAIT, '/bin/bash', 'bash', '%s/run.sh' % os.path.dirname(os.path.abspath(__file__)))
+          os.spawnlp(os.P_NOWAIT, '/bin/bash', 'bash', '%s/run.sh' % compiler_path)
           os.environ['HTTP_SERVICE'] = _
       ioloop.add_timeout(time.time() + 5, lambda: scan_tasks(ioloop))
 
