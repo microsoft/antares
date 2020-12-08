@@ -3,6 +3,10 @@
 - Antares simplifies most TVM's low-level features, making it easier to use for DNN developers on Microsoft related platforms.
 - Antares follows "_One Language Syntax for All Platforms_" principle to reduce the description complexity on different platforms.
 
+## Documentation for Quick Start
+1. [Quick Start to install Antares for HLSL](platforms/c-hlsl/evaluator/AntaresEvalAgent)
+2. [Quick Start for Antares IR examples](AntaresIR.md)
+
 # Antares Functionality:
 - Antares can convert computing operators from your DNN models into low-level source codes of the target device (e.g. kernels, shaders, ..).
 - Antares can also automatically tune and optimize these DNN operators on end-to-end device using efficient mechanisms and algorithms.
@@ -170,7 +174,7 @@ After you commit the results, the Antares REST Server will detect this record an
 
 For DirectX12 platform, you could use remote mode to tune expressions. Compared to local tunning, there are two extra things to do:
 
-1) Start remote tuning server on the target machine, reference to [HLSL server](platforms/c-hlsl/evaluator/TestCompute_cs_5_0)
+1) Start remote tuning server on the target machine, reference to [HLSL server](platforms/c-hlsl/evaluator/AntaresEvalAgent)
 
 2) Add server host into the tunning expression
 ```sh

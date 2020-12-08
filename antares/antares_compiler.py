@@ -126,7 +126,8 @@ def compute_gflops(flop, t):
 def do_compilation(compile_args, verbose=True):
   if verbose:
     print('[Build (pid=%d)]' % os.getpid(), ' '.join(compile_args))
-  assert run_process_with_timeout(compile_args, krnl_compile_timeout), "Compilation failed for: Bad kernel code, or Time limit exceeded?\nFailure command: %s\n" % ' '.join(compile_args)
+  assert os.path.exists(compile_args[0]), "Compiler program `%s` is not found." % compile_args[0]
+  assert run_process_with_timeout(compile_args, krnl_compile_timeout), "Compilation failed for: Bad kernel code reported by native compiler.\nFailure command: %s\n" % ' '.join(compile_args)
 
 def codehub_db(compute_key, source_code=None, erase=False):
   compute_key = compute_key.split('##')[0].strip()
