@@ -87,7 +87,9 @@ def translate_code(code, config):
     for buf in global_arg_props['_out']:
       outp_args.append('-'.join([str(x) for x in buf['shape']]) + '/' + buf['dtype'] + '/' + buf['name'])
 
-    header_meta = '///' + ','.join(inp_args) + ':' + ','.join(outp_args) + '\n// BACKEND = %s\n' % backend
+    device_code = os.environ.get('DEVICE_NAME', '')
+    device_code = device_code if device_code else 'default'
+    header_meta = '///' + ','.join(inp_args) + ':' + ','.join(outp_args) + '\n// BACKEND = %s (%s)\n' % (backend, device_code)
     properties = "// CONFIG: %s\n// COMPUTE_V1: %s\n" % (config.strip() if isinstance(config, str) else '', os.environ['COMPUTE_V1'])
     return header_meta + properties
 
