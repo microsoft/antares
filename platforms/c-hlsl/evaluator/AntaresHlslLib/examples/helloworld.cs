@@ -66,33 +66,39 @@ void CSMain(uint3 threadIdx: SV_GroupThreadID, uint3 blockIdx: SV_GroupID, uint3
     output0[(((((((int)blockIdx.x) * 16384) + (vthread_s * 128)) + (((int)threadIdx.x) * 4)) + 3))] = (input0[(((((((int)blockIdx.x) * 16384) + (vthread_s * 128)) + (((int)threadIdx.x) * 4)) + 3))] + input1[(((((((int)blockIdx.x) * 16384) + (vthread_s * 128)) + (((int)threadIdx.x) * 4)) + 3))]);
   }
 }";
+            // Load and Compile shaders
             var hShader = dxShaderLoad(antares_code);
             if (hShader == IntPtr.Zero)
                 throw new Exception("Invalid Shader Source for Compilation.");
 
-            //var d_input0 = dxMemAlloc(524288 * sizeof(float));
-            //var d_input1 = dxMemAlloc(524288 * sizeof(float));
-            var d_input0 = dxMemAlloc(524288 * sizeof(float) * 2);
+            // Allocate device memory for inputs and outputs
+            var d_input0 = dxMemAlloc(524288 * sizeof(float) * 3);
             var d_input1 = IntPtr.Add(d_input0, 524288 * sizeof(float));
-            var d_output0 = dxMemAlloc(524288 * sizeof(float));
+            var d_output0 = IntPtr.Add(d_input1, 524288 * sizeof(float));
 
             var h_input0 = new float[524288];
             var h_input1 = new float[524288];
             var h_output0 = new float[524288];
 
+            // Initialize input data in host memory
             for (int x = 0; x < h_input0.Length; ++x)
               h_input0[x] = 1;
             for (int x = 0; x < h_input1.Length; ++x)
               h_input1[x] = 2;
 
+            // Initialize input data in device memory
             dxMemcpyHtoDAsync(d_input0, Marshal.UnsafeAddrOfPinnedArrayElement(h_input0, 0), 524288 * sizeof(float), IntPtr.Zero);
             dxMemcpyHtoDAsync(d_input1, Marshal.UnsafeAddrOfPinnedArrayElement(h_input1, 0), 524288 * sizeof(float), IntPtr.Zero);
 
+            // Execute the shader with device memory arguments
             dxShaderLaunchAsync(hShader, new IntPtr[]{d_input0, d_input1, d_output0}, IntPtr.Zero);
 
+            // Copy result from device memory to host memory
             dxMemcpyDtoHAsync(Marshal.UnsafeAddrOfPinnedArrayElement(h_output0, 0), d_output0, 524288 * sizeof(float), IntPtr.Zero);
+            // Wait for all to complete
             dxStreamSynchronize(IntPtr.Zero);
 
+            // Print the result in host memory
             // 1 + 2 == 3
             Console.WriteLine("Result = [" + h_output0[0] + ", " + h_output0[1] + ", .., " + h_output0[h_output0.Length - 1] + "]");
             return 0;
