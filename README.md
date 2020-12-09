@@ -4,8 +4,9 @@
 - Antares follows "_One Language Syntax for All Platforms_" principle to reduce the description complexity on different platforms.
 
 ## Documentation for Quick Start
-1. [Quick Start to install Antares for HLSL](platforms/c-hlsl/evaluator/AntaresEvalAgent)
-2. [Quick Start for Antares IR examples](AntaresIR.md)
+1. [Quick Start to install Antares for DirectX12](platforms/c-hlsl/evaluator/AntaresEvalAgent)
+2. [Quick Start to write A + B shaders for DirectX12 using CUDA-like interfaces](platforms/c-hlsl/evaluator/AntaresHlslLib/examples)
+3. [Quick Start for Antares IR examples](AntaresIR.md)
 
 # Antares Functionality:
 - Antares can convert computing operators from your DNN models into low-level source codes of the target device (e.g. kernels, shaders, ..).
