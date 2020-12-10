@@ -60,13 +60,17 @@ def generate_source_file(kernel_code):
 
     # Input and output.
     type_converter = {
-        "int32": "int",
+        "float16": "half",
         "float32": "float",
+        "float64": "double",
         "int8": "char",
+        "int16": "short",
+        "int32": "int",
+        "int64": "long",
     }
     main_func_body = ""
-    input_types = [];
-    output_types = [];
+    input_types = []
+    input_byte_size = []
     for i, input in enumerate(inputs):
         shape, type, name = input.split('/')
         dims = list(filter(None, shape.split('-')))
@@ -75,21 +79,28 @@ def generate_source_file(kernel_code):
             size *= int(dim)
         idx = type.find("@")
         if idx >= 0:
-            input_types.append(type[:idx])
             bits = int(type[idx + 1:])
-            type = "byte"
+            type = "int8"
             size = size * bits // 8
+            input_byte_size.append(size)
         else:
-            input_types.append(type_converter[type])
+            input_byte_size.append(size * int(''.join(filter(str.isdigit, type))) // 8)
         if not type in type_converter:
             return False, rank
+        input_types.append(type_converter[type])
+
         main_func_body += (type_converter[type] + '* input' + str(i) + ' = new ' + type_converter[type] + '[' + str(int(size)) + '];\n')
-        main_func_body += ('for( int i = 0; i < ' + str(int(size)) + '; ++i) {\n')
-        if idx >= 0:
-            main_func_body += ('    input{}[i] = 0;\n'.format(i))
-        else:
+        main_func_body += ('assert(' + str(input_byte_size[-1]) + ' % sizeof(int) == 0);\n')
+        if type == 'int32' or type == 'float32':
+            main_func_body += ('for( int i = 0; i < ' + str(int(size)) + '; ++i) {\n')
             main_func_body += ('    input{}[i] = ({} + 1 + i) % 71;\n'.format(i, i))
+        else:
+            main_func_body += ('for( int i = 0; i < ' + str(input_byte_size[-1]) + ' / sizeof(int); ++i) {\n')
+            main_func_body += ('    ((int*)input{})[i] = ({} + 1 + i) % 71;\n'.format(i, i))
         main_func_body += ('}\n')
+
+    output_types = []
+    output_byte_size = []
     for i, output in enumerate(outputs):
         shape, type, name = output.split('/')
         dims = list(filter(None, shape.split('-')))
@@ -98,14 +109,15 @@ def generate_source_file(kernel_code):
             size *= int(dim)
         idx = type.find("@")
         if idx >= 0:
-            output_types.append(type[:idx])
             bits = int(type[idx + 1:])
-            type = "byte"
+            type = "int8"
             size = size * bits // 8
+            output_byte_size.append(size)
         else:
-            output_types.append(type_converter[type])
+            output_byte_size.append(size * int(''.join(filter(str.isdigit, type))) // 8)
         if not type in type_converter:
             return False, rank
+        output_types.append(type_converter[type])
         main_func_body += (type_converter[type]+ '* output' + str(i) + ' = new ' + type_converter[type]+ '[' + str(int(size)) + '];\n\n')
 
     # Threadpool.
@@ -161,13 +173,14 @@ def generate_source_file(kernel_code):
     main_func_body += ('double ans;\n')
     for i, output in enumerate(outputs):
         shape, type, name = output.split('/')
-        dims = list(filter(None, shape.split('-')))
-        size = 1
-        for dim in dims:
-            size *= int(dim)
         main_func_body += ('ans = 0;\n')
-        main_func_body += ('for( int i = 0; i < ' + str(size) + '; ++i) {\n')
-        main_func_body += ('    ans += (i + 1) % 83 * float(output' + str(i) + '[i]);\n') 
+        main_func_body += ('assert(' + str(output_byte_size[i]) + ' % sizeof(int) == 0);\n')
+        if type == 'int32':
+            main_func_body += ('for( int i = 0; i < ' + str(output_byte_size[i]) + ' / sizeof(int); ++i) {\n')
+            main_func_body += ('    ans += (i + 1) % 83 * (((int*)output' + str(i) + ')[i]);\n') 
+        else:
+            main_func_body += ('for( int i = 0; i < ' + str(output_byte_size[i]) + ' / sizeof(float); ++i) {\n')
+            main_func_body += ('    ans += (i + 1) % 83 * (((float*)output' + str(i) + ')[i]);\n') 
         main_func_body += ('}\n')
         main_func_body += ('printf("- K/' + str(i) + ' = %.10e\\n", ans);\n')
 
@@ -177,6 +190,7 @@ def generate_source_file(kernel_code):
 #include <iostream>
 #include <vector>
 #include <chrono>
+#include <cassert>
 #include <sys/resource.h>
 #include "threadpool.h"
 
