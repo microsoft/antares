@@ -31,8 +31,10 @@ def local_get_dir_file(rel_file, dir_sid=None):
 
 def run_process_with_timeout(args, timeout=None, envs=None):
   try:
+    if timeout is not None:
+      args = ['/usr/bin/timeout', str(timeout)] + args
     proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=envs)
-    retcode = proc.wait(timeout=timeout)
+    retcode = proc.wait()
     return retcode == 0
   except subprocess.TimeoutExpired:
     print('Timed out - killing', proc.pid)
