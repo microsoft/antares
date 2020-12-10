@@ -77,7 +77,7 @@ def type_to_c(dtype):
   idx = dtype.find('@')
   if idx >= 0:
     return dtype[:idx]
-  native_types = {'float32': 'float', 'int32': 'int', 'int8': 'char', 'int64': 'long', 'float64': 'double'}
+  native_types = {'float32': 'float', 'int32': 'int', 'int16': 'short', 'float16': 'half', 'int8': 'char', 'int64': 'long', 'float64': 'double'}
   if dtype in native_types:
     return native_types[dtype]
   raise Exception("Unhandled ctype mapping case: %s" % dtype)
