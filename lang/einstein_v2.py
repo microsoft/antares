@@ -57,54 +57,74 @@ class OpTensor:
     # Calculation Ops
     def __mul__(self, other):
         other = OpTensor.parse(other)
+        if other._op == 'const' and other._value == 1:
+            return self
+        if self._op == 'const' and self._value == 1:
+            return other
         return OpTensor('op', {"name": "*", "inputs": [self, other]}, self._dtype, self._flopbase + other._flopbase + self.filter_flop(other))
 
     def __rmul__(self, other):
         other = OpTensor.parse(other)
-        return OpTensor('op', {"name": "*", "inputs": [other, self]}, self._dtype, self._flopbase + other._flopbase + self.filter_flop(other))
+        return other.__mul__(self)
 
     def __truediv__(self, other):
         other = OpTensor.parse(other)
         op_name = '//' if self._dtype == 'int32' and other._dtype == 'int32' else '/'
+        if other._op == 'const' and other._value == 1:
+            return self
         return OpTensor('op', {"name": op_name, "inputs": [self, other]}, self._dtype, self._flopbase + other._flopbase + self.filter_flop(other))
 
     def __rtruediv__(self, other):
         other = OpTensor.parse(other)
-        op_name = '//' if self._dtype == 'int32' and other._dtype == 'int32' else '/'
-        return OpTensor('op', {"name": op_name, "inputs": [other, self]}, self._dtype, self._flopbase + other._flopbase + self.filter_flop(other))
+        return other.__truediv__(self)
 
     def __floordiv__(self, other):
         other = OpTensor.parse(other)
         assert self._dtype == 'int32' and other._dtype == 'int32'
+        if other._op == 'const' and other._value == 1:
+            return self
         return OpTensor('op', {"name": "//", "inputs": [self, other]}, self._dtype, self._flopbase + other._flopbase + self.filter_flop(other))
 
     def __rfloordiv__(self, other):
         other = OpTensor.parse(other)
-        assert self._dtype == 'int32' and other._dtype == 'int32'
-        return OpTensor('op', {"name": "//", "inputs": [other, self]}, self._dtype, self._flopbase + other._flopbase + self.filter_flop(other))
+        return other.__floordiv__(self)
 
     def __mod__(self, other):
         other = OpTensor.parse(other)
+        if other._op == 'const':
+            assert other._dtype == 'int32'
+            if other._value == 1:
+                return OpTensor.parse(int(0))
+            if self._op == 'axis':
+                assert self._value in explicit_range and explicit_range[self._value] is not None
+                if explicit_range[self._value] <= other._value:
+                    return OpTensor.parse(int(0))
         return OpTensor('op', {"name": "%", "inputs": [self, other]}, self._dtype, self._flopbase + other._flopbase + self.filter_flop(other))
 
     def __add__(self, other):
         other = OpTensor.parse(other)
+        if other._op == 'const' and other._value == 0:
+            return self
+        if self._op == 'const' and self._value == 0:
+            return other
         return OpTensor('op', {"name": "+", "inputs": [self, other]}, self._dtype, self._flopbase + other._flopbase + self.filter_flop(other))
-
-    def __sub__(self, other):
-        other = OpTensor.parse(other)
-        return OpTensor('op', {"name": "-", "inputs": [self, other]}, self._dtype, self._flopbase + other._flopbase + self.filter_flop(other))
 
     def __radd__(self, other):
         other = OpTensor.parse(other)
-        return OpTensor('op', {"name": "+", "inputs": [other, self]}, self._dtype, self._flopbase + other._flopbase + self.filter_flop(other))
+        return other.__radd__(self)
+
+    def __sub__(self, other):
+        other = OpTensor.parse(other)
+        if other._op == 'const' and other._value == 0:
+            return self
+        return OpTensor('op', {"name": "-", "inputs": [self, other]}, self._dtype, self._flopbase + other._flopbase + self.filter_flop(other))
 
     def __rsub__(self, other):
         other = OpTensor.parse(other)
-        return OpTensor('op', {"name": "-", "inputs": [other, self]}, self._dtype, self._flopbase + other._flopbase + self.filter_flop(other))
+        return other.__sub__(self)
 
     def __neg__(self):
-        return OpTensor('op', {"name": "-", "inputs": [OpTensor.parse(0), self]}, self._dtype, self._flopbase + self.filter_flop(self))
+        return OpTensor.parse(0).cast(self._dtype).__sub__(self)
 
     # Relation Ops
     def __lt__ (self, other):
@@ -275,7 +295,10 @@ def emit_tvm_body(node, props):
       _str = _str[:-2] + ']'
     return _str
   elif node._op == 'axis':
-    return warp_axis(node._value)
+    axis_name = warp_axis(node._value)
+    if hasattr(node, '_func'):
+      axis_name = node._func(axis_name)
+    return axis_name
   elif node._op == 'op':
     op_name = node._value["name"]
     op_input_size = len(node._value["inputs"])
@@ -438,6 +461,8 @@ def emit_tvm_ir_v2(exprss, input_dict, extra_outputs):
     return output_begin + reduce_pattern % basic_body + output_end
 
   ll_irs = [emit_input_body(input_dict)]
+  if 'init' in ast:
+    ll_irs.append(ast['init'])
   for ast in ast_seq:
     loops_def, pattern = emit_reduce_body(ast)
     ll_irs.append(loops_def + emit_output_body(ast, pattern))
