@@ -111,7 +111,7 @@ class OpTensor:
 
     def __radd__(self, other):
         other = OpTensor.parse(other)
-        return other.__radd__(self)
+        return other.__add__(self)
 
     def __sub__(self, other):
         other = OpTensor.parse(other)
