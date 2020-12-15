@@ -187,8 +187,8 @@ class OpTensor:
 
 def parse_to_ast(expr, input_dict={}):
   expr = expr.strip().replace('`', '"')
-  if expr.find('[]') >= 0:
-    expr = re.sub('\[ *\]', '[Scaler]', expr)
+  if re.search('\[ *\]', expr):
+    expr = re.sub('\[ *\]', '[0]', expr)
     if expr.rfind('where') == -1:
       expr += ' where Scaler in 1'
     else:
@@ -211,6 +211,7 @@ def parse_to_ast(expr, input_dict={}):
             break
       if ax_name not in explicit_range:
         explicit_range[ax_name] = None
+  exec("_id = OpTensor('axis', '_id', 'int32')")
   for k in explicit_range:
     exec("%s = OpTensor('axis', k, 'int32')" % k)
 
@@ -248,6 +249,8 @@ def parse_to_ast(expr, input_dict={}):
   # Distinguish data/reduce axes according to lval
   for x in lval[lval.index('[') + 1:lval.rindex(']')].split(','):
     x = x.strip()
+    if x == '0':
+      x = 'Scaler'
     props['data_axes'].append(x)
   for x in explicit_range:
     if x not in props['data_axes']:
@@ -279,8 +282,36 @@ def const(other):
   return OpTensor.parse(other)
 
 def warp_axis(ax_name):
-  assert(ax_name[0].isupper())
+  assert(ax_name[0].isupper() or ax_name == '_id')
   return ax_name
+
+def emit_antares_ir(ast):
+  def _emit(node):
+    if node._op == 'const':
+      return 'const(%s)' % node._value
+    elif node._op == 'axis':
+      if hasattr(node, '_func'):
+        return node._func(node._value)
+      return node._value
+    elif node._op == 'op':
+      if len(node._value['inputs']) == 2:
+        return '(%s) %s (%s)' % (_emit(node._value['inputs'][0]), node._value['name'], _emit(node._value['inputs'][1]))
+      raise
+    elif node._op == 'get_item':
+      return '%s[%s]' % (node._value['tensor']._value, ', '.join([_emit(x) for x in node._value['index']]))
+    elif node._op == 'call':
+      if len(node._value['inputs']) == 1:
+        return '%s.call(`%s`, dtype=`%s`)' % (_emit(node._value['inputs'][0]), node._value['name'], node._dtype)
+      return '(%s).call(`%s`, [%s], dtype=`%s`)' % (_emit(node._value['inputs'][0]), node._value['name'], ', '.join([_emit(x) for x in node._value['inputs'][1:]]), node._dtype)
+    elif node._op == 'when':
+      if len(node._value['if']) == 0:
+        return '(%s)' % _emit(node._value['true'])
+      return '(%s).when([%s], %s)' % (_emit(node._value['true']), ', '.join([_emit(x) for x in node._value['if']]), _emit(node._value['false']))
+    else:
+      raise Exception("Unhanled reverse-emit explanation: %s" % node._op)
+  lval = '%s[%s]' % (ast['props']['output_name'], ', '.join([x['name'] for x in ast['props']['data_axes']]))
+  comp_type = '%s=%s' % (ast['props']['reduce_type'] if ast['props']['reduce_type'] else '', '!' if ast['props']['reduce_type'] else '')
+  return '%s %s %s where %s;' % (lval, comp_type, _emit(ast['root']), ', '.join(['%s in %d' % (x['name'], x['range']) for x in ast['props']['data_axes'] + ast['props']['reduce_axes']]))
 
 def emit_tvm_body(node, props):
   if node._op == 'const':
@@ -422,7 +453,7 @@ def emit_tvm_ir_v2(exprss, input_dict, extra_outputs):
 
   # Generate LL_IR body for ast_seq
   def emit_input_body(input_dict):
-    input_body = ''
+    input_body = '_id = input("_id", [1], dtype="int32")[0]; '
     for key in input_dict:
       input_info = input_dict[key]
       input_body += '%s = input("%s", %s, dtype="%s"); ' % (key, key, input_info['shape'], input_info['dtype'])
@@ -461,8 +492,6 @@ def emit_tvm_ir_v2(exprss, input_dict, extra_outputs):
     return output_begin + reduce_pattern % basic_body + output_end
 
   ll_irs = [emit_input_body(input_dict)]
-  if 'init' in ast:
-    ll_irs.append(ast['init'])
   for ast in ast_seq:
     loops_def, pattern = emit_reduce_body(ast)
     ll_irs.append(loops_def + emit_output_body(ast, pattern))
