@@ -15,8 +15,9 @@ kwargs = {'dtype': dtype,
           'requires_grad': False}
 
 x = torch.randn(1024, 512, **kwargs)
-y = torch.randn(1024, 512, **kwargs)
 
 custom_op = CustomOp(os.environ.get('ANTARES_ADDR', 'localhost:8880')).to(device, dtype)
-outputs = custom_op('output0[N, M] = input0[N, M] * input1[N, M] + 1234', [x, y])
-print(outputs)
+
+inputs = {'data': x}
+outputs = custom_op('reduce_sum_0[N] +=! data[N, M]', values=list(inputs.values()), keys=list(inputs.keys()))
+print('The result of tensor `%s` is:\n%s' % (custom_op._output_names[0], outputs))

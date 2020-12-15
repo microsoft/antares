@@ -58,6 +58,7 @@ This example shows you an easy way to quickly add custom operators in Tensorflow
 BACKEND=c-cuda make rest-server
 ```
 
+- Tensorflow Frontend Only:
 ```py
 # For Tensorflow CUDA frontend, just execute the following python script:
 
@@ -70,10 +71,10 @@ op = antares.make_op('reduce_sum_0[N] +=! data[N, M]', {'data': x})
 
 with tf.Session() as sess:
   print('The result of tensor `%s` is:\n%s' % (op._output_names[0], sess.run(op)))
-  sess.run([op] * 100)
 
 ```
 
+- Pytorch Frontend Only:
 ```py
 # For Pytorch frontend, just execute the following python script:
 
@@ -89,11 +90,13 @@ kwargs = {'dtype': dtype,
           'requires_grad': False}
 
 x = torch.randn(1024, 512, **kwargs)
-y = torch.randn(1024, 512, **kwargs)
 
-outputs = custom_op('output0[N, M] = input0[N, M] * input1[N, M] + 1234', [x, y])
+custom_op = CustomOp().to(device, dtype)
 
-print(outputs)
+inputs = {'data': x}
+outputs = custom_op('reduce_sum_0[N] +=! data[N, M]', values=list(inputs.values()), keys=list(inputs.keys()))
+print('The result of tensor `%s` is:\n%s' % (custom_op._output_names[0], outputs))
+
 ```
 
 If you want the operator you just extended to run more efficiently, you can consider to take a look at "How to Tune Expressions" sections below.
