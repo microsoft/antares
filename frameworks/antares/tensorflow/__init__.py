@@ -39,16 +39,19 @@ def make_op(antares_ir, inputs, server_addr=None):
   if server_addr is None:
     server_addr = __default_server_addr__
   input_dict, kwargs = {}, {}
-  for i in range(len(inputs)):
-    dtype = str(inputs[i].dtype.name)
-    input_dict['input%d' % i] = {
+  if isinstance(inputs, list):
+    inputs = dict([(f'input{i}', inputs[i]) for i in range(len(inputs))])
+  for k in inputs:
+    assert k[0].islower(), "Tensor name in Antares IR must start with lower case letter."
+    dtype = str(inputs[k].dtype.name)
+    input_dict[k] = {
       'dtype': dtype[:-4] if dtype.endswith('_ref') else dtype,
-      'shape': [int(x) for x in inputs[i].shape]
+      'shape': [int(x) for x in inputs[k].shape]
     }
-    kwargs['input%d' % i] = inputs[i]
+    kwargs[k] = inputs[k]
 
   input_dict = json.dumps(input_dict)
-  expression = '- einstein_v2("%s", input_dict=%s)' % (antares_ir.replace('"', '\\"'), input_dict)
+  expression = '- einstein_v2("%s", input_dict=%s)' % (antares_ir.replace('"', '`'), input_dict)
   print('+ [Antares Op]', expression)
 
   h = http_client.HTTPConnection(server_addr, timeout=10)
@@ -105,6 +108,7 @@ def make_op(antares_ir, inputs, server_addr=None):
   kwargs['meta_outputs'] = meta_outputs
   result = antares_func(**kwargs)
 
+  result._output_names = [x.split('/')[-1].strip() for x in meta_outputs]
   result._antares_props = {
     'COMPUTE_V1': expression
   }
