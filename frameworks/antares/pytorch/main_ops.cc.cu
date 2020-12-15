@@ -32,6 +32,7 @@
 #define cudaStream_t hipStream_t
 #define cudaMemcpyAsync hipMemcpyAsync
 #define cudaMemcpyHostToDevice hipMemcpyHostToDevice
+#define cudaMemcpyDeviceToHost hipMemcpyDeviceToHost
 #define cudaStreamSynchronize hipStreamSynchronize
 #define cudaEvent_t hipEvent_t
 #define cudaEventCreateWithFlags hipEventCreateWithFlags
@@ -84,7 +85,7 @@ std::vector<torch::Tensor> custom_op_forward(std::vector<torch::Tensor> inputs,
     hmod = it->second.first, hfunc = it->second.second;
 
   int bx, by, bz, tx, ty, tz;
-  int i, pos, next;
+  int pos, next;
   pos = source.find("// [thread_extent] blockIdx.x"), next = source.find("= ", pos + 1), bx = (pos >= 0 && next >= 0) ? std::atoi(source.c_str() + next + 2) : 1;
   pos = source.find("// [thread_extent] blockIdx.y"), next = source.find("= ", pos + 1), by = (pos >= 0 && next >= 0) ? std::atoi(source.c_str() + next + 2) : 1;
   pos = source.find("// [thread_extent] blockIdx.z"), next = source.find("= ", pos + 1), bz = (pos >= 0 && next >= 0) ? std::atoi(source.c_str() + next + 2) : 1;
@@ -97,15 +98,8 @@ std::vector<torch::Tensor> custom_op_forward(std::vector<torch::Tensor> inputs,
   CHECK_EQ(true, (pos > 0 && next > 0));
   auto code_args = source.substr(next, pos - next) + ",";
   args.resize(meta_inputs.size() + meta_outputs.size()), p_args.resize(args.size());
-  for (i = pos = 0; next = code_args.find(',', pos), next >= 0; pos = next + 1, ++i) {
-    int at = code_args.rfind(' ', next) + 1;
-    auto arg_name = code_args.substr(at, next - at);
-    CHECK_NE(arg_name, "");
-    if (arg_name[0] == 'i')
-      p_args[i] = &args[std::atoi(arg_name.c_str() + 5)];
-    else
-      p_args[i] = &args[meta_inputs.size() + std::atoi(arg_name.c_str() + 6)];
-  }
+  for (int i = 0; i < args.size(); ++i)
+    p_args[i] = &args[i];
 
   std::vector<std::vector<int64_t>> output_shapes;
   output_shapes.clear();
