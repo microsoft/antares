@@ -65,12 +65,12 @@ import tensorflow as tf
 from tensorflow.contrib import antares
 
 x = tf.random.uniform([1024, 512])
-y = tf.random.uniform([1024, 512])
 
-op = antares.make_op('output0[N, M] = input0[N, M] * input1[N, M] + 1234', [x, y])
+op = antares.make_op('reduce_sum_0[N] +=! data[N, M]', {'data': x})
 
 with tf.Session() as sess:
-  print(sess.run(op))
+  print('The result of tensor `%s` is:\n%s' % (op._output_names[0], sess.run(op)))
+  sess.run([op] * 100)
 
 ```
 

@@ -40,6 +40,7 @@
 #define cudaStream_t hipStream_t
 #define cudaMemcpyAsync hipMemcpyAsync
 #define cudaMemcpyHostToDevice hipMemcpyHostToDevice
+#define cudaMemcpyDeviceToHost hipMemcpyDeviceToHost
 #define cudaStreamSynchronize hipStreamSynchronize
 #define cudaEvent_t hipEvent_t
 #define cudaEventCreateWithFlags hipEventCreateWithFlags
@@ -109,15 +110,8 @@ class MainOpKernel: public AsyncOpKernel {
     CHECK_EQ(true, (pos > 0 && next > 0));
     auto code_args = source.substr(next, pos - next) + ",";
     args.resize(meta_inputs.size() + meta_outputs.size()), p_args.resize(args.size());
-    for (i = pos = 0; next = code_args.find(',', pos), next >= 0; pos = next + 1, ++i) {
-      int at = code_args.rfind(' ', next) + 1;
-      auto arg_name = code_args.substr(at, next - at);
-      CHECK_NE(arg_name, "");
-      if (arg_name[0] == 'i')
-        p_args[i] = &args[std::atoi(arg_name.c_str() + 5)];
-      else
-        p_args[i] = &args[meta_inputs.size() + std::atoi(arg_name.c_str() + 6)];
-    }
+    for (int i = 0; i < p_args.size(); ++i)
+      p_args[i] = &args[i];
 
     output_shapes.clear();
     for (int y = 0; y < meta_outputs.size(); ++y) {
