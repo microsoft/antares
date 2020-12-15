@@ -295,20 +295,20 @@ def emit_antares_ir(ast):
       return node._value
     elif node._op == 'op':
       if len(node._value['inputs']) == 2:
-        return '(%s) %s (%s)' % (_emit(node._value['inputs'][0]), node._value['name'], _emit(node._value['inputs'][1]))
+        return '(%s %s %s)' % (_emit(node._value['inputs'][0]), node._value['name'], _emit(node._value['inputs'][1]))
       raise
     elif node._op == 'get_item':
       return '%s[%s]' % (node._value['tensor']._value, ', '.join([_emit(x) for x in node._value['index']]))
     elif node._op == 'call':
       if len(node._value['inputs']) == 1:
-        return '%s.call(`%s`, dtype=`%s`)' % (_emit(node._value['inputs'][0]), node._value['name'], node._dtype)
+        return '(%s).call(`%s`, dtype=`%s`)' % (_emit(node._value['inputs'][0]), node._value['name'], node._dtype)
       return '(%s).call(`%s`, [%s], dtype=`%s`)' % (_emit(node._value['inputs'][0]), node._value['name'], ', '.join([_emit(x) for x in node._value['inputs'][1:]]), node._dtype)
     elif node._op == 'when':
       if len(node._value['if']) == 0:
         return '(%s)' % _emit(node._value['true'])
       return '(%s).when([%s], %s)' % (_emit(node._value['true']), ', '.join([_emit(x) for x in node._value['if']]), _emit(node._value['false']))
     else:
-      raise Exception("Unhanled reverse-emit explanation: %s" % node._op)
+      raise Exception("Emit Antares IR: Unhanled reverse-emit op type: %s" % node._op)
   lval = '%s[%s]' % (ast['props']['output_name'], ', '.join([x['name'] for x in ast['props']['data_axes']]))
   comp_type = '%s=%s' % (ast['props']['reduce_type'] if ast['props']['reduce_type'] else '', '!' if ast['props']['reduce_type'] else '')
   return '%s %s %s where %s;' % (lval, comp_type, _emit(ast['root']), ', '.join(['%s in %d' % (x['name'], x['range']) for x in ast['props']['data_axes'] + ast['props']['reduce_axes']]))
