@@ -16,7 +16,7 @@ def no_trivial_ax_input(ast_seq, global_input_dict, global_output_dict):
       if ax['range'] == 1:
         ax_elim.append(ax['name'])
     ast['props']['reduce_axes'] = [x for x in ast['props']['reduce_axes'] if x['name'] not in ax_elim]
-    if i + 1 == len(ast_seq) and len(global_output_dict) == 1:
+    if len(ast_seq) == 1 and len(global_output_dict) == 1:
       ax_rebuld = [x for x in ast['props']['data_axes'] if x['name'] not in ax_elim]
       if ax_rebuld:
         ast['props']['data_axes'] = ax_rebuld

@@ -22,5 +22,6 @@ except FileExistsError:
 
 shutil.copyfile(root_path + '/__init__.py', dist_path + '/__init__.py')
 shutil.copyfile(root_path + '/main_ops.cc.in', dist_path + '/main_ops.cc.in')
+shutil.copyfile(root_path + '/communicate_ops.cc', dist_path + '/communicate_ops.cc')
 
 print("Finish Installation.")
