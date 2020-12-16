@@ -372,7 +372,7 @@ def walk_in_ast(node, func, args, parent, attr_id):
     if node._op == 'get_item':
       for i, ch in enumerate(node._value['index']):
         _walk(ch, node._value['index'], i)
-    elif node._op in ['op', 'call']:
+    elif node._op in ['op', 'call', 'cast']:
       for i, ch in enumerate(node._value['inputs']):
         _walk(ch, node._value['inputs'], i)
     elif node._op == 'when':
@@ -380,7 +380,7 @@ def walk_in_ast(node, func, args, parent, attr_id):
         _walk(ch, node._value['if'], i)
       _walk(node._value['true'], node._value, 'true')
       _walk(node._value['false'], node._value, 'false')
-    elif node._op in ['axis', 'const', 'cast']:
+    elif node._op in ['axis', 'const']:
       pass
     else:
       raise Exception('Unhandled node type in walk_in_ast(): %s' % node._op)
