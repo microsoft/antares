@@ -12,21 +12,26 @@ from tensorflow.python.platform import resource_loader
 from http import client as http_client
 import json, os, hashlib, shutil
 
-def get_tensorflow_antares_component(tf_module_path, op_name):
+def get_tensorflow_antares_component(tf_module_path, op_name, using_mpi=False):
   dist_path = tf.sysconfig.get_include() + '/..'
   abi_flag = tf.sysconfig.CXX11_ABI_FLAG
+  compiler = 'mpicc' if using_mpi else 'gcc'
   if os.system('ldd %s/libtensorflow_framework.so.1 2>/dev/null | grep -e libamdhip64 >/dev/null' % dist_path) == 0:
     with_cuda = "-DGOOGLE_CUDA -D__HIP_PLATFORM_HCC__=1 -I/opt/rocm/include -L/opt/rocm/lib -lamdhip64"
+    if using_mpi:
+      with_cuda += ' -lmpi_cxx -lrccl'
   else:
     with_cuda = "-DGOOGLE_CUDA -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -lcudart -lcuda"
+    if using_mpi:
+      with_cuda += ' -lmpi_cxx -lnccl'
 
   # Compile TF library
-  cmd = '''gcc -pthread -DNDEBUG -g -fwrapv -shared -O2 -g -fstack-protector-strong -Wformat -Werror=format-security -Wdate-time -D_FORTIFY_SOURCE=2 -fPIC \
+  cmd = '''%s -pthread -DNDEBUG -g -fwrapv -shared -O2 -g -fstack-protector-strong -Wformat -Werror=format-security -Wdate-time -D_FORTIFY_SOURCE=2 -fPIC \
     %s \
     -o %s.so -std=c++11 -fPIC -O2 -DOP_NAME='"%s"' \
     -I%s/include -L%s/ -l:libtensorflow_framework.so.1 \
     -I/usr/local %s \
-    -pthread -Wl,-rpath -Wl,--enable-new-dtags -D_GLIBCXX_USE_CXX11_ABI=%d''' % (tf_module_path, tf_module_path, op_name, dist_path, dist_path, with_cuda, abi_flag)
+    -pthread -Wl,-rpath -Wl,--enable-new-dtags -D_GLIBCXX_USE_CXX11_ABI=%d''' % (compiler, tf_module_path, tf_module_path, op_name, dist_path, dist_path, with_cuda, abi_flag)
 
   if os.system(cmd) != 0:
     raise Exception("Failed to compile the tensorflow plugins: %s" % cmd)
@@ -109,7 +114,46 @@ def make_op(antares_ir, inputs, server_addr=None):
   result = antares_func(**kwargs)
 
   result._output_names = [x.split('/')[-1].strip() for x in meta_outputs]
-  result._antares_props = {
-    'COMPUTE_V1': expression
-  }
   return result
+
+
+communicate_library = None
+
+def init_communicate_config():
+  global communicate_library
+  if communicate_library is None:
+    libcommunicate_path = get_tensorflow_antares_component(os.path.dirname(__file__) + '/communicate_ops.cc', 'AntaresCommunicate', using_mpi=True)
+    communicate_library = loader.load_op_library(libcommunicate_path)
+
+    from mpi4py import MPI
+    comm = MPI.COMM_WORLD
+    local = comm.Split_type(MPI.COMM_TYPE_SHARED)
+    rank, size, local_rank = comm.Get_rank(), comm.Get_size(), local.Get_rank()
+    MPI.COMM_WORLD.Barrier()
+    communicate_library.config = rank, size, local_rank
+
+  return communicate_library.config
+
+def communicate(comm_type, data, name=[]):
+  rank, size, local_rank = init_communicate_config()
+
+  dtype = str(data.dtype.name).split('_ref')[0]
+
+  if comm_type.startswith('all_reduce:'):
+    ops = comm_type[comm_type.index(':') + 1:]
+    [data] = communicate_library.nccl2_allreduce([data], data_type=dtype, reduce_type=ops)
+  elif comm_type.startswith('reduce_scatter:'):
+    original_shape = [int(x) for x in data.shape]
+    ops = comm_type[comm_type.index(':') + 1:]
+    [data] = communicate_library.nccl2_reducescatter([data], data_type=dtype, reduce_type=ops, node_size=size)
+    data = tf.reshape(data, [original_shape[0] // size] + original_shape[1:])
+  elif comm_type.startswith('all_gather:'):
+    original_shape = [int(x) for x in data.shape]
+    [data] = communicate_library.nccl2_allgather([data], data_type=dtype, reduce_type='', node_size=size)
+    data = tf.reshape(data, [original_shape[0] * size] + original_shape[1:])
+  else:
+    raise Exception(f"Unrecognized communication type: {comm_type}")
+
+  if name:
+    data._output_names = name
+  return data
