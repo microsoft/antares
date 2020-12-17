@@ -72,6 +72,10 @@ class OpTensor:
         op_name = '//' if self._dtype == 'int32' and other._dtype == 'int32' else '/'
         if other._op == 'const' and other._value == 1:
             return self
+        if other._op == 'const' and self._op == 'axis':
+            assert self._value in explicit_range and explicit_range[self._value] is not None
+            if op_name == '//' and explicit_range[self._value] < other._value:
+                return OpTensor.parse(int(0))
         return OpTensor('op', {"name": op_name, "inputs": [self, other]}, self._dtype, self._flopbase + other._flopbase + self.filter_flop(other))
 
     def __rtruediv__(self, other):
@@ -80,10 +84,7 @@ class OpTensor:
 
     def __floordiv__(self, other):
         other = OpTensor.parse(other)
-        assert self._dtype == 'int32' and other._dtype == 'int32'
-        if other._op == 'const' and other._value == 1:
-            return self
-        return OpTensor('op', {"name": "//", "inputs": [self, other]}, self._dtype, self._flopbase + other._flopbase + self.filter_flop(other))
+        return self.__truediv__(other)
 
     def __rfloordiv__(self, other):
         other = OpTensor.parse(other)
@@ -98,7 +99,7 @@ class OpTensor:
             if self._op == 'axis':
                 assert self._value in explicit_range and explicit_range[self._value] is not None
                 if explicit_range[self._value] <= other._value:
-                    return OpTensor.parse(int(0))
+                    return self
         return OpTensor('op', {"name": "%", "inputs": [self, other]}, self._dtype, self._flopbase + other._flopbase + self.filter_flop(other))
 
     def __add__(self, other):
