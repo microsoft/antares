@@ -16,6 +16,8 @@ def get_tensorflow_antares_component(tf_module_path, op_name, using_mpi=False):
   dist_path = tf.sysconfig.get_include() + '/..'
   abi_flag = tf.sysconfig.CXX11_ABI_FLAG
   compiler = 'mpicc' if using_mpi else 'gcc'
+  if os.path.exists(f'{tf_module_path}.so.{compiler}'):
+    return f'{tf_module_path}.so.{compiler}'
   if os.system('ldd %s/libtensorflow_framework.so.1 2>/dev/null | grep -e libamdhip64 >/dev/null' % dist_path) == 0:
     with_cuda = "-DGOOGLE_CUDA -D__HIP_PLATFORM_HCC__=1 -I/opt/rocm/include -L/opt/rocm/lib -lamdhip64"
     if using_mpi:
@@ -25,17 +27,17 @@ def get_tensorflow_antares_component(tf_module_path, op_name, using_mpi=False):
     if using_mpi:
       with_cuda += ' -lmpi_cxx -lnccl'
 
+  self_pid = os.getpid()
   # Compile TF library
-  cmd = '''%s -pthread -DNDEBUG -g -fwrapv -shared -O2 -g -fstack-protector-strong -Wformat -Werror=format-security -Wdate-time -D_FORTIFY_SOURCE=2 -fPIC \
-    %s \
-    -o %s.so -std=c++11 -fPIC -O2 -DOP_NAME='"%s"' \
-    -I%s/include -L%s/ -l:libtensorflow_framework.so.1 \
-    -I/usr/local %s \
-    -pthread -Wl,-rpath -Wl,--enable-new-dtags -D_GLIBCXX_USE_CXX11_ABI=%d''' % (compiler, tf_module_path, tf_module_path, op_name, dist_path, dist_path, with_cuda, abi_flag)
-
+  cmd = f'''{compiler} -pthread -DNDEBUG -g -fwrapv -shared -O2 -g -fstack-protector-strong -Wformat -Werror=format-security -Wdate-time -D_FORTIFY_SOURCE=2 -fPIC \
+    {tf_module_path} -o {tf_module_path}.so.{self_pid} -std=c++11 -fPIC -O2 -DOP_NAME='"{op_name}"' \
+    -I{dist_path}/include -L{dist_path}/ -l:libtensorflow_framework.so.1 -I/usr/local {with_cuda} \
+    -pthread -Wl,-rpath -Wl,--enable-new-dtags -D_GLIBCXX_USE_CXX11_ABI={abi_flag}'''
   if os.system(cmd) != 0:
     raise Exception("Failed to compile the tensorflow plugins: %s" % cmd)
-  return '%s.so' % tf_module_path
+
+  os.system(f'mv {tf_module_path}.so.{self_pid} {tf_module_path}.so.{compiler} >/dev/null 2>&1 || true')
+  return f'{tf_module_path}.so.{compiler}'
 
 __ops_name__ = __loader__.name.split('.')[-1]
 __default_server_addr__ = 'localhost:8880'
