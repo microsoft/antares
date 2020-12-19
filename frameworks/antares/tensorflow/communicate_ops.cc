@@ -32,6 +32,7 @@
 #define cudaEventQuery hipEventQuery
 #define cudaEventDestroy hipEventDestroy
 #define cudaErrorNotReady hipErrorNotReady
+#define cudaEventElapsedTime hipEventElapsedTime
 #define cudaEventDisableTiming 0
 
 #endif
@@ -179,7 +180,7 @@ REGISTER_KERNEL_BUILDER(Name("Nccl2Allreduce").Device(DEVICE_GPU), Nccl2Allreduc
 
 REGISTER_OP("Nccl2Allreduce")
     .Input("tensor: N * T")
-    .Output("sum: N * T")
+    .Output("result: N * T")
     .Attr("T: {float32, float16, int32, int16, int8}")
     .Attr("N: int >= 1")
     .Attr("data_type: string")
@@ -242,7 +243,7 @@ REGISTER_KERNEL_BUILDER(Name("Nccl2Reducescatter").Device(DEVICE_GPU), Nccl2Redu
 
 REGISTER_OP("Nccl2Reducescatter")
     .Input("tensor: N * T")
-    .Output("sum: N * T")
+    .Output("result: N * T")
     .Attr("T: {float32, float16, int32, int16, int8}")
     .Attr("N: int >= 1")
     .Attr("node_size: int")
@@ -305,7 +306,7 @@ REGISTER_KERNEL_BUILDER(Name("Nccl2Allgather").Device(DEVICE_GPU), Nccl2Allgathe
 
 REGISTER_OP("Nccl2Allgather")
     .Input("tensor: N * T")
-    .Output("sum: N * T")
+    .Output("result: N * T")
     .Attr("T: {float32, float16, int32, int16, int8}")
     .Attr("N: int >= 1")
     .Attr("node_size: int")
@@ -375,6 +376,76 @@ REGISTER_OP("Nccl2Broadcast")
     .Attr("data_type: string")
     .Attr("reduce_type: string")
     .SetIsStateful();
+
+/////////////////////////////////////////////////////////////////////////////////////
+static cudaEvent_t lastMetricEvent = NULL;
+
+template <typename Device>
+class MetricOpKernel: public AsyncOpKernel {
+ public:
+  explicit MetricOpKernel(OpKernelConstruction* c)
+      : AsyncOpKernel(c) {
+  }
+
+  void ComputeAsync(OpKernelContext* c, DoneCallback done) override {
+    auto GetGpuStream = [](OpKernelContext* context) -> cudaStream_t {
+      const cudaStream_t* ptr = CHECK_NOTNULL(
+        reinterpret_cast<const cudaStream_t*>(context->op_device_context()
+                                                ->stream()
+                                                ->implementation()
+                                                ->GpuStreamMemberHack()));
+      return *ptr;
+    };
+    cudaStream_t cu_stream = GetGpuStream(c);
+
+    auto compute = [&]() {
+      for (int i = c->num_inputs() - 1; i >= 0; --i) {
+        Tensor* output;
+        OP_REQUIRES_OK_ASYNC(c, c->allocate_output(i, c->input(i).shape(), &output), done);
+        CHECK_EQ(0, cudaMemcpyAsync((void*)output->tensor_data().data(), (const void*)c->input(i).tensor_data().data(), output->AllocatedBytes(), cudaMemcpyDeviceToDevice, cu_stream));
+      }
+    };
+
+    cudaEvent_t currMetricEvent;
+    CHECK_EQ(0, cudaEventCreateWithFlags(&currMetricEvent, 0));
+
+    pthread_mutex_lock(&__g_lock);
+    if (lastMetricEvent) {
+      CHECK_EQ(0, cudaEventRecord(currMetricEvent, cu_stream));
+      CHECK_EQ(0, cudaStreamSynchronize(cu_stream));
+      float ms;
+      CHECK_EQ(0, cudaEventElapsedTime(&ms, lastMetricEvent, currMetricEvent));
+      LOG(INFO) << "Antares Metric Record: ElapsedTime = " << ms * 1e-3 << " sec.";
+      CHECK_EQ(0, cudaEventDestroy(lastMetricEvent));
+    } else
+      LOG(INFO) << "Antares Metric Record: Initialize metric record.";
+
+    compute();
+    CHECK_EQ(0, cudaEventRecord(currMetricEvent, cu_stream));
+    lastMetricEvent = currMetricEvent;
+    pthread_mutex_unlock(&__g_lock);
+
+    done();
+  }
+
+ private:
+  TF_DISALLOW_COPY_AND_ASSIGN(MetricOpKernel);
+};
+
+REGISTER_KERNEL_BUILDER(Name("Metric").Device(DEVICE_GPU), MetricOpKernel<GPUDevice>);
+
+REGISTER_OP("Metric")
+    .Input("tensor: N * T")
+    .Output("result: N * T")
+    .Attr("T: {float32, float16, int32, int16, int8}")
+    .Attr("N: int >= 1")
+    .SetIsStateful()
+    .SetShapeFn([](shape_inference::InferenceContext* c) {
+      for (int i = c->num_inputs() - 1; i >= 0; --i)
+        c->set_output(i, c->input(i));
+      return Status::OK();
+    });
+
 
 /////////////////////////////////////////////////////////////////////////////////////
 }

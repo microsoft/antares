@@ -16,6 +16,11 @@ if not root_path:
   root_path = '.'
 
 try:
+  shutil.rmtree(dist_path)
+except FileNotFoundError:
+  pass
+
+try:
   os.mkdir(dist_path)
 except FileExistsError:
   pass
