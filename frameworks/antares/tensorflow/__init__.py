@@ -149,19 +149,17 @@ def metric(data):
 def communicate(comm_type, data, name=[]):
   rank, size, local_rank = init_communicate_config()
 
-  dtype = str(data.dtype.name).split('_ref')[0]
-
   if comm_type.startswith('all_reduce:'):
     ops = comm_type[comm_type.index(':') + 1:]
-    [data] = communicate_library.nccl2_allreduce([data], data_type=dtype, reduce_type=ops)
+    [data] = communicate_library.nccl2_allreduce([data], reduce_type=ops)
   elif comm_type.startswith('reduce_scatter:'):
     original_shape = [int(x) for x in data.shape]
     ops = comm_type[comm_type.index(':') + 1:]
-    [data] = communicate_library.nccl2_reducescatter([data], data_type=dtype, reduce_type=ops, node_size=size)
+    [data] = communicate_library.nccl2_reducescatter([data], reduce_type=ops, node_size=size)
     data = tf.reshape(data, [original_shape[0] // size] + original_shape[1:])
   elif comm_type.startswith('all_gather:'):
     original_shape = [int(x) for x in data.shape]
-    [data] = communicate_library.nccl2_allgather([data], data_type=dtype, reduce_type='', node_size=size)
+    [data] = communicate_library.nccl2_allgather([data], node_size=size)
     data = tf.reshape(data, [original_shape[0] * size] + original_shape[1:])
   else:
     raise Exception(f"Unrecognized communication type: {comm_type}")

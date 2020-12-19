@@ -112,17 +112,9 @@ static void finalizeNccl2() {
   pthread_mutex_unlock(&__g_lock);
 }
 
-static void loadTypeConfig(OpKernelConstruction* c, ncclDataType_t &data_type, ncclRedOp_t &reduce_type) {
-  std::string _data_type, _reduce_type;
-  OP_REQUIRES_OK(c, c->GetAttr("data_type", &_data_type));
+inline void loadTypeConfig(OpKernelConstruction* c, ncclRedOp_t &reduce_type) {
+  std::string _reduce_type;
   OP_REQUIRES_OK(c, c->GetAttr("reduce_type", &_reduce_type));
-
-  if (_data_type == "float32")
-    data_type = ncclFloat32;
-  else if (_data_type == "int32")
-    data_type = ncclInt32;
-  else
-    throw std::runtime_error(("Unhandled data_type for communication: " + _data_type).c_str());
 
   if (_reduce_type == "")
     reduce_type = (ncclRedOp_t)-1;
@@ -136,13 +128,22 @@ static void loadTypeConfig(OpKernelConstruction* c, ncclDataType_t &data_type, n
     throw std::runtime_error(("Unhandled reduce_type for communication: " + _reduce_type).c_str());
 }
 
+inline ncclDataType_t get_nccl_type(DataType dtype) {
+  if (dtype == DT_FLOAT)
+    return ncclFloat32;
+  else if (dtype == DT_INT32)
+    return ncclInt32;
+  else
+    throw std::runtime_error(("Unhandled TF-DataType for communication: " + std::to_string((int)dtype)).c_str());
+}
+
 /////////////////////////////////////////////////////////////////////////////////////
 template <typename Device>
 class Nccl2AllreduceOpKernel: public AsyncOpKernel {
  public:
   explicit Nccl2AllreduceOpKernel(OpKernelConstruction* c)
       : AsyncOpKernel(c), ncclComm(initializeNccl2()) {
-    loadTypeConfig(c, data_type, reduce_type);
+    loadTypeConfig(c, reduce_type);
   }
 
   ~Nccl2AllreduceOpKernel() {
@@ -164,13 +165,12 @@ class Nccl2AllreduceOpKernel: public AsyncOpKernel {
     for (int i = c->num_inputs() - 1; i >= 0; --i) {
       Tensor* output;
       OP_REQUIRES_OK_ASYNC(c, c->allocate_output(i, c->input(i).shape(), &output), done);
-      CHECK_EQ(ncclSuccess, ncclAllReduce((const void*)c->input(i).tensor_data().data(), (void*)output->tensor_data().data(), c->input(i).NumElements(), data_type, reduce_type, ncclComm->getHandle(), cu_stream));
+      CHECK_EQ(ncclSuccess, ncclAllReduce((const void*)c->input(i).tensor_data().data(), (void*)output->tensor_data().data(), c->input(i).NumElements(), get_nccl_type(output->dtype()), reduce_type, ncclComm->getHandle(), cu_stream));
     }
     done();
   }
 
  private:
-  ncclDataType_t data_type;
   ncclRedOp_t reduce_type;
   shared_ptr<Nccl2Handle> ncclComm;
   TF_DISALLOW_COPY_AND_ASSIGN(Nccl2AllreduceOpKernel);
@@ -183,7 +183,6 @@ REGISTER_OP("Nccl2Allreduce")
     .Output("result: N * T")
     .Attr("T: {float32, float16, int32, int16, int8}")
     .Attr("N: int >= 1")
-    .Attr("data_type: string")
     .Attr("reduce_type: string")
     .SetIsStateful()
     .SetShapeFn([](shape_inference::InferenceContext* c) {
@@ -199,7 +198,7 @@ class Nccl2ReducescatterOpKernel: public AsyncOpKernel {
  public:
   explicit Nccl2ReducescatterOpKernel(OpKernelConstruction* c)
       : AsyncOpKernel(c), ncclComm(initializeNccl2()) {
-    loadTypeConfig(c, data_type, reduce_type);
+    loadTypeConfig(c, reduce_type);
     OP_REQUIRES_OK(c, c->GetAttr("node_size", &node_size));
   }
 
@@ -226,14 +225,13 @@ class Nccl2ReducescatterOpKernel: public AsyncOpKernel {
 
       Tensor* output;
       OP_REQUIRES_OK_ASYNC(c, c->allocate_output(i, result_shape, &output), done);
-      CHECK_EQ(ncclSuccess, ncclReduceScatter((const void*)c->input(i).tensor_data().data(), (void*)output->tensor_data().data(), c->input(i).NumElements() / node_size, data_type, reduce_type, ncclComm->getHandle(), cu_stream));
+      CHECK_EQ(ncclSuccess, ncclReduceScatter((const void*)c->input(i).tensor_data().data(), (void*)output->tensor_data().data(), c->input(i).NumElements() / node_size, get_nccl_type(output->dtype()), reduce_type, ncclComm->getHandle(), cu_stream));
     }
     done();
   }
 
  private:
   int node_size;
-  ncclDataType_t data_type;
   ncclRedOp_t reduce_type;
   shared_ptr<Nccl2Handle> ncclComm;
   TF_DISALLOW_COPY_AND_ASSIGN(Nccl2ReducescatterOpKernel);
@@ -247,7 +245,6 @@ REGISTER_OP("Nccl2Reducescatter")
     .Attr("T: {float32, float16, int32, int16, int8}")
     .Attr("N: int >= 1")
     .Attr("node_size: int")
-    .Attr("data_type: string")
     .Attr("reduce_type: string")
     .SetIsStateful()
     .SetShapeFn([](shape_inference::InferenceContext* c) {
@@ -263,7 +260,6 @@ class Nccl2AllgatherOpKernel: public AsyncOpKernel {
  public:
   explicit Nccl2AllgatherOpKernel(OpKernelConstruction* c)
       : AsyncOpKernel(c), ncclComm(initializeNccl2()) {
-    loadTypeConfig(c, data_type, reduce_type);
     OP_REQUIRES_OK(c, c->GetAttr("node_size", &node_size));
   }
 
@@ -289,15 +285,13 @@ class Nccl2AllgatherOpKernel: public AsyncOpKernel {
 
       Tensor* output;
       OP_REQUIRES_OK_ASYNC(c, c->allocate_output(i, result_shape, &output), done);
-      CHECK_EQ(ncclSuccess, ncclAllGather((const void*)c->input(i).tensor_data().data(), (void*)output->tensor_data().data(), c->input(i).NumElements(), data_type, ncclComm->getHandle(), cu_stream));
+      CHECK_EQ(ncclSuccess, ncclAllGather((const void*)c->input(i).tensor_data().data(), (void*)output->tensor_data().data(), c->input(i).NumElements(), get_nccl_type(output->dtype()), ncclComm->getHandle(), cu_stream));
     }
     done();
   }
 
  private:
   int node_size;
-  ncclDataType_t data_type;
-  ncclRedOp_t reduce_type;
   shared_ptr<Nccl2Handle> ncclComm;
   TF_DISALLOW_COPY_AND_ASSIGN(Nccl2AllgatherOpKernel);
 };
@@ -310,8 +304,6 @@ REGISTER_OP("Nccl2Allgather")
     .Attr("T: {float32, float16, int32, int16, int8}")
     .Attr("N: int >= 1")
     .Attr("node_size: int")
-    .Attr("data_type: string")
-    .Attr("reduce_type: string")
     .SetIsStateful()
     .SetShapeFn([](shape_inference::InferenceContext* c) {
       for (int i = c->num_inputs() - 1; i >= 0; --i) {
@@ -326,9 +318,8 @@ class Nccl2BroadcastOpKernel: public AsyncOpKernel {
  public:
   explicit Nccl2BroadcastOpKernel(OpKernelConstruction* c)
       : AsyncOpKernel(c), ncclComm(initializeNccl2()) {
-    loadTypeConfig(c, data_type, reduce_type);
 
-    OP_REQUIRES_OK(c, c->GetAttr("sourceRank", &sourceRank));
+    OP_REQUIRES_OK(c, c->GetAttr("source_rank", &source_rank));
     initializeNccl2();
   }
 
@@ -352,16 +343,15 @@ class Nccl2BroadcastOpKernel: public AsyncOpKernel {
     cudaStream_t cu_stream = GetGpuStream(c);
 
     for (int i = c->num_inputs() - 1; i >= 0; --i) {
-      CHECK_EQ(ncclSuccess, ncclBroadcast((const void*)c->input(i).tensor_data().data(), (void*)c->input(i).tensor_data().data(), c->input(i).NumElements(), ncclFloat, sourceRank, ncclComm->getHandle(), cu_stream));
+      CHECK_EQ(ncclSuccess, ncclBroadcast((const void*)c->input(i).tensor_data().data(), (void*)c->input(i).tensor_data().data(), c->input(i).NumElements(), get_nccl_type(c->input(i).dtype()), source_rank, ncclComm->getHandle(), cu_stream));
     }
     done();
   }
 
  private:
-  ncclDataType_t data_type;
   ncclRedOp_t reduce_type;
 
-  int sourceRank;
+  int source_rank;
   shared_ptr<Nccl2Handle> ncclComm;
   TF_DISALLOW_COPY_AND_ASSIGN(Nccl2BroadcastOpKernel);
 };
@@ -372,9 +362,7 @@ REGISTER_OP("Nccl2Broadcast")
     .Input("tensor: N * T")
     .Attr("T: {float32, float16, int32, int16, int8}")
     .Attr("N: int >= 1")
-    .Attr("sourceRank: int")
-    .Attr("data_type: string")
-    .Attr("reduce_type: string")
+    .Attr("source_rank: int")
     .SetIsStateful();
 
 /////////////////////////////////////////////////////////////////////////////////////
@@ -402,7 +390,11 @@ class MetricOpKernel: public AsyncOpKernel {
       for (int i = c->num_inputs() - 1; i >= 0; --i) {
         Tensor* output;
         OP_REQUIRES_OK_ASYNC(c, c->allocate_output(i, c->input(i).shape(), &output), done);
-        CHECK_EQ(0, cudaMemcpyAsync((void*)output->tensor_data().data(), (const void*)c->input(i).tensor_data().data(), output->AllocatedBytes(), cudaMemcpyDeviceToDevice, cu_stream));
+        size_t type_size = 0;
+        if (output->dtype() == DT_INT32 || output->dtype() == DT_FLOAT)
+          type_size = 4;
+        CHECK_GT(type_size, 0);
+        CHECK_EQ(0, cudaMemcpyAsync((void*)output->tensor_data().data(), (const void*)c->input(i).tensor_data().data(), output->NumElements() * type_size, cudaMemcpyDeviceToDevice, cu_stream));
       }
     };
 
