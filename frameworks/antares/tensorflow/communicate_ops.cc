@@ -144,6 +144,7 @@ class Nccl2AllreduceOpKernel: public AsyncOpKernel {
   explicit Nccl2AllreduceOpKernel(OpKernelConstruction* c)
       : AsyncOpKernel(c), ncclComm(initializeNccl2()) {
     loadTypeConfig(c, reduce_type);
+    LOG(INFO) << "Antares Nccl2AllreduceOpKernel Appended.";
   }
 
   ~Nccl2AllreduceOpKernel() {
@@ -200,6 +201,7 @@ class Nccl2ReducescatterOpKernel: public AsyncOpKernel {
       : AsyncOpKernel(c), ncclComm(initializeNccl2()) {
     loadTypeConfig(c, reduce_type);
     OP_REQUIRES_OK(c, c->GetAttr("node_size", &node_size));
+    LOG(INFO) << "Antares Nccl2ReducescatterOpKernel Appended.";
   }
 
   ~Nccl2ReducescatterOpKernel() {
@@ -261,6 +263,7 @@ class Nccl2AllgatherOpKernel: public AsyncOpKernel {
   explicit Nccl2AllgatherOpKernel(OpKernelConstruction* c)
       : AsyncOpKernel(c), ncclComm(initializeNccl2()) {
     OP_REQUIRES_OK(c, c->GetAttr("node_size", &node_size));
+    LOG(INFO) << "Antares Nccl2AllgatherOpKernel Appended.";
   }
 
   ~Nccl2AllgatherOpKernel() {
@@ -320,7 +323,7 @@ class Nccl2BroadcastOpKernel: public AsyncOpKernel {
       : AsyncOpKernel(c), ncclComm(initializeNccl2()) {
 
     OP_REQUIRES_OK(c, c->GetAttr("source_rank", &source_rank));
-    initializeNccl2();
+    LOG(INFO) << "Antares Nccl2BroadcastOpKernel Appended.";
   }
 
   ~Nccl2BroadcastOpKernel() {
@@ -407,14 +410,20 @@ class MetricOpKernel: public AsyncOpKernel {
       CHECK_EQ(0, cudaStreamSynchronize(cu_stream));
       float ms;
       CHECK_EQ(0, cudaEventElapsedTime(&ms, lastMetricEvent, currMetricEvent));
-      LOG(INFO) << "Antares Metric Record: ElapsedTime = " << ms * 1e-3 << " sec.";
+      if (__ncclComm)
+        LOG(INFO) << "Antares Metric Record: ElapsedTime (" << __ncclComm->mpi_rank << "/" << __ncclComm->mpi_size << ") = " << ms * 1e-3 << " sec.";
+      else
+        LOG(INFO) << "Antares Metric Record: ElapsedTime = " << ms * 1e-3 << " sec.";
       CHECK_EQ(0, cudaEventDestroy(lastMetricEvent));
-    } else
-      LOG(INFO) << "Antares Metric Record: Initialize metric record.";
-
-    compute();
-    CHECK_EQ(0, cudaEventRecord(currMetricEvent, cu_stream));
-    lastMetricEvent = currMetricEvent;
+      CHECK_EQ(0, cudaEventDestroy(currMetricEvent));
+      lastMetricEvent = nullptr;
+      compute();
+    } else {
+      LOG(INFO) << "Antares Metric Record: Initialize Metric Record.";
+      compute();
+      CHECK_EQ(0, cudaEventRecord(currMetricEvent, cu_stream));
+      lastMetricEvent = currMetricEvent;
+    }
     pthread_mutex_unlock(&__g_lock);
 
     done();
