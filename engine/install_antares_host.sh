@@ -19,5 +19,5 @@ cd $TVM_HOME && git checkout 73f425d && git apply device-stub/tvm_v0.7.patch && 
   sed -i 's/LLVM OFF/LLVM ON/g' config.cmake && sed -i 's~CUDA OFF~CUDA '"${TVM_HOME}/device-stub"'~g' config.cmake && \
   cmake .. && make -j8
 
-pip3 install --upgrade tornado psutil xgboost==1.2.1 numpy decorator attrs pytest typed_ast
+pip3 install --upgrade tornado psutil xgboost==1.2.1 numpy decorator attrs pytest typed_ast mpi4py
 
