@@ -13,10 +13,23 @@
 #define CHECK_ENV() (0 == cuInit(0) || (exit(1), 0));
 #else
 #include <hip/hip_runtime.h>
-#define Q(attr_key) ((0 == hipDeviceGetAttribute(&val, hipDeviceAttribute ## attr_key, 0)) ? printf("%s: %d\n", #attr_key, val) : (exit(1), 0))
+#define Q(attr_key) ((0 == hipDeviceGetAttribute_(&val, hipDeviceAttribute ## attr_key, 0)) ? printf("%s: %d\n", #attr_key, val) : (exit(1), 0))
 #define hipDeviceAttributeMultiProcessorCount hipDeviceAttributeMultiprocessorCount
 #define hipDeviceAttributeGlobalMemoryBusWidth hipDeviceAttributeMemoryBusWidth
 #define CHECK_ENV() (0 == hipInit(0) || (exit(1), 0));
+
+inline hipError_t hipDeviceGetAttribute_(int *val, hipDeviceAttribute_t attr, int dev) {
+  if (attr == hipDeviceAttributeComputeCapabilityMajor || attr == hipDeviceAttributeComputeCapabilityMinor) {
+    static hipDeviceProp_t prop;
+    hipError_t err = hipGetDeviceProperties(&prop, dev);
+    if (err != 0)
+      return err;
+    *val = (attr == hipDeviceAttributeComputeCapabilityMajor) ? (prop.gcnArch / 100) : (prop.gcnArch % 100);
+    return hipSuccess;
+  }
+  return ::hipDeviceGetAttribute(val, attr, dev);
+}
+
 #endif
 
 int main() {
