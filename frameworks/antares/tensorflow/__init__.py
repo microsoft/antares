@@ -121,20 +121,30 @@ def make_op(antares_ir, inputs, server_addr=None):
 
 communicate_library = None
 
-def init_communicate_config():
+def init_library():
   global communicate_library
   if communicate_library is None:
     libcommunicate_path = get_tensorflow_antares_component(os.path.dirname(__file__) + '/communicate_ops.cc', 'AntaresCommunicate', using_mpi=True)
     communicate_library = loader.load_op_library(libcommunicate_path)
+  return communicate_library
 
+def init_communicate_config():
+  communicate_library = init_library()
+  if not hasattr(communicate_library, 'comm_config'):
     from mpi4py import MPI
     comm = MPI.COMM_WORLD
     local = comm.Split_type(MPI.COMM_TYPE_SHARED)
     rank, size, local_rank = comm.Get_rank(), comm.Get_size(), local.Get_rank()
     MPI.COMM_WORLD.Barrier()
-    communicate_library.config = rank, size, local_rank
+    communicate_library.comm_config = rank, size, local_rank
+  return communicate_library.comm_config
 
-  return communicate_library.config
+def metric(data):
+  communicate_library = init_library()
+  results = communicate_library.metric(data)
+  for d, r in zip(data, results):
+    r._output_names = d._output_names if hasattr(d, '_output_names') else [d.name.split(':')[0]]
+  return results
 
 def communicate(comm_type, data, name=[]):
   rank, size, local_rank = init_communicate_config()
