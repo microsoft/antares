@@ -131,9 +131,9 @@ class MainOpKernel: public AsyncOpKernel {
   }
 
   ~MainOpKernel() {
-    LOG(INFO) << "~MainOpKernel(..)";
+    // LOG(INFO) << "~MainOpKernel(..)";
     if (hmod != nullptr) {
-      LOG(INFO) << "MainOpKernel is releasing the dynamtic kernel..";
+      // LOG(INFO) << "MainOpKernel is releasing the dynamtic kernel..";
       CHECK_EQ(cuModuleUnload(hmod), 0);
       hfunc = nullptr;
     }
