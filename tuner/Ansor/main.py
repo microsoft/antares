@@ -63,4 +63,7 @@ class MainTuner(object):
   def tune(self, n_trial, **kwargs):
     global GLOBAL_TUNER
     GLOBAL_TUNER = self
-    auto_scheduler.auto_schedule(self.auto_task, tuning_options=auto_scheduler.TuningOptions(num_measure_trials=n_trial, runner=self.measure_ctx.runner, measure_callbacks=[]))
+    try:
+      auto_scheduler.auto_schedule(self.auto_task, tuning_options=auto_scheduler.TuningOptions(num_measure_trials=n_trial, runner=self.measure_ctx.runner, measure_callbacks=[]))
+    except:
+      pass
