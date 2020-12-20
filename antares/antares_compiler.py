@@ -436,10 +436,12 @@ def main_compute(code_only=False):
     tuner_type = os.environ.get('TUNER', '')
     if not tuner_type:
       explicit_ops = AntaresGlobal.attrs.explicit_ops
+      global_outs = get_global_arg_props()['_out']
       if ('|plan/' not in ('|' + '|'.join(AntaresGlobal.attrs.options)) and
           len(explicit_ops) == 1 and
           len(explicit_ops[-1].reduce_axis) > 0 and
-          len(get_global_arg_props()['_out']) == 1 and
+          len(global_outs) == 1 and
+          global_outs[0]['name'] == explicit_ops[-1].name and
           backend in ['c-rocm', 'c-cuda', 'c-hlsl', 'c-ocl']):
         tuner_type = 'Ansor'
       else:
@@ -532,7 +534,10 @@ def main_compute(code_only=False):
           tuner.load_history(autotvm.record.load_from_file(history_log_for_transfer_learning))
 
       tuner.tune(n_trial=num_trials, callbacks=callbacks, measure_option=None)
-      assert not math.isinf(tuner.task.best.timecost), "Not valid config found in the whole tuning."
+      if math.isinf(tuner.task.best.timecost):
+        print(f'[Error] valid config found in the whole tuning. (Try other tuner types other than `TUNER={tuner_type}`?)')
+        cleanup_on_exit(0, None)
+
       best_config = json.dumps(config_to_json(tuner.task.best.config))
 
       if auto_commit:
