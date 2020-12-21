@@ -308,6 +308,8 @@ def emit_antares_ir(ast):
       if len(node._value['if']) == 0:
         return '(%s)' % _emit(node._value['true'])
       return '(%s).when([%s], %s)' % (_emit(node._value['true']), ', '.join([_emit(x) for x in node._value['if']]), _emit(node._value['false']))
+    elif node._op == 'cast':
+      return '(%s).cast(`%s`)' % (_emit(node._value['inputs'][0]), node._dtype)
     else:
       raise Exception("Emit Antares IR: Unhanled reverse-emit op type: %s" % node._op)
   lval = '%s[%s]' % (ast['props']['output_name'], ', '.join([x['name'] for x in ast['props']['data_axes']]))
