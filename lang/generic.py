@@ -162,6 +162,7 @@ def do_native_scheduling(attrs):
 intermediate_output = 'MultipleOutputsTempVar'
 
 def refactor_multiple_names(code, global_arg_props):
+  code = code.replace('(int* __restrict__ _id, ', '(').replace('_id[(0)]', '_id')
   if len(global_arg_props['_out']) <= 1:
     return code
   for i in range(len(global_arg_props['_out'])):

@@ -65,12 +65,17 @@ std::vector<torch::Tensor> custom_op_forward(std::vector<torch::Tensor> inputs,
     fclose(fp);
 
     int major, minor;
+#ifndef __HIP_PLATFORM_HCC__
     CHECK_EQ(cuDeviceGetAttribute(&major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, 0), 0);
     CHECK_EQ(cuDeviceGetAttribute(&minor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, 0), 0);
-#ifndef __HIP_PLATFORM_HCC__
     std::string arch = std::to_string(major * 10 + minor);
     std::string compile_cmd = "/usr/local/cuda/bin/nvcc " + kernel_src_path + " -gencode arch=compute_" + arch + ",code=sm_" + arch + " --fatbin -O2 -o " + kernel_path;
 #else
+    static hipDeviceProp_t prop;
+    if (!prop.gcnArch)
+      CHECK_EQ(hipGetDeviceProperties(&prop, 0), 0);
+    major = prop.gcnArch / 100, minor = prop.gcnArch % 100;
+
     std::string arch = std::to_string(major * 100 + minor);
     std::string compile_cmd = "/opt/rocm/bin/hipcc " + kernel_src_path + " --amdgpu-target=gfx" + arch + " --genco -Wno-ignored-attributes -O2 -o " + kernel_path;
 #endif
