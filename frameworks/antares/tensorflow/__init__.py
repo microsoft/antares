@@ -156,11 +156,21 @@ def communicate(comm_type, data, name=[]):
     original_shape = [int(x) for x in data.shape]
     ops = comm_type[comm_type.index(':') + 1:]
     [data] = communicate_library.nccl2_reducescatter([data], reduce_type=ops, node_size=size)
-    data = tf.reshape(data, [original_shape[0] // size] + original_shape[1:])
+    for i in range(len(original_shape)):
+      if original_shape[i] > 1:
+        assert original_shape[i] % size == 0
+        break
+    original_shape[i] //= size
+    data = tf.reshape(data, original_shape)
   elif comm_type.startswith('all_gather:'):
     original_shape = [int(x) for x in data.shape]
     [data] = communicate_library.nccl2_allgather([data], node_size=size)
-    data = tf.reshape(data, [original_shape[0] * size] + original_shape[1:])
+    for i in range(len(original_shape)):
+      if original_shape[i] > 1:
+        assert original_shape[i] % size == 0
+        break
+    original_shape[i] //= size
+    data = tf.reshape(data, original_shape)
   else:
     raise Exception(f"Unrecognized communication type: {comm_type}")
 

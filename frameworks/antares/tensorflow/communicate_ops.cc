@@ -221,9 +221,8 @@ class Nccl2ReducescatterOpKernel: public AsyncOpKernel {
     cudaStream_t cu_stream = GetGpuStream(c);
 
     for (int i = c->num_inputs() - 1; i >= 0; --i) {
-      auto result_shape = c->input(i).shape();
-      CHECK_EQ(0, result_shape.dim_size(0) % node_size);
-      result_shape.set_dim(0, result_shape.dim_size(0) / node_size);
+      CHECK_EQ(0, c->input(i).NumElements() % node_size);
+      auto result_shape = tensorflow::TensorShape({c->input(i).NumElements() / node_size});
 
       Tensor* output;
       OP_REQUIRES_OK_ASYNC(c, c->allocate_output(i, result_shape, &output), done);
