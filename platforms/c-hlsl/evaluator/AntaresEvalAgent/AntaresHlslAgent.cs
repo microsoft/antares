@@ -105,7 +105,7 @@ namespace AntaresHlslEvalAgent
             process.StartInfo = processInfo;
             process.Start();
 
-            string output = "";
+            string output = "[Timeout Expired in " + timeout_in_ms + " ms]";
             if (!process.WaitForExit(timeout_in_ms))
                 process.Kill();
             else
@@ -281,8 +281,7 @@ namespace AntaresHlslEvalAgent
                 }
                 else
                 {
-                    Debug.Assert((num_elements[i] * type_size[i]) % sizeof(float) == 0);
-                    var h_input = new float[(num_elements[i] * type_size[i]) / sizeof(float)];
+                    var h_input = new float[(num_elements[i] * type_size[i] + sizeof(float) - 1) / sizeof(float)];
                     for (int x = 0; x < h_input.Length; ++x)
                         h_input[x] = (x + i + 1) % 71;
                     dxMemcpyHtoDAsync(kargs[i], Marshal.UnsafeAddrOfPinnedArrayElement(h_input, 0), num_elements[i] * type_size[i], IntPtr.Zero);
@@ -309,8 +308,7 @@ namespace AntaresHlslEvalAgent
                 }
                 else
                 {
-                    Debug.Assert((num_elements[i] * type_size[i]) % sizeof(float) == 0);
-                    var h_output = new float[(num_elements[i] * type_size[i]) / sizeof(float)];
+                    var h_output = new float[(num_elements[i] * type_size[i] + sizeof(float) - 1) / sizeof(float)];
                     dxMemcpyDtoHAsync(Marshal.UnsafeAddrOfPinnedArrayElement(h_output, 0), kargs[i], num_elements[i] * type_size[i], IntPtr.Zero);
                     dxStreamSynchronize(IntPtr.Zero);
                     for (int x = 0; x < h_output.Length; ++x)

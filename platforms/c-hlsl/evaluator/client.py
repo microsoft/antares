@@ -24,7 +24,10 @@ def eval(kernel_path, **kwargs):
     except:
       raise Exception("Didn't get correct response from Antares Agent: Bad kernel code, or bad agent address?")
 
-    start = output_content.index('\n- ')
+    start = output_content.find('\n- ')
+    if start < 0:
+      print(f"Evaluation Error: {output_content}")
+      return {}
     stop = output_content.index('\n', start + 1)
     results = output_content[start + 3:stop].strip()
     results = json.loads(results)

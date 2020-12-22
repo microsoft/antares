@@ -157,9 +157,10 @@ int main(int argc, char** argv)
           ((float*)(ptrs.first))[x] = (x + i + 1) % 71;
       } else {
         size_t byte_size = size * it.type_size();
-        assert(byte_size % sizeof(int) == 0);
         for (size_t x = 0; x < byte_size / sizeof(int); ++x)
           ((int*)(ptrs.first))[x] = (x + i + 1) % 71;
+        for (size_t x = byte_size - byte_size % sizeof(int); x < byte_size; x++)
+          ((char*)(ptrs.first))[x] = 1;
       }
       if (ptrs.first != ptrs.second)
         assert(0 == cuMemcpyHtoDAsync((CUdeviceptr)ptrs.second, ptrs.first, size * it.type_size(), nullptr));
@@ -200,22 +201,23 @@ int main(int argc, char** argv)
     launch_kernel();
 
     for (int c = 0; c < outputs.size(); ++c) {
-      size_t output_byte_size = outputs[c].element_size() * outputs[c].type_size();
+      size_t byte_size = outputs[c].element_size() * outputs[c].type_size();
       if (h_args[inputs.size() + c] != d_args[inputs.size() + c])
-        assert(0 == cuMemcpyDtoHAsync(h_args[inputs.size() + c], (CUdeviceptr)d_args[inputs.size() + c], output_byte_size, nullptr));
+        assert(0 == cuMemcpyDtoHAsync(h_args[inputs.size() + c], (CUdeviceptr)d_args[inputs.size() + c], byte_size, nullptr));
     }
     assert(0 == cuStreamSynchronize(nullptr));
 
     for (int c = 0; c < outputs.size(); ++c) {
-      size_t output_byte_size = outputs[c].element_size() * outputs[c].type_size();
-      assert(output_byte_size % sizeof(float) == 0);
+      size_t byte_size = outputs[c].element_size() * outputs[c].type_size();
       double digest = 0.0;
       if (outputs[c].dtype == "int32") {
-        for (size_t i = 0; i < output_byte_size / sizeof(int); ++i)
+        for (size_t i = 0; i < byte_size / sizeof(int); ++i)
           digest += (i + 1) % 83 * ((int*)h_args[inputs.size() + c])[i];
       } else {
-        for (size_t i = 0; i < output_byte_size / sizeof(float); ++i)
+        for (size_t i = 0; i < byte_size / sizeof(float); ++i)
           digest += (i + 1) % 83 * ((float*)h_args[inputs.size() + c])[i];
+        for (size_t i = byte_size - byte_size % sizeof(int); i < byte_size; i++)
+          digest += ((char*)h_args[inputs.size() + c])[i];
       }
       printf("- K/%d: %.10e\n", c, digest);
     }
