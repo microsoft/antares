@@ -73,7 +73,8 @@ def common_reduce(name, args=(0,)):
   return te.comm_reducer(reduce_op, lambda t: tir.const(args[0], dtype=t), name=name)
 
 def input(name, shape, dtype="float32"):
-  AntaresGlobal.local_arg_pros['_in'] += [{'name': name, 'dtype': dtype, 'shape': shape}]
+  if not name.startswith("_"):
+    AntaresGlobal.local_arg_pros['_in'] += [{'name': name, 'dtype': dtype, 'shape': shape}]
 
   global placeholders
   if len(shape) == 0:
