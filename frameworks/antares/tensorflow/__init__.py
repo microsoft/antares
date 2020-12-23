@@ -167,9 +167,8 @@ def communicate(comm_type, data, name=[]):
     [data] = communicate_library.nccl2_allgather([data], node_size=size)
     for i in range(len(original_shape)):
       if original_shape[i] > 1:
-        assert original_shape[i] % size == 0
         break
-    original_shape[i] //= size
+    original_shape[i] *= size
     data = tf.reshape(data, original_shape)
   else:
     raise Exception(f"Unrecognized communication type: {comm_type}")
