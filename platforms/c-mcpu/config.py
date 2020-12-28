@@ -41,6 +41,5 @@ def do_native_translation(code, **kwargs):
     code = 'extern "C" void kernel_main(%s) {\n  // [thread_compute]\n' % ', '.join([t + '* ' + v for t, v in args]) + code[tail + len(") {\n"):]
     code = code.replace('threadIdx.x', '__rank__').replace(' __global__ ', ' ').replace(' __restrict__ ', ' ')
     code = '#include <math.h>\n#include <algorithm>\nusing namespace std;\n\n' + kwargs['attrs'].blend + '\n' + code
-    code = code + '\n#ifdef __fp16\ntypedef __fp16 half\n#endif\n'
     code = remove_local_cache(code, arg_bufs)
     return code

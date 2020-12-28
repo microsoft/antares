@@ -80,7 +80,7 @@ namespace AntaresHlslEvalAgent
                 {
                     var value = key.GetValue("TdrConfigState");
                     key.Close();
-                    if (value == null || Convert.ToInt32(value) != 3)
+                    if (value == null || Convert.ToInt32(value) != 1)
                         return false;
                     return true;
                 }
@@ -151,7 +151,7 @@ namespace AntaresHlslEvalAgent
                 runSystemCommand("curl.exe", "-LOs https://github.com/microsoft/antares/raw/library/antares_hlsl_v0.1_x64.dll");
             }
 
-            runSystemCommand("netsh", "advfirewall firewall add rule name=\"TCP Port for Antares\" dir=in action=allow protocol=TCP localport=" + LISTEN_PORT);
+            runSystemCommand("netsh.exe", "advfirewall firewall add rule name=AntaresEvalAgent dir=in action=allow protocol=TCP localport=" + LISTEN_PORT);
             return true;
         }
 
