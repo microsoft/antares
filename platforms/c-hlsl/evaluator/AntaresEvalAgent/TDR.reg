@@ -16,4 +16,4 @@ Windows Registry Editor Version 5.00
 "DontShowUI"=dword:00000001
 
 [HKEY_CURRENT_USER\SOFTWARE\Antares\HLSL]
-"TdrConfigState"=dword:00000004
+"TdrConfigState"=dword:00000001
