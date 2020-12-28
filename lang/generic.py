@@ -24,7 +24,7 @@ def einstein_v2(exprss, input_dict, extra_outputs=[], **kwargs):
     ir = einstein_v2.emit_tvm_ir(exprss, input_dict, extra_outputs)
     assert(len(ir) > 0)
     os.environ['LL_IR'] = ir
-    print('\n[LL-IR]\n%s\n' % ir)
+    print('\n[LL-IR]\n%s\n' % ir[ir.find('; ') + 2:])
 
   exec(ir, globals())
 
