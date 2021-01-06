@@ -131,6 +131,8 @@ inline void loadTypeConfig(OpKernelConstruction* c, ncclRedOp_t &reduce_type) {
 inline ncclDataType_t get_nccl_type(DataType dtype) {
   if (dtype == DT_FLOAT)
     return ncclFloat32;
+  else if (dtype == DT_DOUBLE)
+    return ncclFloat64;
   else if (dtype == DT_INT32)
     return ncclInt32;
   else
@@ -182,7 +184,7 @@ REGISTER_KERNEL_BUILDER(Name("Nccl2Allreduce").Device(DEVICE_GPU), Nccl2Allreduc
 REGISTER_OP("Nccl2Allreduce")
     .Input("tensor: N * T")
     .Output("result: N * T")
-    .Attr("T: {float32, float16, int32, int16, int8}")
+    .Attr("T: {float64, float32, float16, int32, int16, int8}")
     .Attr("N: int >= 1")
     .Attr("reduce_type: string")
     .SetIsStateful()
@@ -243,7 +245,7 @@ REGISTER_KERNEL_BUILDER(Name("Nccl2Reducescatter").Device(DEVICE_GPU), Nccl2Redu
 REGISTER_OP("Nccl2Reducescatter")
     .Input("tensor: N * T")
     .Output("result: N * T")
-    .Attr("T: {float32, float16, int32, int16, int8}")
+    .Attr("T: {float64, float32, float16, int32, int16, int8}")
     .Attr("N: int >= 1")
     .Attr("node_size: int")
     .Attr("reduce_type: string")
@@ -303,7 +305,7 @@ REGISTER_KERNEL_BUILDER(Name("Nccl2Allgather").Device(DEVICE_GPU), Nccl2Allgathe
 REGISTER_OP("Nccl2Allgather")
     .Input("tensor: N * T")
     .Output("result: N * T")
-    .Attr("T: {float32, float16, int32, int16, int8}")
+    .Attr("T: {float64, float32, float16, int32, int16, int8}")
     .Attr("N: int >= 1")
     .Attr("node_size: int")
     .SetIsStateful()
@@ -362,7 +364,7 @@ REGISTER_KERNEL_BUILDER(Name("Nccl2Broadcast").Device(DEVICE_GPU), Nccl2Broadcas
 
 REGISTER_OP("Nccl2Broadcast")
     .Input("tensor: N * T")
-    .Attr("T: {float32, float16, int32, int16, int8}")
+    .Attr("T: {float64, float32, float16, int32, int16, int8}")
     .Attr("N: int >= 1")
     .Attr("source_rank: int")
     .SetIsStateful();
@@ -395,6 +397,8 @@ class MetricOpKernel: public AsyncOpKernel {
         size_t type_size = 0;
         if (output->dtype() == DT_INT32 || output->dtype() == DT_FLOAT)
           type_size = 4;
+        else if (output->dtype() == DT_DOUBLE)
+          type_size = 8;
         CHECK_GT(type_size, 0);
         CHECK_EQ(0, cudaMemcpyAsync((void*)output->tensor_data().data(), (const void*)c->input(i).tensor_data().data(), output->NumElements() * type_size, cudaMemcpyDeviceToDevice, cu_stream));
       }
@@ -437,7 +441,7 @@ REGISTER_KERNEL_BUILDER(Name("Metric").Device(DEVICE_GPU), MetricOpKernel<GPUDev
 REGISTER_OP("Metric")
     .Input("tensor: N * T")
     .Output("result: N * T")
-    .Attr("T: {float32, float16, int32, int16, int8}")
+    .Attr("T: {float64, float32, float16, int32, int16, int8}")
     .Attr("N: int >= 1")
     .SetIsStateful()
     .SetShapeFn([](shape_inference::InferenceContext* c) {
