@@ -53,7 +53,7 @@ def do_native_translation(code, **kwargs):
       with open(local_get_dir_file('range_book.json'), 'r') as fp:
         range_book = json.load(fp)
     except FileNotFoundError:
-      raise Exception("TODO: Graphcore code generation is not implemented in new emit_tvm_ir_v2()")
+      raise Exception("TODO: Graphcore code generation is not completely implemented in new emit_tvm_ir_v2()")
 
     props = []
     for k in range_book['book']:
@@ -64,7 +64,7 @@ def do_native_translation(code, **kwargs):
     props = ';'.join(props)
 
     code = '''
-// Antares Property: %s
+// Antares Property (k * ax_id + l .. r): %s
 
 #include <poplar/Vertex.hpp>
 
