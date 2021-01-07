@@ -114,7 +114,7 @@ std::pair<void *, void *> create_tensor_memory(const tensor_property &tp) {
 
 void *timeout_monitor(void *arg) {
     sleep(30);
-    printf("[FATAL] Time limit exceeded for this evaluation.\n");
+    fprintf(stderr, "[FATAL] Time limit exceeded for this evaluation.\n");
     _exit(1);
 }
 
