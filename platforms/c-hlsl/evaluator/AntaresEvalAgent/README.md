@@ -1,6 +1,6 @@
 # Install Antares Engine for DirectX12 HLSL Codegen:
 
-1) First, you need a Win10 (64-bit) OS with DirectX12 enabled, and this host is used to activate the Antares HLSL Eval Agent.
+1) First, you need a Win10 (64-bit) OS with DirectX12 enabled, and this host is used to activate the Antares HLSL Eval Agent. Recommend to use Windows 10 build 17063 or later, since `curl.exe` is included in Windows shell, or you need to download `curl.exe` yourself and make it visible to applications by updating environment variable `PATH`.
 
 2) Then, you either need a remote Linux Host or WSL 1.0/2.0 environment. Here is the guide to [install WSL for Win10](https://docs.microsoft.com/en-us/windows/wsl/install-win10). Ensure the Linux environment can interact with Win10 over network.
 

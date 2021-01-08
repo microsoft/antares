@@ -33,11 +33,13 @@ sudo BACKEND=c-cuda make
 
 # If you need Antares to extend/boost Tensorflow operators, please also run:
 sudo python3 ./frameworks/antares/tensorflow/setup.py
-# (Recommended Tensorflow CUDA Installation Source (for CUDA 10.0): pip3 install --upgrade pip && pip3 install tensorflow-gpu==1.15.3)
+# (Recommended Tensorflow CUDA Installation Source (for CUDA 10.0): pip3 install --upgrade pip && pip3 install tensorflow-gpu==1.15.4)
+# (Recommended Tensorflow ROCm Installation Source (for ROCm 4.0): pip3 install tensorflow-rocm==1.15.9)
 
 # If you need Antares to extend/boost Pytorch operators, please also run:
 sudo python3 ./frameworks/antares/pytorch/setup.py
 # (Recommended Pytorch CUDA Installation Source (for CUDA 10.0): pip3 install torch==1.5.0 torchvision==0.6.0 -f https://download.pytorch.org/whl/torch_stable.html)
+# (Recommended Pytorch ROCm Installation Source (for ROCm 4.0): pip3 install --pre torch==1.8.0.dev20210106 -f https://download.pytorch.org/whl/nightly/rocm4.0/torch_nightly.html
 ```
 
 # Startup with First Example (CUDA example):
