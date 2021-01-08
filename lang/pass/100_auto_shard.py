@@ -122,7 +122,7 @@ def run_pass_v2(ast_seq, global_input_dict, global_output_dict):
 
   # AST props: ast['props']['data_axes'], ast['props']['input_dict']
   for i in range(len(pieces)):
-    assert data_axes[i]['range'] % pieces[i] == 0
+    assert data_axes[i]['range'] % pieces[i] == 0, "Axis sharding must be exactly divided, while requesting %d // %d." % (data_axes[i]['range'], pieces[i])
     data_axes[i]['range'] //= pieces[i]
 
   for k in ast['props']['input_dict']:

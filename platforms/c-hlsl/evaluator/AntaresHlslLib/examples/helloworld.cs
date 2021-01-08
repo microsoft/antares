@@ -21,25 +21,41 @@ namespace AntaresHelloWorldExample
 {
     class Program
     {
-        [DllImport(@"antares_hlsl_v0.1_x64.dll", CallingConvention = CallingConvention.Cdecl)]
+        public const string HlslDllName = @"antares_hlsl_v0.1_x64.dll";
+
+        [DllImport(HlslDllName, CallingConvention = CallingConvention.Cdecl)]
         public static extern int dxStreamSynchronize(IntPtr hStream);
 
-        [DllImport(@"antares_hlsl_v0.1_x64.dll", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(HlslDllName, CallingConvention = CallingConvention.Cdecl)]
         public static extern IntPtr dxShaderLoad(string source, [Optional] int num_outputs, [Optional] int num_inputs);
-        [DllImport(@"antares_hlsl_v0.1_x64.dll", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(HlslDllName, CallingConvention = CallingConvention.Cdecl)]
         public static extern IntPtr dxShaderLoad(string source, out int num_outputs, out int num_inputs);
 
-        [DllImport(@"antares_hlsl_v0.1_x64.dll", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(HlslDllName, CallingConvention = CallingConvention.Cdecl)]
         public static extern int dxShaderLaunchAsync(IntPtr hShader, IntPtr[] source, IntPtr hStream);
 
-        [DllImport(@"antares_hlsl_v0.1_x64.dll", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(HlslDllName, CallingConvention = CallingConvention.Cdecl)]
         public static extern IntPtr dxMemAlloc(long bytes);
         
-        [DllImport(@"antares_hlsl_v0.1_x64.dll", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(HlslDllName, CallingConvention = CallingConvention.Cdecl)]
         public static extern int dxMemcpyHtoDAsync(IntPtr dptr, IntPtr hptr, long bytes, IntPtr hStream);
 
-        [DllImport(@"antares_hlsl_v0.1_x64.dll", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(HlslDllName, CallingConvention = CallingConvention.Cdecl)]
         public static extern int dxMemcpyDtoHAsync(IntPtr hptr, IntPtr dptr, long bytes, IntPtr hStream);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern bool FreeLibrary(IntPtr hModule);
+
+        public static void UnloadHlslImportedDll()
+        {
+            foreach (System.Diagnostics.ProcessModule mod in System.Diagnostics.Process.GetCurrentProcess().Modules)
+            {
+                if (mod.ModuleName == HlslDllName)
+                {
+                    FreeLibrary(mod.BaseAddress);
+                }
+            }
+        }
 
         static int Main(string[] args)
         {
@@ -101,6 +117,8 @@ void CSMain(uint3 threadIdx: SV_GroupThreadID, uint3 blockIdx: SV_GroupID, uint3
             // Print the result in host memory
             // 1 + 2 == 3
             Console.WriteLine("Result = [" + h_output0[0] + ", " + h_output0[1] + ", .., " + h_output0[h_output0.Length - 1] + "]");
+
+            UnloadHlslImportedDll();
             return 0;
         }
     }

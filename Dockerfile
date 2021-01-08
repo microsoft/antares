@@ -1,4 +1,4 @@
-FROM nvidia/cuda:11.0-cudnn8-devel-ubuntu18.04
+FROM nvidia/cuda:11.1-cudnn8-devel-ubuntu20.04
 MAINTAINER Wei CUI <weicu@microsoft.com>
 
 ENV DEBIAN_FRONTEND noninteractive
@@ -20,7 +20,7 @@ RUN apt-get update && apt install -y --no-install-recommends git ca-certificates
 RUN curl -sL http://repo.radeon.com/rocm/apt/debian/rocm.gpg.key | apt-key add - && \
     printf "deb [arch=amd64] http://repo.radeon.com/rocm/apt/4.0/ xenial main" | tee /etc/apt/sources.list.d/rocm_hip.list && \
     apt update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    rocm-dev zlib1g-dev unzip librdmacm-dev rocblas hipsparse rccl rocfft rocrand miopen-hip && apt-get clean && rm -rf /var/lib/apt/lists/*
+    rocm-dev zlib1g-dev rename zip unzip librdmacm-dev rocblas hipsparse rccl rocfft rocrand miopen-hip rocthrust hip-rocclr && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN /bin/echo -e "set backspace=indent,eol,start\nset nocompatible\nset ts=4" > /etc/vim/vimrc.tiny
 
