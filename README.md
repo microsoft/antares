@@ -42,14 +42,6 @@ sudo python3 ./frameworks/antares/pytorch/setup.py
 # (Recommended Pytorch ROCm Installation Source (for ROCm 4.0): pip3 install --pre torch==1.8.0.dev20210106 -f https://download.pytorch.org/whl/nightly/rocm4.0/torch_nightly.html
 ```
 
-# Startup with First Example (CUDA example):
-
-```sh
-cd ${ANTARES_ROOT}/
-sudo BACKEND=c-cuda COMPUTE_V1='- einstein_v2("output0[N, M] +=! input0[N, K] * input1[K, M]", { "input0": {"dtype": "float32", "shape": [1024, 512]}, "input1": {"dtype": "float32", "shape": [512, 512]}})' make
-# Other valid platforms for BACKEND variable could be: c-rocm, c-hlsl, c-gc, c-mcpu, c-ocl, ..
-```
-
 # Example with Tensorflow-GPU/Pytorch-GPU:
 
 This example shows you an easy way to quickly add custom operators in Tensorflow/Pytorch, but the operator itself is not an optimized version (not tuned).

@@ -5,7 +5,8 @@ import tensorflow as tf
 import os, time
 import numpy as np
 
-def compare_ops(left, right):
+def compare_ops(left, right_ir):
+  right = right_ir.tune(step=100, use_cache=True).emit()
   config = tf.ConfigProto()
   config.gpu_options.allow_growth = True
   with tf.Session(config=config) as sess:

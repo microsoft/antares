@@ -13,7 +13,7 @@ if 'all_gather' not in op: count *= size
 
 input_0 = tf.get_variable('input_0', count, 'float32', initializer=tf.initializers.ones('float32'))
 [input_0] = antares.metric([input_0])
-for i in range(repeat): [input_0] = antares.communicate(op, [input_0], ["input_0"])
+for i in range(repeat): [input_0] = antares.communicate(op, [input_0], axes=[0], names=["input_0"])
 [output_0] = antares.metric([input_0])
 
 tf_config = tf.ConfigProto()

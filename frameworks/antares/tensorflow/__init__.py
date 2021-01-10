@@ -79,7 +79,7 @@ def make_op(ir, feed_dict, extra_outputs=[]):
     return response
 
   def tune(step=100, use_cache=False, timeout=-1):
-    if use_cache and request_server().find('// Saved Perf =') >= 0:
+    if use_cache and request_server().find('// Saved Perf =') >= 0 or step <= 0:
       return request_server
     request_server(tune_step=step)
     timer, timeout = 1, int(timeout)
@@ -183,36 +183,32 @@ def metric(data):
   results = communicate_library.metric(data)
   return results
 
-def communicate(comm_type, data, names=[]):
+def communicate(comm_type, data, axes=[], names=[]):
   rank, size, local_rank = init_communicate_config()
 
   if comm_type.startswith('all_reduce:'):
     ops = comm_type[comm_type.index(':') + 1:]
-    data = communicate_library.nccl2_allreduce(data, reduce_type=ops)
+    out = communicate_library.nccl2_allreduce(data, reduce_type=ops)
   elif comm_type.startswith('reduce_scatter:'):
-    original_shape = [int(x) for x in data.shape]
     ops = comm_type[comm_type.index(':') + 1:]
-    [data] = communicate_library.nccl2_reducescatter([data], reduce_type=ops, node_size=size)
-    for i in range(len(original_shape)):
-      if original_shape[i] > 1:
-        assert original_shape[i] % size == 0
-        break
-    original_shape[i] //= size
-    data = tf.reshape(data, original_shape)
+    out = communicate_library.nccl2_reducescatter(data, reduce_type=ops, node_size=size)
+    for i in range(len(data)):
+      _shape = [int(x) for x in data[i].shape]
+      assert _shape[axes[i]] % size == 0, f"Tensor of shape %s cannot be evenly divided by {size} at axis %d" % (_shape, axes[i])
+      _shape[axes[i]] //= size
+      out[i] = tf.reshape(out[i], _shape)
   elif comm_type.startswith('all_gather:'):
-    original_shape = [int(x) for x in data.shape]
-    [data] = communicate_library.nccl2_allgather([data], node_size=size)
-    for i in range(len(original_shape)):
-      if original_shape[i] > 1:
-        break
-    original_shape[i] *= size
-    data = tf.reshape(data, original_shape)
+    out = communicate_library.nccl2_allgather(data, node_size=size)
+    for i in range(len(data)):
+      _shape = [int(x) for x in data[i].shape]
+      _shape[axes[i]] *= size
+      out[i] = tf.reshape(out[i], _shape)
   else:
     raise Exception(f"Unrecognized communication type: {comm_type}")
 
   if names:
-    data = list(data)
+    out = list(out)
     for i in range(len(names)):
-      data[i] = tf.identity(data[i], name=names[i])
-    data = tuple(data)
-  return data
+      out[i] = tf.identity(out[i], name=names[i])
+    out = tuple(out)
+  return out
