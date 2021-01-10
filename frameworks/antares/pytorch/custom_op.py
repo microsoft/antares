@@ -8,9 +8,9 @@ from http import client as http_client
 
 import antares_custom_op
 
-def generate_antares_expression(antares_ir, inputs):
+def generate_antares_expression(antares_ir, feed_dict, extra_outputs):
   input_dict, kwargs = {}, {}
-  for k, v in inputs:
+  for k, v in feed_dict:
     input_dict[k] = {
     'dtype': str(v.dtype).split('.')[1],
     'shape': list(v.shape)
@@ -18,7 +18,7 @@ def generate_antares_expression(antares_ir, inputs):
     kwargs[k] = v
 
   input_dict = json.dumps(input_dict)
-  return '- einstein_v2("%s", input_dict=%s)' % (antares_ir.replace('"', '`'), input_dict)
+  return '- einstein_v2("%s", input_dict=%s, extra_outputs=%s)' % (antares_ir.replace('"', '`'), input_dict, extra_outputs)
 
 def fetch_and_compile_antares_kernel(expression, expr_hash, server_addr):
   print('+ [Antares Op]', expression)
@@ -51,24 +51,20 @@ def fetch_and_compile_antares_kernel(expression, expr_hash, server_addr):
   output_names = [x.split('/')[-1].strip() for x in meta_outputs]
   return output_names, (source, source_path, expr_hash, meta_inputs, meta_outputs)
 
-'''
-class CustomFunction(Function):
-  @staticmethod
-  def forward(ctx, inputs, attributes):
-    outputs = antares_custom_op.forward(inputs, *attributes)
-    return outputs
-'''
 
 class CustomOp(torch.nn.Module):
-  def __init__(self, server_addr='localhost:8880'):
+  def __init__(self, server_addr='localhost'):
     super(CustomOp, self).__init__()
+    if server_addr.find(':') < 0:
+      server_addr += ':8880'
     self.server_addr = server_addr
     self.ops = dict()
 
-  def forward(self, antares_ir, values, keys=[]):
+  def forward(self, ir, mapped_values, mapped_keys=[], extra_outputs=[]):
+    keys, values = mapped_keys, mapped_values
     if not keys:
       keys = [f'input{i}' for i in range(len(values))]
-    antares_expr = generate_antares_expression(antares_ir, zip(keys, values))
+    antares_expr = generate_antares_expression(ir, zip(keys, values), extra_outputs)
 
     expr_hash = hashlib.sha256(antares_expr.encode()).hexdigest()
     if expr_hash in self.ops:
@@ -77,6 +73,12 @@ class CustomOp(torch.nn.Module):
       output_names, attributes = fetch_and_compile_antares_kernel(antares_expr, expr_hash, self.server_addr)
       self.ops[expr_hash] = output_names, attributes
 
-    self._output_names = output_names
     outputs = antares_custom_op.forward(values, *attributes)
+    for i in range(len(outputs)):
+      outputs[i].id = output_names[i]
+
+    if len(outputs) == 1:
+       outputs = outputs[0]
+    else:
+       outputs = tuple(outputs)
     return outputs
