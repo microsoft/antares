@@ -10,7 +10,8 @@ from tensorflow.contrib.util import loader
 from tensorflow.python.platform import resource_loader
 
 from http import client as http_client
-import json, os, hashlib, shutil
+import json, os, hashlib, shutil, time
+
 
 def get_tensorflow_antares_component(tf_module_path, op_name, using_mpi=False):
   dist_path = tf.sysconfig.get_include() + '/..'
@@ -42,82 +43,120 @@ def get_tensorflow_antares_component(tf_module_path, op_name, using_mpi=False):
 __ops_name__ = __loader__.name.split('.')[-1]
 __default_server_addr__ = 'localhost:8880'
 
-def make_op(antares_ir, inputs, server_addr=None):
-  if server_addr is None:
-    server_addr = __default_server_addr__
+def set_default_server_addr(server_addr):
+  global __default_server_addr__
+  __default_server_addr__ = server_addr
+  if server_addr.find(':') < 0:
+    __default_server_addr__ += ':8880'
+
+def make_op(ir, feed_dict, extra_outputs=[]):
   input_dict, kwargs = {}, {}
-  if isinstance(inputs, list):
-    inputs = dict([(f'input{i}', inputs[i]) for i in range(len(inputs))])
-  for k in inputs:
+  if isinstance(feed_dict, list):
+    feed_dict = dict([(f'input{i}', feed_dict[i]) for i in range(len(feed_dict))])
+  for k in feed_dict:
     assert k[0].islower(), "Tensor name in Antares IR must start with lower case letter."
-    dtype = str(inputs[k].dtype.name)
+    dtype = str(feed_dict[k].dtype.name)
     input_dict[k] = {
       'dtype': dtype[:-4] if dtype.endswith('_ref') else dtype,
-      'shape': [int(x) for x in inputs[k].shape]
+      'shape': [int(x) for x in feed_dict[k].shape]
     }
-    kwargs[k] = inputs[k]
+    kwargs[k] = feed_dict[k]
 
   input_dict = json.dumps(input_dict)
-  expression = '- einstein_v2("%s", input_dict=%s)' % (antares_ir.replace('"', '`'), input_dict)
+  expression = '- einstein_v2("%s", input_dict=%s, extra_outputs=%s)' % (ir.replace('"', '`'), input_dict, extra_outputs)
   print('+ [Antares Op]', expression)
 
-  h = http_client.HTTPConnection(server_addr, timeout=10)
-  try:
-    h.request('GET', '/', headers={'COMPUTE_V1': expression})
-  except:
-    raise Exception("Failed to contact with Antares server: %s (not started?)" % server_addr)
-  res = h.getresponse()
-  if res.status != 200:
-    raise Exception("Fail to get server response, reason: %s" % res.reason)
+  def request_server(tune_step=0):
+    h = http_client.HTTPConnection(__default_server_addr__, timeout=10)
+    try:
+      h.request('GET', '/', headers={'COMPUTE_V1': expression, 'STEP': tune_step})
+    except:
+      raise Exception("Failed to contact with Antares server: %s (not started?)" % __default_server_addr__)
+    res = h.getresponse()
+    if res.status != 200:
+      raise Exception("Fail to get server response, reason: %s" % res.reason)
+    response = res.read().decode()
+    return response
 
-  source = res.read().decode()
-  try:
-    meta_bgn = source.index('///') + len('///')
-  except:
-    raise Exception("Illegal syntax for Antares expression: %s" % expression)
-  meta_pos = source.index(':', meta_bgn)
-  meta_end = source.index('\n', meta_pos)
-  meta_inputs = source[meta_bgn:meta_pos].split(',')
-  meta_outputs = source[meta_pos + 1:meta_end].split(',')
-  kwargs['source'] = source
-  kwargs['antares_ir'] = antares_ir 
+  def tune(step=100, use_cache=False, timeout=-1):
+    if use_cache and request_server().find('// Saved Perf =') >= 0:
+      return request_server
+    request_server(tune_step=step)
+    timer, timeout = 1, int(timeout)
+    while timeout == -1 or timer < timeout:
+      source = request_server() + '\n'
+      idx = source.find('// Saved Perf = ')
+      if idx >= 0:
+        status = source[idx:source.index('\n', idx)]
+        print('+ [Antares Op]', f'>> tuning status (time = {timer}/{timeout}): {status}', end='\r')
+      if source.find('// Antares Tuning Completed') >= 0:
+        break
+      if not timeout:
+        break
+      timer += 1
+      time.sleep(1)
+    print()
+    return request_server
 
-  code_name = 'Antares' + hashlib.sha256(expression.encode()).hexdigest()
-  tf_module_path = '/tmp/antares_tf_%s.cc' % code_name
+  def emit():
+    source = request_server()
+    try:
+      meta_bgn = source.index('///') + len('///')
+    except:
+      raise Exception("Illegal syntax for Antares expression: %s" % expression)
+    meta_pos = source.index(':', meta_bgn)
+    meta_end = source.index('\n', meta_pos)
+    meta_inputs = source[meta_bgn:meta_pos].split(',')
+    meta_outputs = source[meta_pos + 1:meta_end].split(',')
+    kwargs['source'] = source
+    kwargs['antares_ir'] = ir
 
-  shutil.copyfile(resource_loader.get_path_to_datafile('main_ops.cc.in'), tf_module_path)
-  with open(tf_module_path, 'a') as fp:
-    fp.write('REGISTER_OP(OP_NAME)')
-    for i in range(len(meta_inputs)):
-      shape, dtype, name = meta_inputs[i].split('/')
-      fp.write('\n  .Input("%s: %s") // %s' % (name, dtype, shape.replace('-', ', ')))
-    for i in range(len(meta_outputs)):
-      shape, dtype, name = meta_outputs[i].split('/')
-      fp.write('\n  .Output("%s: %s") // %s' % (name, dtype, shape.replace('-', ', ')))
-    fp.write('\n  .Attr("source: string").Attr("antares_ir: string").Attr("tf_module_path: string").Attr("meta_inputs: list(string)").Attr("meta_outputs: list(string)").SetIsStateful()')
-    fp.write('\n  .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {')
-    for i in range(len(meta_outputs)):
-      fp.write('\n    c->set_output(%d, c->MakeShape({%s}));' % (i, meta_outputs[i].split('/')[0].replace('-', ', ')))
-    fp.write('\n    return ::tensorflow::Status::OK();\n  });')
+    code_name = 'Antares' + hashlib.sha256(expression.encode()).hexdigest()
+    tf_module_path = '/tmp/antares_tf_%s.cc' % code_name
 
-  libops_path = get_tensorflow_antares_component(tf_module_path, code_name)
-  library = loader.load_op_library(libops_path)
-  antares_func = None
-  for attr in dir(library):
-    if attr.startswith('antares') and '_eager' not in attr:
-      antares_func = getattr(library, attr)
-      break
-  if not antares_func:
-    raise Exception("Invalid antares component is made.")
+    shutil.copyfile(resource_loader.get_path_to_datafile('main_ops.cc.in'), tf_module_path)
+    with open(tf_module_path, 'a') as fp:
+      fp.write('REGISTER_OP(OP_NAME)')
+      for i in range(len(meta_inputs)):
+        shape, dtype, name = meta_inputs[i].split('/')
+        fp.write('\n  .Input("%s: %s") // %s' % (name, dtype, shape.replace('-', ', ')))
+      for i in range(len(meta_outputs)):
+        shape, dtype, name = meta_outputs[i].split('/')
+        fp.write('\n  .Output("%s: %s") // %s' % (name, dtype, shape.replace('-', ', ')))
+      fp.write('\n  .Attr("source: string").Attr("antares_ir: string").Attr("tf_module_path: string").Attr("meta_inputs: list(string)").Attr("meta_outputs: list(string)").SetIsStateful()')
+      fp.write('\n  .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {')
+      for i in range(len(meta_outputs)):
+        fp.write('\n    c->set_output(%d, c->MakeShape({%s}));' % (i, meta_outputs[i].split('/')[0].replace('-', ', ')))
+      fp.write('\n    return ::tensorflow::Status::OK();\n  });')
 
-  kwargs['tf_module_path'] = tf_module_path
-  kwargs['meta_inputs'] = meta_inputs
-  kwargs['meta_outputs'] = meta_outputs
-  result = antares_func(**kwargs)
+    libops_path = get_tensorflow_antares_component(tf_module_path, code_name)
+    library = loader.load_op_library(libops_path)
+    antares_func = None
+    for attr in dir(library):
+      if attr.startswith('antares') and '_eager' not in attr:
+        antares_func = getattr(library, attr)
+        break
+    if not antares_func:
+      raise Exception("Invalid antares component is made.")
 
-  result._output_names = [x.split('/')[-1].strip() for x in meta_outputs]
-  return result
+    kwargs['tf_module_path'] = tf_module_path
+    kwargs['meta_inputs'] = meta_inputs
+    kwargs['meta_outputs'] = meta_outputs
+    result = antares_func(**kwargs)
 
+    output_names = [x.split('/')[-1].strip() for x in meta_outputs]
+    if len(output_names) == 1:
+      result = tf.identity(result, name=output_names[0])
+    else:
+      result = list(result)
+      for i in range(len(result)):
+        result[i] = tf.identity(result[i], name=output_names[i])
+      result = tuple(result)
+    return result
+
+  request_server.tune = tune
+  request_server.emit = emit
+  return request_server
 
 communicate_library = None
 
@@ -142,16 +181,14 @@ def init_communicate_config():
 def metric(data):
   communicate_library = init_library()
   results = communicate_library.metric(data)
-  for d, r in zip(data, results):
-    r._output_names = d._output_names if hasattr(d, '_output_names') else [d.name.split(':')[0]]
   return results
 
-def communicate(comm_type, data, name=[]):
+def communicate(comm_type, data, names=[]):
   rank, size, local_rank = init_communicate_config()
 
   if comm_type.startswith('all_reduce:'):
     ops = comm_type[comm_type.index(':') + 1:]
-    [data] = communicate_library.nccl2_allreduce([data], reduce_type=ops)
+    data = communicate_library.nccl2_allreduce(data, reduce_type=ops)
   elif comm_type.startswith('reduce_scatter:'):
     original_shape = [int(x) for x in data.shape]
     ops = comm_type[comm_type.index(':') + 1:]
@@ -173,6 +210,9 @@ def communicate(comm_type, data, name=[]):
   else:
     raise Exception(f"Unrecognized communication type: {comm_type}")
 
-  if name:
-    data._output_names = name
+  if names:
+    data = list(data)
+    for i in range(len(names)):
+      data[i] = tf.identity(data[i], name=names[i])
+    data = tuple(data)
   return data
