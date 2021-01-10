@@ -62,7 +62,7 @@ BACKEND=c-cuda make rest-server
 
 - Tensorflow Frontend Only:
 ```py
-# For Tensorflow CUDA frontend, just execute the following python script:
+# For Tensorflow CUDA frontend, execute the following python script:
 
 import tensorflow as tf
 from tensorflow.contrib import antares
@@ -70,7 +70,7 @@ from tensorflow.contrib import antares
 x = tf.get_variable('x', [128, 1024], tf.float32, initializer=tf.initializers.ones(tf.float32), trainable=False)
 y = tf.get_variable('y', [1024, 1024], tf.float32, initializer=tf.initializers.ones(tf.float32), trainable=False)
 
-op = antares.make_op(ir='dot_0[N, M] +=! data[N, K] * weight[K, M]', feed_dict={'data': x, 'weight': y}).tune(step=100, use_cache=True).emit()
+op = antares.make_op(ir='dot_0[N, M] +=! data[N, K] * weight[K, M]', feed_dict={'data': x, 'weight': y}).tune(step=100, use_cache=True, timeout=600).emit()
 
 with tf.Session() as sess:
   sess.run(tf.global_variables_initializer())
@@ -80,14 +80,13 @@ with tf.Session() as sess:
 
 - Pytorch Frontend Only:
 ```py
-# For Pytorch frontend, just execute the following python script:
+# For Pytorch frontend, execute the following python script:
 import os
 import torch
 from torch.contrib.antares.custom_op import CustomOp
 
 device = torch.device("cuda")
 dtype = torch.float32
-custom_op = CustomOp().to(device, dtype)
 
 kwargs = {'dtype': dtype,
           'device': device,
@@ -96,9 +95,10 @@ kwargs = {'dtype': dtype,
 x = torch.ones(128, 1024, **kwargs)
 y = torch.ones(1024, 1024, **kwargs)
 
-result = custom_op(ir='dot_0[N, M] +=! data[N, K] * weight[K, M]', mapped_keys=['data', 'weight'], mapped_values=[x, y])
-print('The result of tensor `%s` is:\n%s' % (result.id, result))
+custom_op = CustomOp(ir='dot_0[N, M] +=! data[N, K] * weight[K, M]', feed_dict={'data': x, 'weight': y}).to(device, dtype).tune(step=100, use_cache=True, timeout=600).emit()
 
+result = custom_op()
+print('The result of tensor `%s` is:\n%s' % (result.id, result))
 ```
 
 If you want the operator you just extended to run more efficiently, you can consider to take a look at "How to Tune Expressions" sections below.
