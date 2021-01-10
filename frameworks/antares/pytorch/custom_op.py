@@ -83,7 +83,7 @@ class CustomOp(torch.nn.Module):
     return output_names, (source, source_path, expr_hash, meta_inputs, meta_outputs)
 
   def tune(self, step=100, use_cache=False, timeout=-1):
-    if use_cache and self.request_server().find('// Saved Perf =') >= 0:
+    if use_cache and self.request_server().find('// Saved Perf =') >= 0 or step <= 0:
       return self
     self.request_server(tune_step=step)
     timer, timeout = 1, int(timeout)
