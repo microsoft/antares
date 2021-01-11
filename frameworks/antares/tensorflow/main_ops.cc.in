@@ -88,7 +88,7 @@ class MainOpKernel: public AsyncOpKernel {
     std::string _id = _id_env ? _id_env : "0";
     kernel_path += "." + _id;
 
-    if (access(kernel_path.c_str(), F_OK) != 0) {
+    if (1 /* require to compute diff with last version if bypass */ || access(kernel_path.c_str(), F_OK) != 0) {
       std::string self_pid = "." + std::to_string(getpid());
 #ifndef __HIP_PLATFORM_HCC__
       CHECK_EQ(cuDeviceGetAttribute(&major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, 0), 0);
