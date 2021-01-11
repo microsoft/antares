@@ -57,6 +57,8 @@ class CustomOp(torch.nn.Module):
     if res.status != 200:
       raise Exception("Fail to get server response, reason: %s" % res.reason)
     response = res.read().decode()
+    if response.startswith('[ERROR]'):
+      raise Exception("IR Compilation Failed - %s" % response)
     return response
 
   def fetch_and_compile_antares_kernel(self, expr_hash):
@@ -86,13 +88,16 @@ class CustomOp(torch.nn.Module):
     if use_cache and self.request_server().find('// Saved Perf =') >= 0 or step <= 0:
       return self
     self.request_server(tune_step=step)
-    timer, timeout = 1, int(timeout)
+    timer, timeout, status = 1, int(timeout), ''
     while timeout == -1 or timer < timeout:
-      source = self.request_server() + '\n'
+      try:
+        source = self.request_server() + '\n'
+      except:
+        source = ''
       idx = source.find('// Saved Perf = ')
       if idx >= 0:
         status = source[idx:source.index('\n', idx)]
-        print('+ [Antares Op]', f'>> tuning status (time = {timer}/{timeout}): {status}', end='\r')
+      print('+ [Antares Op]', f'>> tuning status (time = {timer}/{timeout}): {status}', end='\r')
       if source.find('// Antares Tuning Completed') >= 0:
         break
       if not timeout:

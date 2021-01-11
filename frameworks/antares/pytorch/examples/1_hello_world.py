@@ -3,7 +3,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-import os
 import torch
 from torch.contrib.antares.custom_op import CustomOp
 
