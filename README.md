@@ -73,7 +73,6 @@ with tf.Session() as sess:
 - Pytorch Frontend Only:
 ```py
 # For Pytorch frontend, execute the following python script:
-import os
 import torch
 from torch.contrib.antares.custom_op import CustomOp
 
