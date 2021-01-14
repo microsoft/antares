@@ -17,8 +17,8 @@ PARAMS ?=  docker run -v $(shell pwd):/antares -w /antares --privileged -v /:/ho
 	--shm-size=1g --ulimit memlock=-1 --ulimit stack=67108864 \
 	-v $(shell dirname `ldd /usr/lib/x86_64-linux-gnu/libcuda.so.1 2>/dev/null | grep nvidia-fatbinaryloader | awk '{print $$3}'` 2>/dev/null):/usr/local/nvidia/lib64 \
 	-v $(shell pwd)/public/roc_prof:/usr/local/bin/rp -e CPU_THREADS=$(CPU_THREADS) -e RECORD=$(RECORD) \
-	-e STEP=$(STEP) -e AGENT_URL=$(AGENT_URL) -e TUNER=$(TUNER) -e CONFIG='$(CONFIG)' -e BACKEND=$(BACKEND) -e COMPUTE_V1='$(COMPUTE_V1)' \
-	-e COMMIT=$(COMMIT) -e HARDWARE_CONFIG=$(HARDWARE_CONFIG) -e DEVICE_NAME='$(DEVICE_NAME)'
+	-e STEP=$(STEP) -e AGENT_URL=$(value AGENT_URL) -e TUNER=$(TUNER) -e CONFIG='$(value CONFIG)' -e BACKEND=$(BACKEND) -e COMPUTE_V1='$(value COMPUTE_V1)' \
+	-e COMMIT=$(COMMIT) -e HARDWARE_CONFIG=$(HARDWARE_CONFIG) -e DEVICE_NAME='$(value DEVICE_NAME)'
 
 HTTP_PORT ?= 8880
 HTTP_PREF ?= AntaresServer-$(HTTP_PORT)_
