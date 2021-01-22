@@ -42,7 +42,7 @@ krnl_compile_timeout = 20
 verbose = int(os.environ.get('VERBOSE', '1'))
 
 try:
-  platform_config = importlib.import_module('platforms.%s.config' % backend)
+  platform_config = importlib.import_module('backends.%s.config' % backend)
 except ModuleNotFoundError:
   raise Exception('>> Platform config for backend %s not found' % backend)
 except:
@@ -294,7 +294,7 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
   def do_evaluate():
     try:
       try:
-        eval_client = importlib.import_module('platforms.%s.evaluator.client' % backend)
+        eval_client = importlib.import_module('backends.%s.evaluator.client' % backend)
       except ModuleNotFoundError:
         print('>> Evaluator for backend %s not found, skipping evaluation.' % backend)
         return None
