@@ -6,8 +6,8 @@
 import tensorflow as tf
 import shutil, os, sys
 
-if '1.15' not in tf.version.VERSION:
-  raise Exception("Current Antares plugin is for Tensorflow 1.15.x only.")
+if tf.version.VERSION < '2.4' and not tf.version.VERSION.startswith('1.15.'):
+  raise Exception("Current Antares plugin is for Tensorflow >= 1.5.x / 2.4.x only.")
 
 dist_path = tf.sysconfig.get_include() + '/../contrib/antares'
 root_path = os.path.dirname(sys.argv[0])
@@ -20,10 +20,7 @@ try:
 except FileNotFoundError:
   pass
 
-try:
-  os.mkdir(dist_path)
-except FileExistsError:
-  pass
+os.makedirs(dist_path)
 
 shutil.copyfile(root_path + '/__init__.py', dist_path + '/__init__.py')
 shutil.copyfile(root_path + '/main_ops.cc.in', dist_path + '/main_ops.cc.in')
