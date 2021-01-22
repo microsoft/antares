@@ -17,17 +17,8 @@ if [[ "$COMPUTE_V1" == "" ]]; then
   export COMPUTE_V1='- einstein_v2("output0[N] = input0[N] + input1[N]", input_dict={"input0": {"dtype": "float32", "shape": [1024 * 512]}, "input1": {"dtype": "float32", "shape": [1024 * 512]}})'
 fi
 
-if [[ "$BACKEND" == "" ]]; then
-  if [ -e /dev/nvidia-modeset ]; then
-    BACKEND=c-cuda
-  elif [ -e /dev/kfd ]; then
-    BACKEND=c-rocm
-  elif grep Microsoft /proc/sys/kernel/osrelease >/dev/null; then
-    BACKEND=c-hlsl
-  fi
-fi
+export BACKEND=$(./antares/get_backend.sh)
 
-export BACKEND=${BACKEND:-c-rocm}
 export ANTARES_DRIVER_PATH=/tmp/libAntares
 
 mkdir -p ${ANTARES_DRIVER_PATH}
