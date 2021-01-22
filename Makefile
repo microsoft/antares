@@ -1,5 +1,4 @@
 COMPUTE_V1 ?=
-BACKEND ?=
 TUNER ?=
 STEP ?= 0
 CONFIG ?=
@@ -12,6 +11,7 @@ HOST_MODE ?= 0
 
 CPU_THREADS ?= 8
 INNER_CMD = ./antares/run.sh
+BACKEND = $(shell ./antares/get_backend.sh)
 
 PARAMS ?=  docker run -v $(shell pwd):/antares -w /antares --privileged -v /:/host \
 	--shm-size=1g --ulimit memlock=-1 --ulimit stack=67108864 \
@@ -22,7 +22,7 @@ PARAMS ?=  docker run -v $(shell pwd):/antares -w /antares --privileged -v /:/ho
 
 HTTP_PORT ?= 8880
 HTTP_PREF ?= AntaresServer-$(HTTP_PORT)_
-HTTP_NAME ?= $(HTTP_PREF)$(or $(BACKEND), $(BACKEND), default)
+HTTP_NAME ?= $(HTTP_PREF)$(BACKEND)
 HTTP_EXEC ?= $(PARAMS) -d --name=$(HTTP_NAME) -p $(HTTP_PORT):$(HTTP_PORT) antares
 
 eval:
@@ -41,7 +41,7 @@ stop-server:
 	docker rm $(HTTP_NAME) >/dev/null 2>&1 || true
 
 install_docker:
-	docker build -t antares --network=host .
+	docker build -t antares --network=host . -f docker/Dockerfile.$(BACKEND)*
 
 install_host:
 	./engine/install_antares_host.sh

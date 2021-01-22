@@ -33,16 +33,21 @@ sudo BACKEND=c-cuda make
 
 # If you need Antares to extend/boost Tensorflow operators, please also run:
 sudo python3 ./frameworks/antares/tensorflow/setup.py
-# Recommended Tensorflow-1 CUDA Installation Package (for CUDA 10.0): python3 -m pip install --upgrade pip && python3 -m pip install tensorflow-gpu==1.15.4)
-# Recommended Tensorflow-2 CUDA Installation Package (for CUDA 11.0): python3 -m pip install --upgrade pip && python3 -m pip install tensorflow-gpu==2.4.0)
-# Recommended Tensorflow-1 ROCm Installation Package (for ROCm 4.0):  python3 -m pip install tensorflow-rocm==1.15.9)
-# Recommended Tensorflow-2 ROCm Installation Package (for ROCm 4.0):  python3 -m pip install tensorflow-rocm==2.4.0)
+
+# Reference - Recommended Installation Package Choices for Tensorflow 1.x & 2.x (tested in Ubuntu 20.04):
+#   Tensorflow-1 for NVIDIA CUDA 10.0: python3 -m pip install --upgrade pip && python3 -m pip install tensorflow-gpu==1.15.4
+#   Tensorflow-1 for NVIDIA CUDA 11.0: python3 -m pip install --upgrade pip && python3 -m pip install https://github.com/ghostplant/tensorflow-wheel-collections/releases/download/cuda-11/tensorflow_gpu-1.15.4_cuda11+nv-cp38-cp38-linux_x86_64.whl
+#   Tensorflow-2 for NVIDIA CUDA 11.0: python3 -m pip install --upgrade pip && python3 -m pip install tensorflow-gpu==2.4.0
+#   Tensorflow-1 for AMD ROCm 4.0:  python3 -m pip install tensorflow-rocm==1.15.9
+#   Tensorflow-2 for AMD ROCm 4.0:  python3 -m pip install tensorflow-rocm==2.4.0
 
 # If you need Antares to extend/boost Pytorch operators, please also run:
 sudo python3 ./frameworks/antares/pytorch/setup.py
-# Recommended Pytorch CUDA Installation Package (for CUDA 10.0): python3 -m pip install torch==1.5.0 torchvision==0.6.0 -f https://download.pytorch.org/whl/torch_stable.html
-# Recommended Pytorch CUDA Installation Package (for CUDA 11.0): python3 -m pip install torch===1.7.1+cu110 torchvision===0.8.2+cu110 torchaudio===0.7.2 -f https://download.pytorch.org/whl/torch_stable.html
-# Recommended Pytorch ROCm Installation Package (for ROCm 4.0):  python3 -m pip install --pre torch==1.8.0.dev20210106 -f https://download.pytorch.org/whl/nightly/rocm4.0/torch_nightly.html
+
+# Reference - Recommended Installation Package Choices for Pytorch (tested in Ubuntu 20.04):
+#   Pytorch for NVIDIA CUDA 10.0: python3 -m pip install torch==1.5.0 torchvision==0.6.0 -f https://download.pytorch.org/whl/torch_stable.html
+#   Pytorch for NVIDIA CUDA 11.0: python3 -m pip install torch===1.7.1+cu110 torchvision===0.8.2+cu110 torchaudio===0.7.2 -f https://download.pytorch.org/whl/torch_stable.html
+#   Pytorch for AMD ROCm 4.0:  python3 -m pip install --pre torch==1.8.0.dev20210106 -f https://download.pytorch.org/whl/nightly/rocm4.0/torch_nightly.html
 ```
 
 # Example with Tensorflow-GPU/Pytorch-GPU:
