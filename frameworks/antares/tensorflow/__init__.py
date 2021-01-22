@@ -6,7 +6,11 @@ from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
-from tensorflow.contrib.util import loader
+try:
+  from tensorflow.contrib.util import loader
+except:
+  loader = tf
+
 from tensorflow.python.platform import resource_loader
 
 from http import client as http_client
@@ -19,7 +23,12 @@ def get_tensorflow_antares_component(tf_module_path, op_name, using_mpi=False):
   compiler = 'mpicc' if using_mpi else 'gcc'
   if os.path.exists(f'{tf_module_path}.so.{compiler}'):
     return f'{tf_module_path}.so.{compiler}'
-  if os.system('ldd %s/libtensorflow_framework.so.1 2>/dev/null | grep -e libamdhip64 >/dev/null' % dist_path) == 0:
+
+  for flag in tf.sysconfig.get_link_flags():
+    if flag.startswith('-l:libtensorflow_framework.so'):
+      libtf_so_name = flag[3:].strip()
+      break
+  if os.system(f'ldd {dist_path}/{libtf_so_name} 2>/dev/null | grep -e libamdhip64 >/dev/null') == 0:
     with_cuda = "-DGOOGLE_CUDA -D__HIP_PLATFORM_HCC__=1 -I/opt/rocm/include -L/opt/rocm/lib -lamdhip64"
     if using_mpi:
       with_cuda += ' -lmpi_cxx -lrccl'
@@ -32,7 +41,7 @@ def get_tensorflow_antares_component(tf_module_path, op_name, using_mpi=False):
   # Compile TF library
   cmd = f'''{compiler} -pthread -DNDEBUG -g -fwrapv -shared -O2 -g -fstack-protector-strong -Wformat -Werror=format-security -Wdate-time -D_FORTIFY_SOURCE=2 -fPIC \
     {tf_module_path} -o {tf_module_path}.so.{self_pid} -std=c++11 -fPIC -O2 -DOP_NAME='"{op_name}"' \
-    -I{dist_path}/include -L{dist_path}/ -l:libtensorflow_framework.so.1 -I/usr/local {with_cuda} \
+    -I{dist_path}/include -L{dist_path}/ -l:{libtf_so_name} -I/usr/local {with_cuda} \
     -pthread -Wl,-rpath -Wl,--enable-new-dtags -D_GLIBCXX_USE_CXX11_ABI={abi_flag}'''
   if os.system(cmd) != 0:
     raise Exception("Failed to compile the tensorflow plugins: %s" % cmd)

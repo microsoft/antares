@@ -6,6 +6,10 @@
 import tensorflow as tf
 from tensorflow.contrib import antares
 
+if tf.version.VERSION.startswith('2.'):
+  tf = tf.compat.v1
+  tf.disable_eager_execution()
+
 from _common import *
 
 x = create_variable([1024, 3072], dtype=tf.float32)

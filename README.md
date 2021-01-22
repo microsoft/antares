@@ -33,13 +33,16 @@ sudo BACKEND=c-cuda make
 
 # If you need Antares to extend/boost Tensorflow operators, please also run:
 sudo python3 ./frameworks/antares/tensorflow/setup.py
-# (Recommended Tensorflow CUDA Installation Source (for CUDA 10.0): pip3 install --upgrade pip && pip3 install tensorflow-gpu==1.15.4)
-# (Recommended Tensorflow ROCm Installation Source (for ROCm 4.0): pip3 install tensorflow-rocm==1.15.9)
+# Recommended Tensorflow-1 CUDA Installation Package (for CUDA 10.0): python3 -m pip install --upgrade pip && pip3 install tensorflow-gpu==1.15.4)
+# Recommended Tensorflow-2 CUDA Installation Package (for CUDA 11.0): python3 -m pip install --upgrade pip && pip3 install tensorflow-gpu==2.4.0)
+# Recommended Tensorflow-1 ROCm Installation Package (for ROCm 4.0):  python3 -m pip install tensorflow-rocm==1.15.9)
+# Recommended Tensorflow-2 ROCm Installation Package (for ROCm 4.0):  python3 -m pip install tensorflow-rocm==2.4.0)
 
 # If you need Antares to extend/boost Pytorch operators, please also run:
 sudo python3 ./frameworks/antares/pytorch/setup.py
-# (Recommended Pytorch CUDA Installation Source (for CUDA 10.0): pip3 install torch==1.5.0 torchvision==0.6.0 -f https://download.pytorch.org/whl/torch_stable.html)
-# (Recommended Pytorch ROCm Installation Source (for ROCm 4.0): pip3 install --pre torch==1.8.0.dev20210106 -f https://download.pytorch.org/whl/nightly/rocm4.0/torch_nightly.html
+# Recommended Pytorch CUDA Installation Package (for CUDA 10.0): python3 -m pip install torch==1.5.0 torchvision==0.6.0 -f https://download.pytorch.org/whl/torch_stable.html
+# Recommended Pytorch CUDA Installation Package (for CUDA 11.0): python3 -m pip install torch===1.7.1+cu110 torchvision===0.8.2+cu110 torchaudio===0.7.2 -f https://download.pytorch.org/whl/torch_stable.html
+# Recommended Pytorch ROCm Installation Package (for ROCm 4.0):  python3 -m pip install --pre torch==1.8.0.dev20210106 -f https://download.pytorch.org/whl/nightly/rocm4.0/torch_nightly.html
 ```
 
 # Example with Tensorflow-GPU/Pytorch-GPU:
@@ -52,12 +55,16 @@ This example shows you an easy way to quickly add custom operators in Tensorflow
 BACKEND=c-cuda make rest-server
 ```
 
-- Tensorflow Frontend Only:
+- Tensorflow Frontend Only (>= 1.15.x / >= 2.4.x):
 ```py
 # For Tensorflow CUDA frontend, execute the following python script:
 
 import tensorflow as tf
 from tensorflow.contrib import antares
+
+if tf.version.VERSION.startswith('2.'):
+  tf = tf.compat.v1
+  tf.disable_eager_execution()
 
 x = tf.get_variable('x', [128, 1024], tf.float32, initializer=tf.initializers.ones(tf.float32), trainable=False)
 y = tf.get_variable('y', [1024, 1024], tf.float32, initializer=tf.initializers.ones(tf.float32), trainable=False)

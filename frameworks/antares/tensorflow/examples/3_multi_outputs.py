@@ -6,6 +6,10 @@
 import tensorflow as tf
 from tensorflow.contrib import antares
 
+if tf.version.VERSION.startswith('2.'):
+  tf = tf.compat.v1
+  tf.disable_eager_execution()
+
 input0 = tf.get_variable('input0', [1024 * 512], tf.float32, initializer=tf.initializers.ones(tf.float32), trainable=False)
 input1 = tf.get_variable('input1', [1024 * 512], tf.float32, initializer=tf.initializers.ones(tf.float32), trainable=False)
 
