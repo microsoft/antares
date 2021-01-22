@@ -136,7 +136,7 @@ def do_native_scheduling(attrs):
     if plan_name.find('.') < 0:
       plan_name = 'standard.' + plan_name
     import importlib
-    schedule_lib = importlib.import_module('platforms.%s.schedule.%s' % (attrs.backend, plan_name), __loader__.name)
+    schedule_lib = importlib.import_module('backends.%s.schedule.%s' % (attrs.backend, plan_name), __loader__.name)
     schedule_lib.schedule(attrs)
     return attrs.scheduler, attrs.inputs + attrs.outputs
 
