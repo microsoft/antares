@@ -7,7 +7,7 @@ import importlib
 import urllib.request
 
 try:
-    eval_agent = importlib.import_module('platforms.c-mcpu.evaluator.eval_agent.eval_agent')
+    eval_agent = importlib.import_module('backends.c-mcpu.evaluator.eval_agent.eval_agent')
 except ModuleNotFoundError:
     raise Exception('>> eval agent is not found')
 except:
@@ -21,7 +21,7 @@ def eval(kernel_path, **kwargs):
     output_content = ''
     if not os.environ.get('AGENT_URL', ''):
         curr_dir = os.getcwd()
-        os.chdir(os.path.join(curr_dir, 'platforms/c-mcpu/evaluator/eval_agent'))
+        os.chdir(os.path.join(curr_dir, 'backends/c-mcpu/evaluator/eval_agent'))
         ret, output_content = eval_agent.profile_kernel(kernel_data.decode())
         os.chdir(curr_dir)
     else:

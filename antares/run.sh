@@ -3,9 +3,8 @@
 cd $(dirname $0)/..
 ANTARES_ROOT=$(pwd)
 
-# Valid Backends: c-cuda, c-rocm, c-mcpu, c-hlsl, c-gc
 export PYTHONDONTWRITEBYTECODE=1
-export TVM_HOME=/opt/tvm
+export TVM_HOME=$(cat engine/install_antares_host.sh | grep ^TVM_HOME | head -n 1 | awk -F\= '{print $NF}')
 export PYTHONPATH=${TVM_HOME}/python:${TVM_HOME}/topi/python:${TVM_HOME}/nnvm/python:${ANTARES_ROOT}
 
 if [ ! -e ${TVM_HOME}/build/libtvm.so ]; then
@@ -48,7 +47,7 @@ if [ ! -e ${ANTARES_DRIVER_PATH}/device_properties.cfg ]; then
     cat hardware/${HARDWARE_CONFIG}.cfg > ${ANTARES_DRIVER_PATH}/device_properties.cfg
     echo "  >> Using specific hardware device properties."
   else
-    cat platforms/${BACKEND}/default_props.cfg > ${ANTARES_DRIVER_PATH}/device_properties.cfg
+    cat backends/${BACKEND}/default_props.cfg > ${ANTARES_DRIVER_PATH}/device_properties.cfg
     echo "  >> Using ${BACKEND} default device properties."
   fi
 else

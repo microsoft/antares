@@ -4,8 +4,8 @@
 - Antares follows "_One Language Syntax for All Platforms_" principle to reduce the description complexity on different platforms.
 
 ## Documentation for Quick Start
-1. [Quick Start to install Antares for DirectX12](platforms/c-hlsl/evaluator/AntaresEvalAgent)
-2. [Quick Start to write A + B shaders for DirectX12 using CUDA-like interfaces](platforms/c-hlsl/evaluator/AntaresHlslLib/examples)
+1. [Quick Start to install Antares for DirectX12](backends/c-hlsl/evaluator/AntaresEvalAgent)
+2. [Quick Start to write A + B shaders for DirectX12 using CUDA-like interfaces](backends/c-hlsl/evaluator/AntaresHlslLib/examples)
 3. [Quick Start for Antares IR examples](AntaresIR.md)
 
 # Antares Functionality:
@@ -33,8 +33,8 @@ sudo BACKEND=c-cuda make
 
 # If you need Antares to extend/boost Tensorflow operators, please also run:
 sudo python3 ./frameworks/antares/tensorflow/setup.py
-# Recommended Tensorflow-1 CUDA Installation Package (for CUDA 10.0): python3 -m pip install --upgrade pip && pip3 install tensorflow-gpu==1.15.4)
-# Recommended Tensorflow-2 CUDA Installation Package (for CUDA 11.0): python3 -m pip install --upgrade pip && pip3 install tensorflow-gpu==2.4.0)
+# Recommended Tensorflow-1 CUDA Installation Package (for CUDA 10.0): python3 -m pip install --upgrade pip && python3 -m pip install tensorflow-gpu==1.15.4)
+# Recommended Tensorflow-2 CUDA Installation Package (for CUDA 11.0): python3 -m pip install --upgrade pip && python3 -m pip install tensorflow-gpu==2.4.0)
 # Recommended Tensorflow-1 ROCm Installation Package (for ROCm 4.0):  python3 -m pip install tensorflow-rocm==1.15.9)
 # Recommended Tensorflow-2 ROCm Installation Package (for ROCm 4.0):  python3 -m pip install tensorflow-rocm==2.4.0)
 
@@ -115,20 +115,6 @@ Antares can support multi-line statements as long as they are fuse-able, for exa
     output0[N, F, HO, WO] = conv_bias[N, F, HO, WO].when(conv_bias[N, F, HO, WO] > 0.0, 0.0);
 ```
 
-# Antares Additional Features (comparing to TVM):
-
-|   | Antares | TVM |
-|---|---|---|
-| Platform: DirectX12 | Y | - |
-| Platform: ROCm HIP C |  Y | - |
-| Platform: GraphCore | Y | - |
-| Decoupling for Multi-Platforms | Y | - |
-| Workflow: Auto Shard | Y | - |
-| Workflow: Auto Infershape | Y | - |
-| Language | Antares IR | Hyrbid Script/Topi/.. |
-| Framework: JIT Op Maker for Tensorflow | Y | - |
-| Framework: JIT Op Maker for Pytorch | Y | - |
-
 # Current Feature Table:
 
 |       | HIP-C(c-rocm) | CUDA(c-cuda) | CPU(c-mcpu) | DirectX12(c-hlsl) | Graphcore(c-gc) | (..coming soon..) |
@@ -174,9 +160,9 @@ After you commit the results, the Antares REST Server will detect this record an
 
 ## Tunning DirectX12 Compute Shader:
 
-For DirectX12 platform, you could use "Win10 as server + Linux/WSL as client" mode to tune expressions. Please refer documentation [here](platforms/c-hlsl/evaluator/AntaresEvalAgent).
+For DirectX12 platform, you could use "Win10 as server + Linux/WSL as client" mode to tune expressions. Please refer documentation [here](backends/c-hlsl/evaluator/AntaresEvalAgent).
 
-# How to run Antares REST Server for different platforms:
+# How to run Antares REST Server for different backends:
 You can add environment variable `HTTP_PORT=<portnum>` to change the listening port, by default, it will be listening on localhost:8880:
 ```sh
     HTTP_PORT=8880 BACKEND=c-cuda make rest-server
