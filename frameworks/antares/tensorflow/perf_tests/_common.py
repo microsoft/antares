@@ -5,6 +5,10 @@ import tensorflow as tf
 import os, time
 import numpy as np
 
+if tf.version.VERSION.startswith('2.'):
+  tf = tf.compat.v1
+  tf.disable_eager_execution()
+
 def compare_ops(left, right_ir):
   right = right_ir.tune(step=100, use_cache=True).emit()
   config = tf.ConfigProto()

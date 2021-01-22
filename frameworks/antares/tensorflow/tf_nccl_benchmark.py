@@ -4,6 +4,10 @@
 import os, tensorflow as tf
 from tensorflow.contrib import antares
 
+if tf.version.VERSION.startswith('2.'):
+  tf = tf.compat.v1
+  tf.disable_eager_execution()
+
 rank, size, local_rank = antares.init_communicate_config()
 count = int(os.environ.get('N', '4096'))
 op = os.environ.get('OP', 'all_reduce:+')
