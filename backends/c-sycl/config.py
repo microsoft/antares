@@ -45,16 +45,3 @@ extern "C" void compute_kernel_vargs(sycl::queue* q, void **vargs) {{
 }}
 '''
   return code
-
-  code = code.replace('extern "C" __global__ ', '__kernel ').replace(' __restrict__ ', ' ').replace('__shared__', '__local')
-  code = code.replace('__syncthreads()', 'barrier(CLK_LOCAL_MEM_FENCE)')
-  for i, key in enumerate(['blockIdx.x', 'blockIdx.y', 'blockIdx.z']):
-    code = code.replace(key, 'get_group_id(%d)' % i)
-  for i, key in enumerate(['threadIdx.x', 'threadIdx.y', 'threadIdx.z']):
-    code = code.replace(key, 'get_local_id(%d)' % i)
-  param_end = code.index(') {\n')
-  param_begin = code.rindex('(', 0, param_end)
-  params = ['__global ' + x.strip() for x in code[param_begin + 1:param_end].split(',')]
-  params = ', '.join(params)
-  code = code[:param_begin + 1] + params + code[param_end:]
-  return code
