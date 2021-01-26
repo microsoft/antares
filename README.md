@@ -1,5 +1,5 @@
 # What is Antares:
-- Antares is an automatic engine for multi-platform kernel generation and optimization (targeting to CUDA/ROCm/CPU/DirectX12/Graphcore).
+- Antares is an automatic engine for multi-platform kernel generation and optimization (targeting to CUDA/ROCm/CPU/DirectX12/Graphcore/OneAPI).
 - Antares simplifies most TVM's low-level features, making it easier to use for DNN developers on Microsoft related platforms.
 - Antares follows "_One Language Syntax for All Platforms_" principle to reduce the description complexity on different platforms.
 
@@ -122,17 +122,16 @@ Antares can support multi-line statements as long as they are fuse-able, for exa
 
 # Current Feature Table:
 
-|       | HIP-C(c-rocm) | CUDA(c-cuda) | CPU(c-mcpu) | DirectX12(c-hlsl) | Graphcore(c-gc) | (..coming soon..) |
+|       | HIP-C(c-rocm) | CUDA(c-cuda) | CPU(c-mcpu) | DirectX12(c-hlsl) | Graphcore(c-gc) | Intel OneAPI(c-sycl) | (..coming soon..) |
 |---|---|---|---|---|---|---|
-| Global schedules | Y | Y | Y | Y | Y |  |
-| Local schedules | Y | Y | Y | Y |  |  |
-| Head fusion | Y | Y | Y | Y | Y |  |
-| Tail fusion | Y | Y |  | Y |  |  |
-| Evaluator | Y | Y | Y | Y |  |  |
-| Tensorflow Plugin | Y | Y |  |  |  |  |
-| Pytorch Plugin | Y | Y |  |  |  |  |
-| NNfusion Plugin | Y | Y | Y | Y | Y |  |
-| Blend Intricsic | Y | Y | Y | Y |  |  |
+| Global schedules  | Y | Y | Y | Y | Y | Y |  |
+| Local schedules   | Y | Y | Y | Y |   | Y |  |
+| Head fusion       | Y | Y | Y | Y | Y | Y |  |
+| Tail fusion       | Y | Y |   | Y |   |   |  |
+| Evaluator         | Y | Y | Y | Y | Y | Y |  |
+| Tensorflow Plugin | Y | Y |   |   |   |   |  |
+| Pytorch Plugin    | Y | Y |   |   |   |   |  |
+| Blend Intricsic   | Y | Y | Y | Y |   |   |  |
 
 -----------
 
