@@ -123,7 +123,7 @@ Antares can support multi-line statements as long as they are fuse-able, for exa
 # Current Feature Table:
 
 |       | HIP-C(c-rocm) | CUDA(c-cuda) | CPU(c-mcpu) | DirectX12(c-hlsl) | Graphcore(c-gc) | Intel OneAPI(c-sycl) | (..coming soon..) |
-|---|---|---|---|---|---|---|
+|---|---|---|---|---|---|---|---|
 | Global schedules  | Y | Y | Y | Y | Y | Y |  |
 | Local schedules   | Y | Y | Y | Y |   | Y |  |
 | Head fusion       | Y | Y | Y | Y | Y | Y |  |
