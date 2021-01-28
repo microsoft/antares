@@ -9,7 +9,6 @@ from antares.common import backend
 
 def eval(kernel_path, **kwargs):
     dev_id = kwargs['dev_id']
-    curr_dir = os.getcwd()
     source_file = '%s/run_graph.cpp' % os.path.dirname(__file__)
 
     evaluator_path = '%s/evaluator.%s' % (os.environ['ANTARES_DRIVER_PATH'], backend)
