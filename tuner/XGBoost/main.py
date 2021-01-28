@@ -10,6 +10,8 @@ class MainTuner(XGBTuner):
       kwargs['plan_size'] = 32
     if 'feature_type' not in kwargs:
       kwargs['feature_type'] = 'knob'
+    if 'num_threads' not in kwargs:
+      kwargs['num_threads'] = 4
     super(MainTuner, self).__init__(task, **kwargs)
 
   def cleanup(self):
