@@ -3,9 +3,8 @@
 cd $(dirname $0)/..
 ANTARES_ROOT=$(pwd)
 
-# Valid Backends: c-cuda, c-rocm, c-mcpu, c-hlsl, c-gc
 export PYTHONDONTWRITEBYTECODE=1
-export TVM_HOME=/opt/tvm
+export TVM_HOME=$(cat engine/install_antares_host.sh | grep ^TVM_HOME | head -n 1 | awk -F\= '{print $NF}')
 export PYTHONPATH=${TVM_HOME}/python:${TVM_HOME}/topi/python:${TVM_HOME}/nnvm/python:${ANTARES_ROOT}
 
 if [ ! -e ${TVM_HOME}/build/libtvm.so ]; then
@@ -18,17 +17,8 @@ if [[ "$COMPUTE_V1" == "" ]]; then
   export COMPUTE_V1='- einstein_v2("output0[N] = input0[N] + input1[N]", input_dict={"input0": {"dtype": "float32", "shape": [1024 * 512]}, "input1": {"dtype": "float32", "shape": [1024 * 512]}})'
 fi
 
-if [[ "$BACKEND" == "" ]]; then
-  if [ -e /dev/nvidia-modeset ]; then
-    BACKEND=c-cuda
-  elif [ -e /dev/kfd ]; then
-    BACKEND=c-rocm
-  elif grep Microsoft /proc/sys/kernel/osrelease >/dev/null; then
-    BACKEND=c-hlsl
-  fi
-fi
+export BACKEND=$(./antares/get_backend.sh)
 
-export BACKEND=${BACKEND:-c-rocm}
 export ANTARES_DRIVER_PATH=/tmp/libAntares
 
 mkdir -p ${ANTARES_DRIVER_PATH}
@@ -48,7 +38,7 @@ if [ ! -e ${ANTARES_DRIVER_PATH}/device_properties.cfg ]; then
     cat hardware/${HARDWARE_CONFIG}.cfg > ${ANTARES_DRIVER_PATH}/device_properties.cfg
     echo "  >> Using specific hardware device properties."
   else
-    cat platforms/${BACKEND}/default_props.cfg > ${ANTARES_DRIVER_PATH}/device_properties.cfg
+    cat backends/${BACKEND}/default_props.cfg > ${ANTARES_DRIVER_PATH}/device_properties.cfg
     echo "  >> Using ${BACKEND} default device properties."
   fi
 else

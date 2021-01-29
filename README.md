@@ -1,11 +1,11 @@
 # What is Antares:
-- Antares is an automatic engine for multi-platform kernel generation and optimization (targeting to CUDA/ROCm/CPU/DirectX12/Graphcore).
+- Antares is an automatic engine for multi-platform kernel generation and optimization (targeting to CUDA/ROCm/CPU/DirectX12/Graphcore/OneAPI).
 - Antares simplifies most TVM's low-level features, making it easier to use for DNN developers on Microsoft related platforms.
 - Antares follows "_One Language Syntax for All Platforms_" principle to reduce the description complexity on different platforms.
 
 ## Documentation for Quick Start
-1. [Quick Start to install Antares for DirectX12](platforms/c-hlsl/evaluator/AntaresEvalAgent)
-2. [Quick Start to write A + B shaders for DirectX12 using CUDA-like interfaces](platforms/c-hlsl/evaluator/AntaresHlslLib/examples)
+1. [Quick Start to install Antares for DirectX12](backends/c-hlsl/evaluator/AntaresEvalAgent)
+2. [Quick Start to write A + B shaders for DirectX12 using CUDA-like interfaces](backends/c-hlsl/evaluator/AntaresHlslLib/examples)
 3. [Quick Start for Antares IR examples](AntaresIR.md)
 
 # Antares Functionality:
@@ -33,13 +33,21 @@ sudo BACKEND=c-cuda make
 
 # If you need Antares to extend/boost Tensorflow operators, please also run:
 sudo python3 ./frameworks/antares/tensorflow/setup.py
-# (Recommended Tensorflow CUDA Installation Source (for CUDA 10.0): pip3 install --upgrade pip && pip3 install tensorflow-gpu==1.15.4)
-# (Recommended Tensorflow ROCm Installation Source (for ROCm 4.0): pip3 install tensorflow-rocm==1.15.9)
+
+# Reference - Recommended Installation Package Choices for Tensorflow 1.x & 2.x (tested in Ubuntu 20.04):
+#   Tensorflow-1 for NVIDIA CUDA 10.0: python3 -m pip install --upgrade pip && python3 -m pip install tensorflow-gpu==1.15.4
+#   Tensorflow-1 for NVIDIA CUDA 11.0: python3 -m pip install --upgrade pip && python3 -m pip install https://github.com/ghostplant/tensorflow-wheel-collections/releases/download/cuda-11/tensorflow_gpu-1.15.4_cuda11+nv-cp38-cp38-linux_x86_64.whl
+#   Tensorflow-2 for NVIDIA CUDA 11.0: python3 -m pip install --upgrade pip && python3 -m pip install tensorflow-gpu==2.4.0
+#   Tensorflow-1 for AMD ROCm 4.0:  python3 -m pip install tensorflow-rocm==1.15.9
+#   Tensorflow-2 for AMD ROCm 4.0:  python3 -m pip install tensorflow-rocm==2.4.0
 
 # If you need Antares to extend/boost Pytorch operators, please also run:
 sudo python3 ./frameworks/antares/pytorch/setup.py
-# (Recommended Pytorch CUDA Installation Source (for CUDA 10.0): pip3 install torch==1.5.0 torchvision==0.6.0 -f https://download.pytorch.org/whl/torch_stable.html)
-# (Recommended Pytorch ROCm Installation Source (for ROCm 4.0): pip3 install --pre torch==1.8.0.dev20210106 -f https://download.pytorch.org/whl/nightly/rocm4.0/torch_nightly.html
+
+# Reference - Recommended Installation Package Choices for Pytorch (tested in Ubuntu 20.04):
+#   Pytorch for NVIDIA CUDA 10.0: python3 -m pip install torch==1.5.0 torchvision==0.6.0 -f https://download.pytorch.org/whl/torch_stable.html
+#   Pytorch for NVIDIA CUDA 11.0: python3 -m pip install torch===1.7.1+cu110 torchvision===0.8.2+cu110 torchaudio===0.7.2 -f https://download.pytorch.org/whl/torch_stable.html
+#   Pytorch for AMD ROCm 4.0:  python3 -m pip install --pre torch==1.8.0.dev20210106 -f https://download.pytorch.org/whl/nightly/rocm4.0/torch_nightly.html
 ```
 
 # Example with Tensorflow-GPU/Pytorch-GPU:
@@ -52,12 +60,16 @@ This example shows you an easy way to quickly add custom operators in Tensorflow
 BACKEND=c-cuda make rest-server
 ```
 
-- Tensorflow Frontend Only:
+- Tensorflow Frontend Only (>= 1.15.x / >= 2.4.x):
 ```py
 # For Tensorflow CUDA frontend, execute the following python script:
 
 import tensorflow as tf
 from tensorflow.contrib import antares
+
+if tf.version.VERSION.startswith('2.'):
+  tf = tf.compat.v1
+  tf.disable_eager_execution()
 
 x = tf.get_variable('x', [128, 1024], tf.float32, initializer=tf.initializers.ones(tf.float32), trainable=False)
 y = tf.get_variable('y', [1024, 1024], tf.float32, initializer=tf.initializers.ones(tf.float32), trainable=False)
@@ -108,33 +120,18 @@ Antares can support multi-line statements as long as they are fuse-able, for exa
     output0[N, F, HO, WO] = conv_bias[N, F, HO, WO].when(conv_bias[N, F, HO, WO] > 0.0, 0.0);
 ```
 
-# Antares Additional Features (comparing to TVM):
-
-|   | Antares | TVM |
-|---|---|---|
-| Platform: DirectX12 | Y | - |
-| Platform: ROCm HIP C |  Y | - |
-| Platform: GraphCore | Y | - |
-| Decoupling for Multi-Platforms | Y | - |
-| Workflow: Auto Shard | Y | - |
-| Workflow: Auto Infershape | Y | - |
-| Language | Antares IR | Hyrbid Script/Topi/.. |
-| Framework: JIT Op Maker for Tensorflow | Y | - |
-| Framework: JIT Op Maker for Pytorch | Y | - |
-
 # Current Feature Table:
 
-|       | HIP-C(c-rocm) | CUDA(c-cuda) | CPU(c-mcpu) | DirectX12(c-hlsl) | Graphcore(c-gc) | (..coming soon..) |
-|---|---|---|---|---|---|---|
-| Global schedules | Y | Y | Y | Y | Y |  |
-| Local schedules | Y | Y | Y | Y |  |  |
-| Head fusion | Y | Y | Y | Y | Y |  |
-| Tail fusion | Y | Y |  | Y |  |  |
-| Evaluator | Y | Y | Y | Y |  |  |
-| Tensorflow Plugin | Y | Y |  |  |  |  |
-| Pytorch Plugin | Y | Y |  |  |  |  |
-| NNfusion Plugin | Y | Y | Y | Y | Y |  |
-| Blend Intricsic | Y | Y | Y | Y |  |  |
+|       | HIP-C(c-rocm) | CUDA(c-cuda) | CPU(c-mcpu) | DirectX12(c-hlsl) | Graphcore(c-gc) | Intel OneAPI(c-sycl) | (..coming soon..) |
+|---|---|---|---|---|---|---|---|
+| Global schedules  | Y | Y | Y | Y | Y | Y |  |
+| Local schedules   | Y | Y | Y | Y |   | Y |  |
+| Head fusion       | Y | Y | Y | Y | Y | Y |  |
+| Tail fusion       | Y | Y |   | Y |   |   |  |
+| Evaluator         | Y | Y | Y | Y | Y | Y |  |
+| Tensorflow Plugin | Y | Y |   |   |   |   |  |
+| Pytorch Plugin    | Y | Y |   |   |   |   |  |
+| Blend Intricsic   | Y | Y | Y | Y |   |   |  |
 
 -----------
 
@@ -167,9 +164,9 @@ After you commit the results, the Antares REST Server will detect this record an
 
 ## Tunning DirectX12 Compute Shader:
 
-For DirectX12 platform, you could use "Win10 as server + Linux/WSL as client" mode to tune expressions. Please refer documentation [here](platforms/c-hlsl/evaluator/AntaresEvalAgent).
+For DirectX12 platform, you could use "Win10 as server + Linux/WSL as client" mode to tune expressions. Please refer documentation [here](backends/c-hlsl/evaluator/AntaresEvalAgent).
 
-# How to run Antares REST Server for different platforms:
+# How to run Antares REST Server for different backends:
 You can add environment variable `HTTP_PORT=<portnum>` to change the listening port, by default, it will be listening on localhost:8880:
 ```sh
     HTTP_PORT=8880 BACKEND=c-cuda make rest-server
