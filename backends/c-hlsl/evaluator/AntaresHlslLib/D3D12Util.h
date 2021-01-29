@@ -5,8 +5,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
-#include <dxgi1_5.h>
-#include <d3d12.h>
+
 #include <cassert>
 #include <vector>
 #include <wrl/client.h>
@@ -18,8 +17,19 @@
 #include <numeric>
 #include <chrono>
 #include <direct.h>
-#pragma once
 
+#ifdef _GAMING_XBOX_SCARLETT
+#include "pch.h"
+#define _USE_DXC_
+#include <dxcapi_xs.h>
+#pragma comment(lib, "dxcompiler_xs.lib")
+
+using namespace DirectX;
+using namespace DX;
+
+#else
+#include <dxgi1_5.h>
+#include <d3d12.h>
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
 
@@ -30,12 +40,15 @@
 #include <d3dcompiler.h>
 #pragma comment(lib, "d3dcompiler.lib")
 #endif
+#define IID_GRAPHICS_PPV_ARGS IID_PPV_ARGS
+
+#endif
 
 using namespace std;
 using namespace Microsoft::WRL;
 
 
-#define IFE(x)  ((FAILED(x)) ? (printf("Error-line: (%s) %d\n\nPossible Reason:\n\tWindows TDR might be triggered.\n\tTo avoid this, please apply https://github.com/microsoft/antares/blob/master/backends/c-hlsl/evaluator/AntaresEvalAgent/TDR.reg into Windows registry and reboot your system to take effect.\nIf this is not fixed, please report an issue to https://github.com/microsoft/antares/issues\n\n", __FILE__, __LINE__), abort(), 0): 1)
+#define IFE(x)  ((FAILED(x)) ? (printf("Error-line: (%s) %d\n\nPossible Reason:\n\tWindows TDR might be triggered.\n\tTo avoid this, please apply https://github.com/microsoft/antares/blob/master/platforms/c-hlsl/evaluator/AntaresEvalAgent/TDR.reg into Windows registry and reboot your system to take effect.\nIf this is not fixed, please report an issue to https://github.com/microsoft/antares/issues\n\n", __FILE__, __LINE__), abort(), 0): 1)
 
 namespace {
 
@@ -90,6 +103,8 @@ namespace {
 
         return resourceDesc;
     }
+
+#ifndef _GAMING_XBOX_SCARLETT
 
     struct CD3DX12_ROOT_DESCRIPTOR_TABLE1 : public D3D12_ROOT_DESCRIPTOR_TABLE1
     {
@@ -625,13 +640,16 @@ namespace {
 
         return E_INVALIDARG;
     }
+#endif
 }
 
 namespace antares {
 
     struct D3DDevice
     {
-        ComPtr<IDXGIFactory4> pDxgiFactory;
+#ifndef _GAMING_XBOX_SCARLETT
+        ComPtr<IDXGIFactory5> pDxgiFactory;
+#endif
         ComPtr<ID3D12Device1> pDevice;
         ComPtr<ID3D12CommandQueue> pCommandQueue;
         ComPtr<ID3D12CommandAllocator> pCommandAllocator;
@@ -655,6 +673,7 @@ namespace antares {
         }
         void InitD3DDevice()
         {
+#ifndef _GAMING_XBOX_SCARLETT
             IFE(CreateDXGIFactory1(IID_PPV_ARGS(&pDxgiFactory)));
 
             if (D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&pDevice)))
@@ -663,10 +682,29 @@ namespace antares {
                 IFE(pDxgiFactory->EnumWarpAdapter(IID_PPV_ARGS(&pAdapter)));
                 IFE(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&pDevice)));
             }
+#else
+            // Create the DX12 API device object.
+            D3D12XBOX_CREATE_DEVICE_PARAMETERS params = {};
+            params.Version = D3D12_SDK_VERSION;
+            if (bEnableDebugLayer) {
+                // Enable the debug layer.
+                params.ProcessDebugFlags = D3D12_PROCESS_DEBUG_FLAG_DEBUG_LAYER_ENABLED;
+            }
+            params.GraphicsCommandQueueRingSizeBytes = static_cast<UINT>(D3D12XBOX_DEFAULT_SIZE_BYTES);
+            params.GraphicsScratchMemorySizeBytes = static_cast<UINT>(D3D12XBOX_DEFAULT_SIZE_BYTES);
+            params.ComputeScratchMemorySizeBytes = static_cast<UINT>(D3D12XBOX_DEFAULT_SIZE_BYTES);
+
+            HRESULT hr = D3D12XboxCreateDevice(
+                nullptr,
+                &params,
+                IID_GRAPHICS_PPV_ARGS(pDevice.ReleaseAndGetAddressOf()));
+            ThrowIfFailed(hr);
+#endif
         }
 
         void Init()
         {
+#ifndef _GAMING_XBOX_SCARLETT
             // Enable debug layer
             ComPtr<ID3D12Debug> pDebug;
             if (bEnableDebugLayer && SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDebug))))
@@ -679,21 +717,22 @@ namespace antares {
                     pDebug1->SetEnableGPUBasedValidation(true);
                 }
             }
+#endif
 
             InitD3DDevice();
 
             // Create a command queue
             D3D12_COMMAND_QUEUE_DESC commandQueueDesc = D3D12CommandQueueDesc(CommandListType);
-            IFE(pDevice->CreateCommandQueue(&commandQueueDesc, IID_PPV_ARGS(&pCommandQueue)));
+            IFE(pDevice->CreateCommandQueue(&commandQueueDesc, IID_GRAPHICS_PPV_ARGS(pCommandQueue.ReleaseAndGetAddressOf())));
 
             // Create a command allocator
-            IFE(pDevice->CreateCommandAllocator(CommandListType, IID_PPV_ARGS(&pCommandAllocator)));
+            IFE(pDevice->CreateCommandAllocator(CommandListType, IID_GRAPHICS_PPV_ARGS(pCommandAllocator.ReleaseAndGetAddressOf())));
 
             // Create a CPU-GPU synchronization event
             event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
 
             // Create a fence to allow GPU to signal upon completion of execution
-            IFE(pDevice->CreateFence(fenceValue, D3D12_FENCE_FLAG_SHARED, IID_PPV_ARGS(&pFence)));
+            IFE(pDevice->CreateFence(fenceValue, D3D12_FENCE_FLAG_SHARED, IID_GRAPHICS_PPV_ARGS(pFence.ReleaseAndGetAddressOf())));
 
 #ifdef _USE_GPU_TIMER_
 #define _MAX_GPU_TIMER_ 65536
@@ -739,7 +778,7 @@ namespace antares {
                 &resourceDesc,
                 initialState,
                 nullptr,
-                IID_PPV_ARGS(ppResource)
+                IID_GRAPHICS_PPV_ARGS(ppResource)
             ));
         }
         inline void CreateGPUOnlyResource(UINT64 size, ID3D12Resource** ppResource)
@@ -900,21 +939,21 @@ namespace antares {
             BufferDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
             IFE(pDevice->CreateCommittedResource(&HeapProps, D3D12_HEAP_FLAG_NONE, &BufferDesc,
-                D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&m_pReadBackBuffer)));
+                D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_GRAPHICS_PPV_ARGS(m_pReadBackBuffer.ReleaseAndGetAddressOf())));
             m_pReadBackBuffer->SetName(L"GpuTimeStamp Buffer");
 
             D3D12_QUERY_HEAP_DESC QueryHeapDesc;
             QueryHeapDesc.Count = nMaxTimers * 2;
             QueryHeapDesc.NodeMask = 1;
             QueryHeapDesc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
-            IFE(pDevice->CreateQueryHeap(&QueryHeapDesc, IID_PPV_ARGS(&m_pQueryHeap)));
+            IFE(pDevice->CreateQueryHeap(&QueryHeapDesc, IID_GRAPHICS_PPV_ARGS(m_pQueryHeap.ReleaseAndGetAddressOf())));
             m_pQueryHeap->SetName(L"GpuTimeStamp QueryHeap");
 
             IFE(pDevice->CreateCommandList(0,
                 CommandListType,
                 pCommandAllocator.Get(),
                 nullptr,
-                IID_PPV_ARGS(&m_pResolveCmdList)));
+                IID_GRAPHICS_PPV_ARGS(m_pResolveCmdList.ReleaseAndGetAddressOf())));
             m_pResolveCmdList->ResolveQueryData(m_pQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 0, nMaxTimers * 2, m_pReadBackBuffer.Get(), 0);
             m_pResolveCmdList->Close();
             m_nMaxTimers = nMaxTimers;
@@ -974,8 +1013,8 @@ namespace antares {
     private:
         DXCompiler()
         {
-            IFE(DxcCreateInstance(CLSID_DxcLibrary, IID_PPV_ARGS(&m_pLibrary)));
-            IFE(DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&m_pCompiler)));
+            IFE(DxcCreateInstance(CLSID_DxcLibrary, IID_PPV_ARGS(m_pLibrary.ReleaseAndGetAddressOf())));
+            IFE(DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(m_pCompiler.ReleaseAndGetAddressOf())));
         }
         DXCompiler(const DXCompiler&) = delete;
         DXCompiler& operator=(const DXCompiler&) = delete;

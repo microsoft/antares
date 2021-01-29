@@ -9,7 +9,7 @@
 #define _USE_GPU_TIMER_
 // #define _USE_DXC_
 
-#include "D3D12Antares.h"
+#include "D3D12Util.h"
 #include "D3D12APIWrapper.h"
 
 namespace {
@@ -376,11 +376,11 @@ void* dxShaderLoad(const char* src, int* num_inputs, int* num_outputs)
     ComPtr<ID3DBlob> error;
 
     IFE(D3DX12SerializeVersionedRootSignature(&computeRootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1_1, &signature, &error));
-    IFE(device.pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_computeRootSignature)));
+    IFE(device.pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_GRAPHICS_PPV_ARGS(m_computeRootSignature.ReleaseAndGetAddressOf())));
 
     computePsoDesc.CS = hd->bytecode;
     computePsoDesc.pRootSignature = m_computeRootSignature.Get();
-    IFE(device.pDevice->CreateComputePipelineState(&computePsoDesc, IID_PPV_ARGS(&m_computeState)));
+    IFE(device.pDevice->CreateComputePipelineState(&computePsoDesc, IID_GRAPHICS_PPV_ARGS(m_computeState.ReleaseAndGetAddressOf())));
 
     return handle;
 }
@@ -400,8 +400,8 @@ void* dxStreamCreate()
     dx_stream_t* pStream = new dx_stream_t;
 
     // Create 
-    IFE(device.pDevice->CreateCommandAllocator(device.CommandListType, IID_PPV_ARGS(&pStream->pCmdAllocator)));
-    IFE(device.pDevice->CreateCommandList(0, device.CommandListType, pStream->pCmdAllocator.Get(), nullptr, IID_PPV_ARGS(&pStream->pCmdList)));
+    IFE(device.pDevice->CreateCommandAllocator(device.CommandListType, IID_GRAPHICS_PPV_ARGS(pStream->pCmdAllocator.ReleaseAndGetAddressOf())));
+    IFE(device.pDevice->CreateCommandList(0, device.CommandListType, pStream->pCmdAllocator.Get(), nullptr, IID_GRAPHICS_PPV_ARGS(pStream->pCmdList.ReleaseAndGetAddressOf())));
     pStream->pCmdList->Close(); // Close it and then reset it with pStream->Reset().
 
     if (_USE_DESCRIPTOR_HEAP_)
@@ -416,7 +416,7 @@ void* dxStreamCreate()
         desc.NumDescriptors = MAX_HEAP_SIZE;
         desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-        IFE(device.pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&pStream->pDescHeap)));
+        IFE(device.pDevice->CreateDescriptorHeap(&desc, IID_GRAPHICS_PPV_ARGS(pStream->pDescHeap.ReleaseAndGetAddressOf())));
     }
     pStream->Reset();
     return pStream;
@@ -499,8 +499,8 @@ int dxMemcpyHtoDAsync(void* dst, void* src, size_t bytes, void *hStream)
     auto dst_buffer = (dx_buffer_t*)(deviceIter->second);
     ComPtr<ID3D12CommandAllocator> pCommandAllocator;
     ComPtr<ID3D12GraphicsCommandList> pCmdList;
-    IFE(device.pDevice->CreateCommandAllocator(device.CommandListType, IID_PPV_ARGS(&pCommandAllocator)));
-    IFE(device.pDevice->CreateCommandList(0, device.CommandListType, pCommandAllocator.Get(), nullptr, IID_PPV_ARGS(&pCmdList)));
+    IFE(device.pDevice->CreateCommandAllocator(device.CommandListType, IID_GRAPHICS_PPV_ARGS(pCommandAllocator.ReleaseAndGetAddressOf())));
+    IFE(device.pDevice->CreateCommandList(0, device.CommandListType, pCommandAllocator.Get(), nullptr, IID_GRAPHICS_PPV_ARGS(pCmdList.ReleaseAndGetAddressOf())));
     dst_buffer->StateTransition(pCmdList.Get(), D3D12_RESOURCE_STATE_COPY_DEST);
     pCmdList->CopyBufferRegion(dst_buffer->handle.Get(), offset, deviceCPUSrcX.Get(), 0, bytes);
     dst_buffer->StateTransition(pCmdList.Get(), D3D12_RESOURCE_STATE_COMMON);
@@ -537,8 +537,8 @@ int dxMemcpyDtoHAsync(void* dst, void* src, size_t bytes, void* hStream)
     auto src_buffer = (dx_buffer_t*)(deviceIter->second);
     ComPtr<ID3D12CommandAllocator> pCommandAllocator;
     ComPtr<ID3D12GraphicsCommandList> pCmdList;
-    IFE(device.pDevice->CreateCommandAllocator(device.CommandListType, IID_PPV_ARGS(&pCommandAllocator)));
-    IFE(device.pDevice->CreateCommandList(0, device.CommandListType, pCommandAllocator.Get(), nullptr, IID_PPV_ARGS(&pCmdList)));
+    IFE(device.pDevice->CreateCommandAllocator(device.CommandListType, IID_GRAPHICS_PPV_ARGS(pCommandAllocator.ReleaseAndGetAddressOf())));
+    IFE(device.pDevice->CreateCommandList(0, device.CommandListType, pCommandAllocator.Get(), nullptr, IID_GRAPHICS_PPV_ARGS(pCmdList.ReleaseAndGetAddressOf())));
     src_buffer->StateTransition(pCmdList.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
     pCmdList->CopyBufferRegion(deviceCPUSrcX.Get(), 0, src_buffer->handle.Get(), offset, bytes);
     src_buffer->StateTransition(pCmdList.Get(), D3D12_RESOURCE_STATE_COMMON);
@@ -697,13 +697,13 @@ void* dxEventCreate()
         BufferDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
         IFE(device.pDevice->CreateCommittedResource(&HeapProps, D3D12_HEAP_FLAG_NONE, &BufferDesc,
-            D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&qheap.pReadbackBuffer)));
+            D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_GRAPHICS_PPV_ARGS(qheap.pReadbackBuffer.ReleaseAndGetAddressOf())));
 
         D3D12_QUERY_HEAP_DESC QueryHeapDesc;
         QueryHeapDesc.Count = MAX_QUERY_NUM;
         QueryHeapDesc.NodeMask = 1;
         QueryHeapDesc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
-        IFE(device.pDevice->CreateQueryHeap(&QueryHeapDesc, IID_PPV_ARGS(&qheap.pHeap)));
+        IFE(device.pDevice->CreateQueryHeap(&QueryHeapDesc, IID_GRAPHICS_PPV_ARGS(qheap.pHeap.ReleaseAndGetAddressOf())));
 
         qheap.curIdx = 0;
         qheap.totSize = MAX_QUERY_NUM;
