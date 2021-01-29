@@ -12,7 +12,7 @@
 #include "D3D12Util.h"
 #include "D3D12APIWrapper.h"
 
-//namespace {
+namespace {
     static bool _USE_DESCRIPTOR_HEAP_ = false;
 
     struct dx_buffer_t
@@ -183,6 +183,7 @@
         assert(static_cast<char*>(vPtr) - static_cast<char*>(iter->first) >= 0);
         return iter;
     }
+}
 
 
 int dxInit(int flags)
@@ -783,4 +784,3 @@ float dxEventElapsedTime(void* hStart, void* hStop)
     IFE(device.pCommandQueue->GetTimestampFrequency(&GpuFrequency));
     return static_cast<float>(timeStampEnd - timeStampStart) / static_cast<float>(GpuFrequency);
 }
-//}

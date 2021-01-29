@@ -686,7 +686,10 @@ namespace antares {
             // Create the DX12 API device object.
             D3D12XBOX_CREATE_DEVICE_PARAMETERS params = {};
             params.Version = D3D12_SDK_VERSION;
-
+            if (bEnableDebugLayer) {
+                // Enable the debug layer.
+                params.ProcessDebugFlags = D3D12_PROCESS_DEBUG_FLAG_DEBUG_LAYER_ENABLED;
+            }
             params.GraphicsCommandQueueRingSizeBytes = static_cast<UINT>(D3D12XBOX_DEFAULT_SIZE_BYTES);
             params.GraphicsScratchMemorySizeBytes = static_cast<UINT>(D3D12XBOX_DEFAULT_SIZE_BYTES);
             params.ComputeScratchMemorySizeBytes = static_cast<UINT>(D3D12XBOX_DEFAULT_SIZE_BYTES);
@@ -1010,8 +1013,8 @@ namespace antares {
     private:
         DXCompiler()
         {
-            IFE(DxcCreateInstance(CLSID_DxcLibrary, IID_PPV_ARGS(&m_pLibrary)));
-            IFE(DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&m_pCompiler)));
+            IFE(DxcCreateInstance(CLSID_DxcLibrary, IID_PPV_ARGS(m_pLibrary.ReleaseAndGetAddressOf())));
+            IFE(DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(m_pCompiler.ReleaseAndGetAddressOf())));
         }
         DXCompiler(const DXCompiler&) = delete;
         DXCompiler& operator=(const DXCompiler&) = delete;
