@@ -25,6 +25,9 @@ namespace AntaresHlslEvalAgent
         public const string HlslDllName = @"antares_hlsl_v0.1_x64.dll";
 
         [DllImport(HlslDllName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int dxInit(int flags);
+
+        [DllImport(HlslDllName, CallingConvention = CallingConvention.Cdecl)]
         public static extern IntPtr dxStreamCreate();
 
         [DllImport(HlslDllName, CallingConvention = CallingConvention.Cdecl)]
@@ -202,14 +205,22 @@ namespace AntaresHlslEvalAgent
                         using (System.IO.StreamReader reader = new System.IO.StreamReader(body, req.ContentEncoding))
                         {
                             string source = reader.ReadToEnd();
-                            System.IO.File.WriteAllText(@".\dx_kernel.hlsl", source);
-                            string expected_timeout = req.Headers.Get("ET").Trim();
+                            try
+                            {
+                                System.IO.File.WriteAllText(@".\dx_kernel.hlsl", source);
+                                string expected_timeout = req.Headers.Get("ET").Trim();
+                                string outer_timeout = req.Headers.Get("OT").Trim();
 
-                            string result = runSystemCommand(@".\" + System.Diagnostics.Process.GetCurrentProcess().ProcessName, expected_timeout, 5000);
+                                string result = runSystemCommand(@".\" + System.Diagnostics.Process.GetCurrentProcess().ProcessName, expected_timeout, Convert.ToInt32(Convert.ToDouble(outer_timeout) * 1000));
 
-                            byte[] buffer = System.Text.Encoding.UTF8.GetBytes(result);
-                            resp.OutputStream.Write(buffer, 0, buffer.Length);
-                            resp.OutputStream.Close();
+                                byte[] buffer = System.Text.Encoding.UTF8.GetBytes(result);
+                                resp.OutputStream.Write(buffer, 0, buffer.Length);
+                                resp.OutputStream.Close();
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine("[EXCEPTION] " + ex.ToString());
+                            }
                         }
                     }
                 }
@@ -235,6 +246,8 @@ namespace AntaresHlslEvalAgent
 
         static int Main(string[] args)
         {
+            dxInit(0); // change to dxInit(1) to enable descriptor heap
+
             bool configured = initEnvironment();
             float expected_timeout = -1.0f;
 
