@@ -8,6 +8,7 @@ RECORD ?=
 HARDWARE_CONFIG ?=
 DEVICE_NAME ?=
 HOST_MODE ?= 0
+EXPECTED_TIMEOUT ?= inf
 
 CPU_THREADS ?= 8
 INNER_CMD = ./antares/run.sh
@@ -18,7 +19,7 @@ PARAMS ?=  docker run -v $(shell pwd):/antares -w /antares --privileged -v /:/ho
 	-v $(shell dirname `ldd /usr/lib/x86_64-linux-gnu/libcuda.so.1 2>/dev/null | grep nvidia-fatbinaryloader | awk '{print $$3}'` 2>/dev/null):/usr/local/nvidia/lib64 \
 	-v $(shell pwd)/public/roc_prof:/usr/local/bin/rp -e CPU_THREADS=$(CPU_THREADS) -e RECORD=$(RECORD) \
 	-e STEP=$(STEP) -e AGENT_URL=$(value AGENT_URL) -e TUNER=$(TUNER) -e CONFIG='$(value CONFIG)' -e BACKEND=$(BACKEND) -e COMPUTE_V1='$(value COMPUTE_V1)' \
-	-e COMMIT=$(COMMIT) -e HARDWARE_CONFIG=$(HARDWARE_CONFIG) -e DEVICE_NAME='$(value DEVICE_NAME)'
+	-e COMMIT=$(COMMIT) -e HARDWARE_CONFIG=$(HARDWARE_CONFIG) -e DEVICE_NAME='$(value DEVICE_NAME)' -e EXPECTED_TIMEOUT=$(EXPECTED_TIMEOUT)
 
 HTTP_PORT ?= 8880
 HTTP_PREF ?= AntaresServer-$(HTTP_PORT)_

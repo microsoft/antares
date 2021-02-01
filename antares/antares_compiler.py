@@ -264,7 +264,7 @@ def get_target_source(best_config, dir_sid=None):
 def code_suffix(tpr=-1.0, step_prod=0, step_plan=-1):
   return '\n// Saved Perf = %.6e sec / run; Step Produced = %d; Planned Steps = %d;' % (tpr, step_prod, step_plan)
 
-def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True):
+def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True, expected_timeout=None):
 
   def handle_result(result):
     if verbose:
@@ -291,7 +291,7 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
       kernel_path = codehub_db(os.environ['COMPUTE_V1'], source_code=device_source + code_suffix(tpr=t))
       print('  >> Update current code to codehub: %s' % kernel_path)
 
-  def do_evaluate():
+  def do_evaluate(expected_timeout):
     try:
       try:
         eval_client = importlib.import_module('backends.%s.evaluator.client' % backend)
@@ -302,7 +302,8 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
         traceback.print_exc()
         return None
 
-      expected_timeout = os.environ.get('EXPECTED_TIMEOUT', '')
+      if expected_timeout is None:
+        expected_timeout = os.environ.get('EXPECTED_TIMEOUT', 'inf')
       if expected_timeout in ('', 'inf'):
         expected_timeout = ''
       else:
@@ -323,7 +324,7 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
 
   exec_fd, _ = system_lock([dev_id])
   try:
-    results = do_evaluate()
+    results = do_evaluate(expected_timeout)
     if results is not None:
       handle_result(results)
   except:
@@ -355,7 +356,7 @@ def run_config_entity(target_source, config_str, dir_sid, expected_timecost='inf
     device_source, kernel_path, compile_args = target_source
 
     do_compilation(compile_args, verbose=False)
-    results = evaluate_perf(kernel_path, dev_id, device_source, dir_sid, verbose=False)
+    results = evaluate_perf(kernel_path, dev_id, device_source, dir_sid, verbose=False, expected_timeout=expected_timecost)
     assert results is not None and 'TPR' in results, "Invalid target output detected in evaluation stage."
     digest = ','.join(['%.6e' % float(results['K/%d' % i]) for i in range(len(results) - 1)])
     result = float(results['TPR'])
@@ -516,7 +517,7 @@ def main_compute(code_only=False):
         return results
 
       tuner.task.best = Mock()
-      tuner.task.best.timecost = float('inf')
+      tuner.task.best.timecost = float(os.environ.get('EXPECTED_TIMEOUT', 'inf'))
       tuner.task.best.config = None
       tuner.task.best.occur = -1
 
