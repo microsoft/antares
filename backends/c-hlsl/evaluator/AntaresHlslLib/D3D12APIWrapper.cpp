@@ -190,12 +190,13 @@ int dxInit(int flags)
 {
     if (!defaultStream)
     {
-        device.Init();
         _USE_DESCRIPTOR_HEAP_ = flags;
         if (_USE_DESCRIPTOR_HEAP_)
             fprintf(stderr, "[INFO] D3D12: Descriptor heap is enabled.\n\n");
         else
             fprintf(stderr, "[INFO] D3D12: Descriptor heap is disabled.\n\n");
+
+        device.Init();
         defaultStream = (void*)1LU;
         defaultStream = dxStreamCreate();
     }
@@ -348,11 +349,12 @@ void* dxShaderLoad(const char* src, int* num_inputs, int* num_outputs)
 
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC computeRootSignatureDesc;
     std::vector<CD3DX12_ROOT_PARAMETER1> computeRootParameters;
+    CD3DX12_DESCRIPTOR_RANGE1 ranges[2];
+
     if (_USE_DESCRIPTOR_HEAP_)
     {
         // Prepare Root
         computeRootParameters.resize(1);
-        CD3DX12_DESCRIPTOR_RANGE1 ranges[2];
         // D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE is needed to disable unproper driver optimization.
         ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, (uint32_t)hd->inputs.size(), 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE, 0);
         ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, (uint32_t)hd->outputs.size(), 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE, (uint32_t)hd->inputs.size());
