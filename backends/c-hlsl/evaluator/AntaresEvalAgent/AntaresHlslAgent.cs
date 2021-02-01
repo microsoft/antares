@@ -246,10 +246,10 @@ namespace AntaresHlslEvalAgent
 
         static int Main(string[] args)
         {
-            dxInit(1); // change to dxInit(0) to disable descriptor heap
-
             bool configured = initEnvironment();
             float expected_timeout = -1.0f;
+
+            dxInit(1); // change to dxInit(0) to disable descriptor heap
 
             if (args.Length >= 1)
             {
