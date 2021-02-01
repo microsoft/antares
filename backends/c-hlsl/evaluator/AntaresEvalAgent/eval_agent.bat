@@ -1,5 +1,7 @@
 @echo off
 
+cd %~dp0
+
 echo Compiling Eval Agent Service from Source ..
 C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe AntaresHlslAgent.cs
 

@@ -48,7 +48,7 @@ using namespace std;
 using namespace Microsoft::WRL;
 
 
-#define IFE(x)  ((FAILED(x)) ? (printf("Error-line: (%s) %d\n\nPossible Reason:\n\tWindows TDR might be triggered.\n\tTo avoid this, please apply https://github.com/microsoft/antares/blob/master/platforms/c-hlsl/evaluator/AntaresEvalAgent/TDR.reg into Windows registry and reboot your system to take effect.\nIf this is not fixed, please report an issue to https://github.com/microsoft/antares/issues\n\n", __FILE__, __LINE__), abort(), 0): 1)
+#define IFE(x)  ((FAILED(x)) ? (printf("Error-line: (%s) %d\n\nPossible Reason:\n\tWindows TDR might be triggered.\n\tTo avoid this, please apply https://github.com/microsoft/antares/blob/master/backends/c-hlsl/evaluator/AntaresEvalAgent/TDR.reg into Windows registry and reboot your system to take effect.\nIf this is not fixed, please report an issue to https://github.com/microsoft/antares/issues\n\n", __FILE__, __LINE__), abort(), 0): 1)
 
 namespace {
 

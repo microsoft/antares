@@ -535,7 +535,7 @@ def main_compute(code_only=False):
 
       tuner.tune(n_trial=num_trials, callbacks=callbacks, measure_option=None)
       if math.isinf(tuner.task.best.timecost):
-        print(f'[Error] valid config found in the whole tuning. (Try other tuner types other than `TUNER={tuner_type}`?)')
+        print(f'[Error] No valid config found in the whole tuning. (Try other tuner types other than `TUNER={tuner_type}`?)')
         cleanup_on_exit(0, None)
 
       best_config = json.dumps(config_to_json(tuner.task.best.config))
