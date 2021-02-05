@@ -427,6 +427,7 @@ def emit_tvm_ir_v2(exprss, input_dict, extra_outputs):
     if k in extra_outputs:
       output_dict[k] = ast_outputs_dict[k]
     ast_seq.append(ast)
+  os.environ['MEDIATE_SHAPES'] = ', '.join([f'{x}:{inputs[x]["dtype"]}{str(inputs[x]["shape"])}' for x in inputs])
 
   # Also include the last output
   if k not in extra_outputs:

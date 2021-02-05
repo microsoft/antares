@@ -72,7 +72,6 @@ def get_global_arg_props():
   return global_arg_props
 
 def translate_code(code, config):
-  assert(len(code.split('extern "C"')) == 2)
   global_arg_props = get_global_arg_props()
 
   def get_kernel_metadata():
@@ -93,8 +92,15 @@ def translate_code(code, config):
     properties = "// CONFIG: %s\n// COMPUTE_V1: %s\n" % (config.strip() if isinstance(config, str) else '', os.environ['COMPUTE_V1'])
     return header_meta + properties
 
+
   code = refactor_multiple_names(code, global_arg_props)
-  code = platform_config.do_native_translation(code, attrs=AntaresGlobal.attrs)
+  kernel_slices = ['// -- ' + os.environ.get('MEDIATE_SHAPES', '')]
+  for kernel in ('\n' + code).split('\nextern ')[1:]:
+    kernel = 'extern %s\n' % kernel[:kernel.index('\n}') + 2]
+    kernel = platform_config.do_native_translation(kernel, attrs=AntaresGlobal.attrs)
+    kernel_slices.append(kernel)
+  code = '\n// ---------------------------------------------------------------------------\n'.join(kernel_slices)
+
   try:
     defs = platform_config.get_intrisic_defs() + '\n'
   except:
