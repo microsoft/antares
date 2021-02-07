@@ -222,7 +222,7 @@ def build_source_file():
             output = subprocess.check_output(cmd)
         else:
             pass
-    except CalledProcessError as e:
+    except Exception as e:
         print(e)
         return False
 
@@ -237,7 +237,7 @@ def execute(rank):
     output = b''
     try:
         output = subprocess.check_output(cmd, timeout=10)
-    except subprocess.CalledProcessError as e:
+    except Exception as e:
         print(e)
 
     return output
