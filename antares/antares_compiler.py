@@ -356,7 +356,8 @@ def compute_mem_ratio(tpr):
   return min(int(ratio), 100)
 
 def run_config_entity(target_source, config_str, dir_sid, expected_timecost='inf', dev_id=0):
-  print("  >> [ ] Param_entity on sid = %s: config = '%s', dev_id = %d, upper_bound_tpr = %.6e s" % (dir_sid, config_str, dev_id, expected_timecost))
+  config_str_short = config_str # if len(config_str) < 60 else config_str[:60] + '..'
+  print("  >> [ ] Param_entity on sid = %s: config = '%s', dev_id = %d, upper_bound_tpr = %.6e s" % (dir_sid, config_str_short, dev_id, expected_timecost))
   try:
     assert target_source is not None, "Invalid target source detected in verification stage."
     device_source, kernel_path, compile_args = target_source
@@ -369,7 +370,8 @@ def run_config_entity(target_source, config_str, dir_sid, expected_timecost='inf
   except:
     digest = 'null'
     result = float('inf')
-  print("  >> [*] Param_entity on sid = %s: config = '%s', tpr = `%.6f`, digest = `%s`, mem_occupy = %d %%" % (dir_sid, config_str, result, digest, compute_mem_ratio(result)))
+  if not math.isinf(result):
+    print("  >> [*] Param_entity on sid = %s: config = '%s', tpr = `%.6f`, digest = `%s`, mem_occupy = %d %%" % (dir_sid, config_str_short, result, digest, compute_mem_ratio(result)))
   return result
 
 

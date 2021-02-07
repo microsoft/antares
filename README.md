@@ -104,7 +104,7 @@ result = custom_op()
 print('The result of tensor `%s` is:\n%s' % (result.id, result))
 ```
 
-If you want the operator you just extended to run more efficiently, you can consider to take a look at "How to Tune Expressions" sections below.
+If you want the operator you just extended to run more efficiently, you can take a look at "How to Tune Expressions" section below.
 
 # Documentation for Other Advanced Examples:
 
