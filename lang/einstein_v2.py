@@ -178,13 +178,13 @@ class OpTensor:
           dtype = self._dtype
         return OpTensor('call', {"name": func_name, "inputs": [self] + others}, dtype, _flopbase)
 
-    def when(self, conditions, other):
+    def when(self, conditions, other, merge_op='all'):
         other = OpTensor.parse(other)
         assert self._dtype == other._dtype or '@' in self._dtype or '@' in other._dtype, "Conditional true and false values must have same datatype (%s v.s. %s)" % (self._dtype, other._dtype)
         conditions = conditions if isinstance(conditions, list) else [conditions]
         for cond in conditions:
           assert(cond._dtype == 'int8')
-        return OpTensor('when', {"if": conditions, "true": self, "false": other}, self._dtype, max(self._flopbase, other._flopbase))
+        return OpTensor('when', {"if": conditions, "true": self, "false": other, "merge_op": merge_op}, self._dtype, max(self._flopbase, other._flopbase))
 
 def parse_to_ast(expr, input_dict={}):
   expr = expr.strip().replace('`', '"')
@@ -307,7 +307,7 @@ def emit_antares_ir(ast):
     elif node._op == 'when':
       if len(node._value['if']) == 0:
         return '(%s)' % _emit(node._value['true'])
-      return '(%s).when([%s], %s)' % (_emit(node._value['true']), ', '.join([_emit(x) for x in node._value['if']]), _emit(node._value['false']))
+      return '(%s).when([%s], %s, merge_op="%s")' % (_emit(node._value['true']), ', '.join([_emit(x) for x in node._value['if']]), _emit(node._value['false']), node._value['merge_op'])
     elif node._op == 'cast':
       return '(%s).cast(`%s`)' % (_emit(node._value['inputs'][0]), node._dtype)
     else:
@@ -355,7 +355,7 @@ def emit_tvm_body(node, props):
     return 'tir.call_pure_extern(cast_dtype("%s"), "%s", %s)' % (node._dtype, node._value['name'], ', '.join([emit_tvm_body(x, props) for x in node._value["inputs"]]))
   elif node._op == 'when':
     all_conds = [emit_tvm_body(cond, props) for cond in node._value['if']]
-    return 'tir.if_then_else(te.all(' + ', '.join(all_conds) + '), t=' + emit_tvm_body(node._value['true'], props) + ', f=' + emit_tvm_body(node._value['false'], props) + ')'
+    return 'tir.if_then_else(te.%s(' % node._value['merge_op'] + ', '.join(all_conds) + '), t=' + emit_tvm_body(node._value['true'], props) + ', f=' + emit_tvm_body(node._value['false'], props) + ')'
   else:
     raise Exception('Unrecognized node type: %s' % node._op)
 
