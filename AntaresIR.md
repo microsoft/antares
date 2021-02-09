@@ -1,5 +1,67 @@
 ### Antares IR Syntax
 
+```
+Einstain Expression Parsing:
+
+  1) Transform-based Operator Format:  output[D1, D2, ..] = f(input[D1, D2, ..]) where D2 in 8
+
+       step-1: Auto fill einsum dummy-axis, get:  output[D1, D2, ..] = f(input[D1, D2, ..]) where D2 in 8, D1 in input.shape[0], ..
+
+       step-2: construct basic C code, get:
+
+       for (int D1 = 0; D1 < input.shape[0]; D1++)
+         for (int D2 = 0; D2 < 8; D2++)
+           for (..)
+             output[D1, D2, ..] = f(input[D1, D2, ..])
+
+     Specific Example (OneHot Op): output0[N, F] = const(1.0).when([input0[N] == F], const(0.0)) where F in 128
+
+       step-1/step-2: .., finally get:
+
+       for (int N = 0; N < input0.shape[0]; ++N)
+         for (int F = 0; F < 128; ++F)
+           output0[N, F] = (input0[N] == F) ? const(1.0) : const(0.0);
+
+
+  2) Aggregation-based Operator Format:  output[D1, D2, ..] +=! f(input[D1, D2, .., R1, R2, ..])
+
+       step-1: Auto fill einsum dummy-axis, get:  output[D1, D2, ..] +=! f(input[D1, D2, .., R1, R2, ..]) where D1 in input.shape[0], D2 in input.shape[1], .., R1 in input.shape[..], R2 in input.shape[..], ..
+
+       step-2: construct basic C code, get:
+
+       for (int D1 = 0; D1 < input.shape[0]; D1++)
+         for (int D2 = 0; D2 < input.shape[1]; D2++)
+           for (..)
+             output[D1, D2, ..] = 0;
+       for (int D1 = 0; D1 < input.shape[0]; D1++)
+         for (int D2 = 0; D2 < input.shape[1]; D2++)
+           for (..)
+             for (int R1 = 0; R1 < input.shape[0]; R1++)
+               for (int R2 = 0; R2 < input.shape[1]; R2++)
+                 for (..)
+                   output[D1, D2, ..] = f(input[D1, D2, .., R1, R2, ..]);
+
+     Specific Example (Conv2D Op): output0[N, F, HO, WO] +=! input0[N, C, HO + KH, WO + KW] * input1[F, C, KH, KW] where HO in 30, WO in 30
+
+       step-1/step-2: .., finally get:
+
+       for (int N = 0; N < input0.shape[0]; ++N)
+         for (int F = 0; F < input1.shape[0]; ++F)
+           for (int HO = 0; HO < 30; ++HO)
+             for (int WO = 0; WO < 30; ++WO)
+               output0[N, F, HO, WO] = 0;
+       for (int N = 0; N < input0.shape[0]; ++N)
+         for (int F = 0; F < input1.shape[0]; ++F)
+           for (int HO = 0; HO < 30; ++HO)
+             for (int WO = 0; WO < 30; ++WO)
+               for (int C = 0; C < input1.shape[1]; ++C)         // R1
+                 for (int KH = 0; KH < input1.shape[2]; ++KH)    // R2
+                   for (int KW = 0; KW < input1.shape[3]; ++KW)  // R3
+                     output0[N, F, HO, WO] += input0[N, C, HO + KH, WO + KW] * input1[F, C, KH, KW];
+
+```
+
+### More Examples:
 ```sh
 # Broadcast
 COMPUTE_V1='- einstein_v2("output0[N, F, HO, WO] = input0[N] where F in 32, HO in 2, WO in 2", input_dict={"input0": {"dtype": "float32", "shape": [16]}})' make
@@ -65,7 +127,7 @@ COMPUTE_V1='- einstein_v2("output0[N, F] = input0[N, F, 2]", input_dict={"input0
 COMPUTE_V1='- einstein_v2("output0[N, F] = input0[N, F].when([F < 128], input1[N, F - 128]) where F in 256", input_dict={"input0": {"dtype": "float32", "shape": [4, 128]}, "input1": {"dtype": "float32", "shape": [4, 128]}})' make
 
 # OneHot
-COMPUTE_V1='- einstein_v2("output0[N, F] = const(1.0).when([input0[N] == F], 0.0) where F in 128", input_dict={"input0": {"dtype": "int32", "shape": [4]}})' make
+COMPUTE_V1='- einstein_v2("output0[N, F] = const(1.0).when([input0[N] == F], const(0.0)) where F in 128", input_dict={"input0": {"dtype": "int32", "shape": [4]}})' make
 
 # Take
 COMPUTE_V1='- einstein_v2("output0[F, C] = input0[input1[F], C]", input_dict={"input0": {"dtype": "float32", "shape": [30528, 1024]}, "input1": {"dtype": "int32", "shape": [3072]}})' make
