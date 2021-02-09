@@ -3,31 +3,38 @@
 ```
 Einstain Expression Parsing:
 
-  1) Transform-based Operator Format:  output[D1, D2, ..] = f(input[D1, D2, ..]) where D2 in 8
+  1) * Transform-based Operator Format:  output[D1, D2, ..] = f(input[D1, D2, ..]) where D2 in 8
 
-       step-1: Auto fill einsum dummy-axis, get:  output[D1, D2, ..] = f(input[D1, D2, ..]) where D2 in 8, D1 in input.shape[0], ..
+       Step-1: Auto fill einsum dummy-axis, get:  output[D1, D2, ..] = f(input[D1, D2, ..]) where D2 in 8, D1 in input.shape[0], ..
 
-       step-2: construct basic C code, get:
+       Step-2: Construct basic C code, get:
 
        for (int D1 = 0; D1 < input.shape[0]; D1++)
          for (int D2 = 0; D2 < 8; D2++)
            for (..)
              output[D1, D2, ..] = f(input[D1, D2, ..])
 
-     Specific Example (OneHot Op): output0[N, F] = const(1.0).when([input0[N] == F], const(0.0)) where F in 128
+     * Specific Example 1 (OneHot Op): output0[N, F] = const(1.0).when([input0[N] == F], const(0.0)) where F in 128
 
-       step-1/step-2: .., finally get:
+       Step-1/Step-2: .., finally get:
 
        for (int N = 0; N < input0.shape[0]; ++N)
          for (int F = 0; F < 128; ++F)
            output0[N, F] = (input0[N] == F) ? const(1.0) : const(0.0);
 
+     * Specific Example 2 (Arrange Op): output0[N] = N.cast(`float32`) where N in 1024
 
-  2) Aggregation-based Operator Format:  output[D1, D2, ..] +=! f(input[D1, D2, .., R1, R2, ..])
+       Step-1/Step-2: .., finally get:
 
-       step-1: Auto fill einsum dummy-axis, get:  output[D1, D2, ..] +=! f(input[D1, D2, .., R1, R2, ..]) where D1 in input.shape[0], D2 in input.shape[1], .., R1 in input.shape[..], R2 in input.shape[..], ..
+       for (int N = 0; N < 1024; ++N)
+         output0[N] = static_cast<float>(N);
 
-       step-2: construct basic C code, get:
+
+  2) * Aggregation-based Operator Format:  output[D1, D2, ..] +=! f(input[D1, D2, .., R1, R2, ..])
+
+       Step-1: Auto fill einsum dummy-axis, get:  output[D1, D2, ..] +=! f(input[D1, D2, .., R1, R2, ..]) where D1 in input.shape[0], D2 in input.shape[1], .., R1 in input.shape[..], R2 in input.shape[..], ..
+
+       Step-2: Construct basic C code, get:
 
        for (int D1 = 0; D1 < input.shape[0]; D1++)
          for (int D2 = 0; D2 < input.shape[1]; D2++)
@@ -41,9 +48,9 @@ Einstain Expression Parsing:
                  for (..)
                    output[D1, D2, ..] = f(input[D1, D2, .., R1, R2, ..]);
 
-     Specific Example (Conv2D Op): output0[N, F, HO, WO] +=! input0[N, C, HO + KH, WO + KW] * input1[F, C, KH, KW] where HO in 30, WO in 30
+     * Specific Example (Conv2D Op): output0[N, F, HO, WO] +=! input0[N, C, HO + KH, WO + KW] * input1[F, C, KH, KW] where HO in 30, WO in 30
 
-       step-1/step-2: .., finally get:
+       Step-1/Step-2: .., finally get:
 
        for (int N = 0; N < input0.shape[0]; ++N)
          for (int F = 0; F < input1.shape[0]; ++F)
@@ -60,8 +67,27 @@ Einstain Expression Parsing:
                      output0[N, F, HO, WO] += input0[N, C, HO + KH, WO + KW] * input1[F, C, KH, KW];
 
 ```
+### Antares Built-in Primitive Mapping:
+| Primitive Type | Antares IR Format | C Code Format |
+|---|---|---|
+| Branch (All) | ```x.when([c1, c2, ..], y)``` | ```(c1 && c2 && ..) ? x : y``` |
+| Branch (Any) | ```x.when([c1, c2, ..], y, merge_op=`any`)``` | ```(c1 \|\| c2 \|\| ..) ? x : y``` |
+| Type Cast | ```x.cast(`int8`)``` | ```static_cast<char>(x)``` |
+| Function Call (Single Arg) | ```x.call(`exp`)``` | ```exp(x)``` |
+| Function Call (Multiple Args) | ```x.call(`max`, [y, ..])``` | ```max(x, y, ..)``` |
+| Logical Ops | ```x & ~(y \| z)``` | ```x && !(y \|\| z)``` |
 
-### More Examples:
+### Antares Built-in Data Type Mapping:
+| Antares Type | C Type |
+|---|---|
+| float64 | double |
+| float32 | float |
+| float16 | half |
+| int32 | int |
+| int16 | short |
+| int8 | char |
+
+### Detailed Examples:
 ```sh
 # Broadcast
 COMPUTE_V1='- einstein_v2("output0[N, F, HO, WO] = input0[N] where F in 32, HO in 2, WO in 2", input_dict={"input0": {"dtype": "float32", "shape": [16]}})' make
