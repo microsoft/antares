@@ -1,7 +1,7 @@
 ### Antares IR Syntax
 
 ```
-Einstain Expression Parsing:
+Einstein Expression Parsing:
 
   1) * Transform-based Operator Format:  output[D1, D2, ..] = f(input[D1, D2, ..]) where D2 in 8
 
