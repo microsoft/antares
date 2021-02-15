@@ -68,7 +68,6 @@ namespace AntaresHelloWorldExample
 // BACKEND = c-hlsl
 // ...
 
-#define long int64_t
 StructuredBuffer<float> input0: register(t0);
 StructuredBuffer<float> input1: register(t1);
 RWStructuredBuffer<float> output0: register(u0);

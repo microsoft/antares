@@ -97,7 +97,13 @@ def translate_code(code, config):
   kernel_slices = ['// -- ' + os.environ.get('MEDIATE_SHAPES', '')]
   for kernel in ('\n' + code).split('\nextern ')[1:]:
     kernel = 'extern %s\n' % kernel[:kernel.index('\n}') + 2]
-    kernel = platform_config.do_native_translation(kernel, attrs=AntaresGlobal.attrs)
+    idx = kernel.index(' void ') + 6
+    idy = kernel.index('(', idx)
+    kernel_name = kernel[idx:idy]
+    idx = kernel.index(') {', idy)
+    arg_names = [x.split() for x in kernel[idy+1:idx].split(',')]
+    arg_names = ', '.join([f'{x[-1]}({x[0][:-1]})' for x in arg_names])
+    kernel = f'// ; {kernel_name} : {arg_names}\n\n' + platform_config.do_native_translation(kernel, attrs=AntaresGlobal.attrs)
     kernel_slices.append(kernel)
   code = '\n// ---------------------------------------------------------------------------\n'.join(kernel_slices)
 
