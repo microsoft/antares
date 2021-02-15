@@ -21,7 +21,7 @@ def do_native_translation(code, **kwargs):
     for i, buf in enumerate(arg_bufs['_out']):
       registers.append('RWStructuredBuffer<%s> %s: register(u%d);\n' % (type_to_c(buf['dtype']), buf['name'], i))
 
-    code_prefix = '#define long int64_t\n'
+    code_prefix = ''
     lines, lds = [], []
     numthreads = {}
     for line in code.split('\n'):
