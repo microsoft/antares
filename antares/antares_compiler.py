@@ -82,19 +82,19 @@ def translate_code(code, config):
         # Just for Auto Shard
         assert(buf['dtype'] == 'int32' and buf['shape'] == [1])
         continue
-      inp_args.append('-'.join([str(x) for x in buf['shape']]) + '/' + buf['dtype'] + '/' + buf['name'])
+      inp_args.append('%s:%s%s' % (buf['name'], buf['dtype'], buf['shape']))
     for buf in global_arg_props['_out']:
-      outp_args.append('-'.join([str(x) for x in buf['shape']]) + '/' + buf['dtype'] + '/' + buf['name'])
+      outp_args.append('%s:%s%s' % (buf['name'], buf['dtype'], buf['shape']))
 
     device_code = os.environ.get('DEVICE_NAME', '')
     device_code = device_code if device_code else 'default'
-    header_meta = '///' + ','.join(inp_args) + ':' + ','.join(outp_args) + '\n// BACKEND = %s (%s)\n' % (backend, device_code)
+    header_meta = '// GLOBALS: ' + ', '.join(inp_args) + ' -> ' + ', '.join(outp_args) + '\n// BACKEND: %s (%s)\n' % (backend, device_code)
     properties = "// CONFIG: %s\n// COMPUTE_V1: %s\n" % (config.strip() if isinstance(config, str) else '', os.environ['COMPUTE_V1'])
     return header_meta + properties
 
 
   code = refactor_multiple_names(code, global_arg_props)
-  kernel_slices = ['// -- ' + os.environ.get('MEDIATE_SHAPES', '')]
+  kernel_slices = ['// TENSORS: ' + os.environ.get('MEDIATE_SHAPES', '')]
   for kernel in ('\n' + code).split('\nextern ')[1:]:
     kernel = 'extern %s\n' % kernel[:kernel.index('\n}') + 2]
     idx = kernel.index(' void ') + 6
@@ -103,7 +103,7 @@ def translate_code(code, config):
     idx = kernel.index(') {', idy)
     arg_names = [x.split() for x in kernel[idy+1:idx].split(',')]
     arg_names = ', '.join([f'{x[-1]}({x[0][:-1]})' for x in arg_names])
-    kernel = f'// ; {kernel_name} : {arg_names}\n\n' + platform_config.do_native_translation(kernel, attrs=AntaresGlobal.attrs)
+    kernel = f'// LOCAL: {kernel_name} - {arg_names}\n\n' + platform_config.do_native_translation(kernel, attrs=AntaresGlobal.attrs)
     kernel_slices.append(kernel)
   code = '\n// ---------------------------------------------------------------------------\n'.join(kernel_slices)
 
@@ -574,9 +574,9 @@ def main_compute(code_only=False):
     saved_code = codehub_db(os.environ['COMPUTE_V1'])
     if saved_code is not None:
       print("  >> Using Saved Code from Codehub:")
-      print("===========================")
+      print("// ---------------------------------------------------------------------------")
       print(saved_code)
-      print("===========================")
+      print("// ---------------------------------------------------------------------------")
       exit(0)
     best_config = ''
 
@@ -589,12 +589,13 @@ def main_compute(code_only=False):
     return device_source
 
   if verbose:
-    print("====================================")
+    print("// ---------------------------------------------------------------------------")
     print(device_source)
-    print("====================================\n")
+    print("// ---------------------------------------------------------------------------")
+    print()
 
   do_compilation(compile_args)
-  dev_id = int(os.environ.get('DEV_KEY', '0'))
+  dev_id = int(os.environ.get('DEV_ID', '0'))
   result = evaluate_perf(kernel_path, dev_id, device_source)
   exit(0 if result is not None and len(result) > 1 else 1)
 

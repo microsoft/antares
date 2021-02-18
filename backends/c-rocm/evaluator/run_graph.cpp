@@ -20,28 +20,6 @@
 #include <pthread.h>
 #include <unistd.h>
 
-#if !defined(__HIPCC__)
-#include <cuda.h>
-#else
-#include <hip/hip_runtime.h>
-#define cuMemAlloc hipMalloc
-#define cuMemFree hipFree
-#define cuModuleLoad hipModuleLoad
-#define cuModuleGetFunction hipModuleGetFunction
-#define cuLaunchKernel hipModuleLaunchKernel
-#define cuMemAllocHost hipHostMalloc
-#define cuMemFreeHost hipHostFree
-#define cuStreamSynchronize hipStreamSynchronize
-#define cuMemcpyHtoDAsync hipMemcpyHtoDAsync
-#define cuMemcpyDtoHAsync hipMemcpyDtoHAsync
-#define CUdeviceptr hipDeviceptr_t
-#define CUmodule hipModule_t
-#define CUfunction hipFunction_t
-#define CUevent hipEvent_t
-#define cuEventElapsedTime hipEventElapsedTime
-#define cuEventCreate hipEventCreateWithFlags
-#define cuEventRecord hipEventRecord
-#endif
 
 std::string get_between(const std::string &str, const std::string &begin, const std::string &end, int start_idx = 0, const std::string &def_ret = "") {
     if (start_idx < 0)
@@ -60,7 +38,8 @@ std::vector<std::string> ssplit(const std::string &str, const std::string &sub) 
     std::vector<std::string> ret;
     int it = 0, next;
     while (next = str.find(sub, it), next >= 0) {
-        ret.push_back(str.substr(it, next - it));
+        if (next > it)
+          ret.push_back(str.substr(it, next - it));
         it = next + sub.size();
     }
     ret.push_back(str.substr(it));
@@ -86,7 +65,7 @@ struct tensor_property {
         throw std::runtime_error(("Unrecognized type size for `" + dtype + "`").c_str());
     }
 
-    size_t mem_size() {
+    size_t mem_size() const {
         return element_size() * type_size();
     }
 };
@@ -95,15 +74,16 @@ std::vector<tensor_property> parse_properties(const std::string &encoded_inputs)
     if (encoded_inputs.size() == 0)
       return {};
     std::vector<tensor_property> ret;
-    for (auto it: ssplit(encoded_inputs, ",")) {
-      auto props = ssplit(it, "/");
+    for (auto it: ssplit(encoded_inputs, "], ")) {
+      auto props = ssplit(it, ":");
       tensor_property tp;
-      auto sshape = ssplit(props[0], "-");
-      for (auto d: sshape)
-        tp.shape.push_back(std::atol(d.c_str()));
-      tp.dtype = props[1];
-      tp.name = props[2];
-      ret.push_back(tp);
+      tp.name = props[0];
+      props = ssplit(props[1], "[");
+      tp.dtype = props[0];
+
+      for (auto dim: ssplit(props[1], ", "))
+        tp.shape.push_back(std::atol(dim.c_str()));
+      ret.push_back(std::move(tp));
     }
     return std::move(ret);
 }
@@ -114,25 +94,328 @@ void *timeout_monitor(void *arg) {
     exit(1);
 }
 
+struct kernel_property {
+  std::vector<std::string> args;
+  std::unordered_map<std::string, int> threads;
+};
+
+
+
+#if !defined(__HIPCC__)
+#include <cuda.h>
+#else
+#include <hip/hip_runtime.h>
+#define cuInit hipInit
+#define cuMemAlloc hipMalloc
+#define cuMemFree hipFree
+#define cuModuleLoad hipModuleLoad
+#define cuModuleGetFunction hipModuleGetFunction
+#define cuLaunchKernel hipModuleLaunchKernel
+#define cuMemAllocHost hipHostMalloc
+#define cuMemFreeHost hipHostFree
+#define cuStreamSynchronize hipStreamSynchronize
+#define cuMemcpyHtoDAsync hipMemcpyHtoDAsync
+#define cuMemcpyDtoHAsync hipMemcpyDtoHAsync
+#define CUdeviceptr hipDeviceptr_t
+#define CUmodule hipModule_t
+#define CUfunction hipFunction_t
+#define CUevent hipEvent_t
+#define cuEventElapsedTime hipEventElapsedTime
+#define cuEventCreate hipEventCreateWithFlags
+#define cuEventDestroy hipEventDestroy
+#define cuEventRecord hipEventRecord
+
+#define CUcontext long
+#define cuDevicePrimaryCtxRetain(x, y) hipSetDevice(y)
+#define cuCtxSetCurrent(x) 0
+#endif
+
+
+namespace ab {
+
+  void init() {
+    CUcontext ctx;
+    if (0 != cuInit(0) || 0 != cuDevicePrimaryCtxRetain(&ctx, 0) || 0 != cuCtxSetCurrent(ctx))
+        throw std::runtime_error("GPU device is not found.");
+  }
+
+  void* alloc(const tensor_property &tp) {
+    static std::unordered_map<std::string, void*> cached_mem;
+    void* &dptr = cached_mem[tp.name];
+    if (dptr)
+      return dptr;
+    assert(0 == cuMemAlloc((CUdeviceptr*)&dptr, tp.mem_size()));
+    fprintf(stderr, "alloc(%p, `%s`);\n", dptr, tp.name.c_str());
+    return dptr;
+  }
+
+  void free(void *dptr) {
+    fprintf(stderr, "free(%p);\n", dptr);
+  }
+
+  void* moduleLoad(const std::string &source) {
+    char temp_name[] = ".antares-module-XXXXXX";
+    auto folder = std::string(mkdtemp(temp_name));
+#if !defined(__HIPCC__)
+    auto path = folder + "/module.cu";
+    FILE *fp = fopen(path.c_str(), "w");
+    assert(source.size() == fwrite(source.data(), 1, source.size(), fp));
+    fclose(fp);
+    assert(0 == system(("/usr/local/cuda/bin/nvcc " + path + " --fatbin -O2 -gencode arch=compute_70,code=sm_70 -O2 -o " + path + ".out").c_str()));
+#else
+    auto path = folder + "/module.cc";
+    FILE *fp = fopen(path.c_str(), "w");
+    assert(source.size() == fwrite(source.data(), 1, source.size(), fp));
+    fclose(fp);
+    assert(0 == system(("/opt/rocm/bin/hipcc " + path + " --amdgpu-target=gfx906 --genco -Wno-ignored-attributes -O2 -o " + path + ".out").c_str()));
+#endif
+    CUmodule hmod = nullptr;
+    assert(0 == cuModuleLoad(&hmod, (path + ".out").c_str()));
+
+    assert(0 == system(("rm -rf " + folder).c_str()));
+    fprintf(stderr, "load(%s)\n", folder.c_str());
+    return hmod;
+  }
+
+  void *moduleGetFunction(const void *hModule, const char *fname) {
+    CUfunction hfunc = nullptr;
+    assert(0 == cuModuleGetFunction(&hfunc, (CUmodule)hModule, fname));
+    return hfunc;
+  }
+
+  void launchKernel(const void *hFunction, const std::unordered_map<std::string, int> &threads, const std::vector<void*> &krnl_args) {
+    auto query = [&](const std::string &axis, int defval = 1) {
+      auto it = threads.find(axis);
+      if (it == threads.end())
+        return defval;
+      return it->second;
+    };
+    std::vector<void* const*> pargs(krnl_args.size());
+    for (int i = 0; i < pargs.size(); ++i)
+      pargs[i] = &krnl_args[i];
+    assert(0 == cuLaunchKernel((CUfunction)hFunction, query("blockIdx.x"), query("blockIdx.y"), query("blockIdx.z"), query("threadIdx.x"), query("threadIdx.y"), query("threadIdx.z"), 0, nullptr, (void**)pargs.data(), nullptr));
+    fprintf(stderr, "launch(");
+    for (int i = 0; i < krnl_args.size(); ++i)
+      fprintf(stderr, "%p,", krnl_args[i]);
+    fprintf(stderr, "\b);\n");
+  }
+
+  void memcpyHtoD(void *dptr, void *hptr, size_t byteSize) {
+    fprintf(stderr, "memcpyHtoD(%zd)\n", byteSize);
+    assert(0 == cuMemcpyHtoDAsync((CUdeviceptr)dptr, hptr, byteSize, nullptr));
+  }
+
+  void memcpyDtoH(void *hptr, void *dptr, size_t byteSize) {
+    fprintf(stderr, "memcpyDtoH(%zd)\n", byteSize);
+    assert(0 == cuMemcpyDtoHAsync(hptr, (CUdeviceptr)dptr, byteSize, nullptr));
+  }
+
+  void synchronize() {
+    fprintf(stderr, "synchronize()\n");
+    assert(0 == cuStreamSynchronize(nullptr));
+  }
+
+  void* recordTime() {
+    CUevent hEvent;
+    fprintf(stderr, "recordTime()\n");
+    assert(0 == cuEventCreate(&hEvent, 0));
+    assert(0 == cuEventRecord(hEvent, nullptr));
+    return hEvent;
+  }
+
+  double convertToElapsedTime(void *hStart, void *hStop) {
+    synchronize();
+    fprintf(stderr, "convertToElapsedTime()\n");
+    float ms;
+    assert(0 == cuEventElapsedTime(&ms, (CUevent)hStart, (CUevent)hStop));
+    assert(0 == cuEventDestroy((CUevent)hStart));
+    assert(0 == cuEventDestroy((CUevent)hStop));
+    return ms * 1e-3;
+  }
+}
+
+struct GraphModule {
+  std::vector<tensor_property> global_inputs, global_outputs;
+  std::unordered_map<std::string, tensor_property> local_tensors;
+  std::map<std::string, kernel_property> local_kernels;
+
+  std::string backend;
+
+  void *hModule;
+  std::unordered_map<std::string, void*> hFunctions;
+
+  GraphModule(const std::string &source) {
+    auto encoded_params = get_between(source, "// GLOBALS: ", "\n");
+    auto params = ssplit(encoded_params, " -> ");
+    global_inputs = parse_properties(params[0]), global_outputs = parse_properties(params[1]);
+
+    encoded_params = get_between(source, "// TENSORS: ", "\n");
+    for (auto &tensor: parse_properties(encoded_params)) {
+      local_tensors[tensor.name] = tensor;
+    }
+
+    backend = get_between(source, "// BACKEND: ", " (");
+    // fprintf(stderr, "%s\n", backend.c_str());
+
+    hModule = ab::moduleLoad(source);
+
+    auto kernel_slices = ssplit(source, "-------\n");
+    for (int i = 1; i < kernel_slices.size(); ++i) {
+      auto name = get_between(kernel_slices[i], "// LOCAL: ", " - ");
+      auto &kp = local_kernels[name];
+      for (auto arg: ssplit(get_between(kernel_slices[i], " - ", "\n"), ", "))
+        kp.args.push_back(arg.substr(0, arg.find('(')));
+      // for (auto &it: kp.args)
+      //   fprintf(stderr, "  arg(%s) = %s\n", name.c_str(), it.c_str());
+      int idx = 0, next;
+      while (next = kernel_slices[i].find("// [thread_extent] ", idx), next >= 0) {
+        auto thread_key = get_between(kernel_slices[i], "] ", " = ", next);
+        auto thread_val = std::atoi(get_between(kernel_slices[i], " = ", "\n", next).c_str());
+        auto &val = kp.threads[thread_key];
+        if (val > 0 && val != thread_val)
+          throw std::runtime_error(("Multiple `" + thread_key + "` extents conflict in values: " + std::to_string(val) + " v.s. " + std::to_string(thread_val) + ";\n").c_str());
+        val = thread_val;
+        idx = next + 1;
+      }
+
+      hFunctions[name] = ab::moduleGetFunction(hModule, name.c_str());
+    }
+  }
+
+  size_t compute(void **args) {
+    std::unordered_map<std::string, int> tensor_used;
+    for (int i = 0; i < global_inputs.size(); ++i)
+      ++tensor_used[global_inputs[i].name];
+    int nodeCnt = local_kernels.size();
+    for (auto it = --local_kernels.end(); nodeCnt > 0; --it, --nodeCnt) {
+      if (nodeCnt == local_kernels.size()) {
+        for (int i = 0; i < it->second.args.size() - global_outputs.size(); ++i)
+          ++tensor_used[it->second.args[i]];
+      } else {
+        for (int i = 0; i < it->second.args.size() - 1; ++i)
+          ++tensor_used[it->second.args[i]];
+      }
+    }
+    std::unordered_map<std::string, void*> tensor_memory;
+    for (int i = 0; i < global_inputs.size(); ++i)
+      tensor_memory[global_inputs[i].name] = args[i];
+    for (int i = 0; i < global_outputs.size(); ++i)
+      tensor_memory[global_outputs[i].name] = args[i + global_inputs.size()];
+
+    for (auto it = local_kernels.begin(); ++nodeCnt <= local_kernels.size(); ++it) {
+      const std::string &name = it->first;
+      if (nodeCnt != local_kernels.size()) {
+        auto &arg_name = it->second.args.back();
+        auto &memptr = tensor_memory[arg_name];
+        assert(memptr == nullptr);
+        memptr = ab::alloc(local_tensors[arg_name]);
+      }
+      std::vector<void*> krnl_args;
+      for (auto &arg: it->second.args)
+        krnl_args.push_back(tensor_memory[arg]);
+
+      ab::launchKernel(hFunctions[name], it->second.threads, krnl_args);
+      // get_funciton(); launch_kernel(krnl_args.data());
+
+      int num_inputs = it->second.args.size() - (nodeCnt != local_kernels.size() ? 1 : global_outputs.size());
+      for (int i = 0; i < num_inputs; ++i)
+        if (--tensor_used[it->second.args[i]] == 0) {
+          ab::free(tensor_memory[it->second.args[i]]);
+        }
+    }
+    return 0;
+  }
+};
+
 int main(int argc, char** argv)
 {
     pthread_t p_timeout_monitor;
     pthread_create(&p_timeout_monitor, NULL, timeout_monitor, NULL);
     pthread_detach(p_timeout_monitor);
 
-#if !defined(__HIPCC__)
-    CUcontext ctx;
-    if (0 != cuInit(0) || 0 != cuDevicePrimaryCtxRetain(&ctx, 0) || 0 != cuCtxSetCurrent(ctx))
-        throw std::runtime_error("GPU device for CUDA is not found.");
-#else
-    if (0 != hipSetDevice(0))
-        throw std::runtime_error("GPU device for ROCM is not found.");
-#endif
+    ab::init();
 
     std::ifstream t("my_kernel.cc");
     std::string source((std::istreambuf_iterator<char>(t)), std::istreambuf_iterator<char>());
     t.close();
 
+#if 1
+    GraphModule gm(source);
+    std::vector<void*> global_args;
+    for (int i = 0; i < gm.global_inputs.size(); ++i) {
+      auto &it = gm.global_inputs[i];
+      void *dptr = ab::alloc(it);
+      global_args.push_back(dptr);
+
+      std::vector<char> hptr(it.mem_size());
+      size_t size = it.element_size();
+      if (it.dtype == "int32") {
+        for (size_t x = 0; x < size; ++x)
+          ((int*)hptr.data())[x] = (x + i + 1) % 71;
+      } else if (it.dtype == "float32") {
+        for (size_t x = 0; x < size; ++x)
+          ((float*)hptr.data())[x] = (x + i + 1) % 71;
+      } else {
+        size_t byte_size = size * it.type_size();
+        for (size_t x = 0; x < byte_size / sizeof(int); ++x)
+          ((int*)hptr.data())[x] = (x + i + 1) % 71;
+        for (size_t x = byte_size - byte_size % sizeof(int); x < byte_size; x++)
+          ((char*)hptr.data())[x] = 1;
+      }
+      ab::memcpyHtoD(dptr, hptr.data(), hptr.size());
+      ab::synchronize();
+    }
+    for (auto &it: gm.global_outputs) {
+      void *dptr = ab::alloc(it);
+      global_args.push_back(dptr);
+    }
+
+    gm.compute(global_args.data());
+
+    for (int i = 0; i < gm.global_outputs.size(); ++i) {
+      auto &it = gm.global_outputs[i];
+      void *dptr = global_args[gm.global_inputs.size() + i];
+
+      std::vector<char> hptr(it.mem_size());
+      ab::memcpyDtoH(hptr.data(), dptr, hptr.size());
+      ab::synchronize();
+
+      size_t byte_size = it.mem_size();
+      double digest = 0.0;
+      if (it.dtype == "int32") {
+        for (size_t x = 0; x < byte_size / sizeof(int); ++x)
+          digest += (x + 1) % 83 * ((int*)hptr.data())[x];
+      } else {
+        for (size_t x = 0; x < byte_size / sizeof(float); ++x)
+          digest += (x + 1) % 83 * ((float*)hptr.data())[x];
+        for (size_t x = byte_size - byte_size % sizeof(int); x < byte_size; x++)
+          digest += ((char*)hptr.data())[x];
+      }
+      printf("\n- K/%d: %.10e\n", i, digest);
+    }
+
+    {
+      auto x = ab::recordTime();
+      gm.compute(global_args.data());
+      auto y = ab::recordTime();
+      ab::synchronize();
+
+      double tpr = ab::convertToElapsedTime(x, y);
+      const char *expected_timeout = getenv("EXPECTED_TIMEOUT");
+      if (expected_timeout && *expected_timeout && tpr > std::atof(expected_timeout))
+        throw std::runtime_error(("Time limit exceeded: " + std::to_string(tpr) + " v.s. (expected) " + expected_timeout).c_str());
+
+      int num_runs = (int)std::max(1LU, std::min(10000LU, (unsigned long)(1.0 / tpr)));
+      tpr = 0.0f;
+      x = ab::recordTime();
+      for (int i = 0; i < num_runs; ++i)
+        gm.compute(global_args.data());
+      y = ab::recordTime();
+      tpr = ab::convertToElapsedTime(x, y) / num_runs;
+      printf("\n- TPR: %g\n", tpr);
+    }
+    return 0;
+#else
     struct kernel_prop {
       std::vector<void*> args;
       std::vector<void**> pargs;
@@ -143,7 +426,7 @@ int main(int argc, char** argv)
     std::unordered_map<std::string, void*> mediate_ptrs;
     std::map<std::string, kernel_prop> kernels;
 
-    auto mediate_params = get_between(source, "// -- ", "\n");
+    auto mediate_params = get_between(source, "// TENSORS: ", "\n");
     for (auto mediate: ssplit(mediate_params, "], ")) {
       auto parts = ssplit(mediate, ":");
       auto name = parts[0];
@@ -190,8 +473,8 @@ int main(int argc, char** argv)
       idx = next + 1;
     }
 
-    auto encoded_params = get_between(source, "///", "\n");
-    auto params = ssplit(encoded_params, ":");
+    auto encoded_params = get_between(source, "// GLOBALS: ", "\n");
+    auto params = ssplit(encoded_params, " -> ");
     auto inputs = parse_properties(params[0]), outputs = parse_properties(params[1]);
 
     std::vector<void*> h_args, d_args;
@@ -316,5 +599,6 @@ int main(int argc, char** argv)
       assert(0 == cuMemFreeHost(it));
     for (auto &it: d_args)
       assert(0 == cuMemFree((CUdeviceptr)it));
+#endif
     return 0;
 }
