@@ -101,9 +101,10 @@ def translate_code(code, config):
     idy = kernel.index('(', idx)
     kernel_name = kernel[idx:idy]
     idx = kernel.index(') {', idy)
-    arg_names = [x.split() for x in kernel[idy+1:idx].split(',')]
-    arg_names = ', '.join([f'{x[-1]}({x[0][:-1]})' for x in arg_names])
-    kernel = f'// LOCAL: {kernel_name} - {arg_names}\n\n' + platform_config.do_native_translation(kernel, attrs=AntaresGlobal.attrs)
+    body = kernel[idx+3:kernel.index('\n}', idx)].strip()
+    args = [(x.split('*')[0].strip(), x.split()[-1]) for x in kernel[idy+1:idx].split(',')]
+    arg_names = ', '.join([f'{x[1]}({x[0]})' for x in args])
+    kernel = f'// LOCAL: {kernel_name} - {arg_names}\n\n' + platform_config.do_native_translation_v2((kernel_name, args, body), attrs=AntaresGlobal.attrs)
     kernel_slices.append(kernel)
   code = '\n// ---------------------------------------------------------------------------\n'.join(kernel_slices)
 
@@ -138,12 +139,6 @@ def compute_gflops(flop, t):
     return flop / (t * 1e3) / 1e6
   except:
     return 0.0
-
-def do_compilation(compile_args, verbose=True):
-  if verbose:
-    print('[Build (pid=%d)]' % os.getpid(), ' '.join(compile_args))
-  assert os.path.exists(compile_args[0]), "Compiler program `%s` is not found." % compile_args[0]
-  assert run_process_with_timeout(compile_args, krnl_compile_timeout), "Compilation failed for: Bad kernel code reported by native compiler.\nFailure command: %s\n" % ' '.join(compile_args)
 
 def codehub_db(compute_key, source_code=None, erase=False):
   compute_key = compute_key.split('##')[0].strip()
@@ -268,10 +263,7 @@ def get_target_source(best_config, dir_sid=None):
   kernel_path = local_get_dir_file('my_kernel.cc', dir_sid=dir_sid)
   with open(kernel_path, 'w') as fp:
     fp.write(device_source)
-
-  kernel_out = local_get_dir_file('my_kernel.out', dir_sid=dir_sid)
-  compile_args = platform_config.get_compile_kernel_args(kernel_path, kernel_out, device_properties())
-  return device_source, kernel_path, compile_args
+  return device_source, kernel_path
 
 def code_suffix(tpr=-1.0, step_prod=0, step_plan=-1):
   return '\n// Saved Perf = %.6e sec / run; Step Produced = %d; Planned Steps = %d;' % (tpr, step_prod, step_plan)
@@ -366,9 +358,8 @@ def run_config_entity(target_source, config_str, dir_sid, expected_timecost='inf
   print("  >> [ ] Param_entity on sid = %s: config = '%s', dev_id = %d, upper_bound_tpr = %.6e s" % (dir_sid, config_str_short, dev_id, expected_timecost))
   try:
     assert target_source is not None, "Invalid target source detected in verification stage."
-    device_source, kernel_path, compile_args = target_source
+    device_source, kernel_path = target_source
 
-    do_compilation(compile_args, verbose=False)
     results = evaluate_perf(kernel_path, dev_id, device_source, dir_sid, verbose=False, expected_timeout=expected_timecost)
     assert results is not None and 'TPR' in results, "Invalid target output detected in evaluation stage."
     digest = ','.join(['%.6e' % float(results['K/%d' % i]) for i in range(len(results) - 1)])
@@ -440,12 +431,7 @@ def main_compute(code_only=False):
     batch_size = int(os.environ.get('BATCH', '16'))
 
     from concurrent.futures import ThreadPoolExecutor
-    try:
-      if platform_config.allow_concurrent_compile_execution():
-        raise Exception()
-      worker_size = 1
-    except:
-      worker_size = batch_size
+    worker_size = batch_size
     thread_pool = ThreadPoolExecutor(max_workers=worker_size)
 
     tuner_type = os.environ.get('TUNER', '')
@@ -583,7 +569,7 @@ def main_compute(code_only=False):
   assert isinstance(best_config, str)
 
   best_config = best_config if best_config else task.config_space
-  device_source, kernel_path, compile_args = get_target_source(best_config)
+  device_source, kernel_path = get_target_source(best_config)
 
   if code_only:
     return device_source
@@ -592,9 +578,8 @@ def main_compute(code_only=False):
     print("// ---------------------------------------------------------------------------")
     print(device_source)
     print("// ---------------------------------------------------------------------------")
-    print()
+    print("// Evaluating Modules..\n")
 
-  do_compilation(compile_args)
   dev_id = int(os.environ.get('DEV_ID', '0'))
   result = evaluate_perf(kernel_path, dev_id, device_source)
   exit(0 if result is not None and len(result) > 1 else 1)

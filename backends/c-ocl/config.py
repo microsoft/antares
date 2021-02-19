@@ -6,9 +6,6 @@ import subprocess, os
 def get_execution_parallism():
   return 1
 
-def get_compile_kernel_args(kernel_src, kernel_out, device_props):
-  return ['/bin/cp', kernel_src, kernel_out]
-
 def do_native_translation(code, **kwargs):
   code = code.replace('extern "C" __global__ ', '__kernel ').replace(' __restrict__ ', ' ').replace('__shared__', '__local')
   code = code.replace('__syncthreads()', 'barrier(CLK_LOCAL_MEM_FENCE)')

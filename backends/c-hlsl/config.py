@@ -9,9 +9,6 @@ from antares.common import type_to_c, AntaresGlobal
 def get_execution_parallism():
     return 1
 
-def get_compile_kernel_args(kernel_src, kernel_out, device_props):
-    return ['/bin/cp', kernel_src, kernel_out]
-
 def do_native_translation(code, **kwargs):
     arg_bufs = AntaresGlobal.local_arg_pros
 

@@ -6,9 +6,6 @@ import subprocess, os
 def get_execution_parallism():
   return 1
 
-def get_compile_kernel_args(kernel_src, kernel_out, device_props):
-  return ['/bin/cp', kernel_src, kernel_out]
-
 def do_native_translation(code, **kwargs):
   code = code.replace(' __global__ ', ' ').replace(' __restrict__ ', ' ')
   brac_start = code.index('(', code.index('void ')) + 1

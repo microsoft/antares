@@ -93,7 +93,7 @@ std::vector<tensor_property> parse_properties(const std::string &encoded_inputs)
     return std::move(ret);
 }
 
-#include "backend_rocm.hpp"
+#include "backend.hpp"
 
 struct ExecutionModule {
   std::vector<tensor_property> global_inputs, global_outputs;
@@ -180,7 +180,7 @@ struct ExecutionModule {
       int num_inputs = it->second.args.size() - (nodeCnt != local_kernels.size() ? 1 : global_outputs.size());
       for (int i = 0; i < num_inputs; ++i)
         if (--tensor_used[it->second.args[i]] == 0) {
-          ab::free(tensor_memory[it->second.args[i]]);
+          ab::release(tensor_memory[it->second.args[i]]);
         }
     }
     return 0;

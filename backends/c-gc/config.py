@@ -11,21 +11,6 @@ from antares.common import type_to_c as _native_dtype, AntaresGlobal
 def get_execution_parallism():
     return 1
 
-def get_compile_kernel_args(kernel_src, kernel_out, device_props):
-    return ['/bin/cp', kernel_src, kernel_out]
-
-def remove_local_cache(code, arg_bufs):
-    result = []
-    for line in code.split('\n'):
-      if line.endswith('];') and line.find('=') < 0:
-        output_buf = arg_bufs['_out'][0]
-        print(line.split()[0], output_buf['dtype'])
-        if line.split()[0] != _native_dtype(output_buf['dtype']):
-          raise Exception("This backend doesn't support injective computation modifying the output type")
-        line = '  ' + line.split('[')[0].strip().replace(' ', ' *') + ' = &' + output_buf['name'] + '[0];'
-      result.append(line)
-    return '\n'.join(result)
-
 def do_native_translation(code, **kwargs):
     arg_bufs = AntaresGlobal.local_arg_pros
 
@@ -33,7 +18,6 @@ def do_native_translation(code, **kwargs):
       raise Exception("Program for graphcore must be based on Antares IR")
 
     code = code[code.index(') {\n') + len(') {\n'):code.rindex('}\n')]
-    code = remove_local_cache(code, arg_bufs)
 
     func_args, delta_args = '', []
     for buf in arg_bufs['_in']:
