@@ -97,8 +97,8 @@ void *timeout_monitor(void *arg) {
 struct kernel_property {
   std::vector<std::string> args;
   std::unordered_map<std::string, int> threads;
+  void* hFunction;
 };
-
 
 
 #if !defined(__HIPCC__)
@@ -177,13 +177,13 @@ namespace ab {
     return hmod;
   }
 
-  void *moduleGetFunction(const void *hModule, const char *fname) {
+  void* moduleGetFunction(const void *hModule, const std::string &fname) {
     CUfunction hfunc = nullptr;
-    assert(0 == cuModuleGetFunction(&hfunc, (CUmodule)hModule, fname));
+    assert(0 == cuModuleGetFunction(&hfunc, (CUmodule)hModule, fname.c_str()));
     return hfunc;
   }
 
-  void launchKernel(const void *hFunction, const std::unordered_map<std::string, int> &threads, const std::vector<void*> &krnl_args) {
+  void launchKernel(const void* hFunction, const std::unordered_map<std::string, int> &threads, const std::vector<void*> &krnl_args) {
     auto query = [&](const std::string &axis, int defval = 1) {
       auto it = threads.find(axis);
       if (it == threads.end())
@@ -234,7 +234,7 @@ namespace ab {
   }
 }
 
-struct GraphModule {
+struct ExecutionModule {
   std::vector<tensor_property> global_inputs, global_outputs;
   std::unordered_map<std::string, tensor_property> local_tensors;
   std::map<std::string, kernel_property> local_kernels;
@@ -242,9 +242,8 @@ struct GraphModule {
   std::string backend;
 
   void *hModule;
-  std::unordered_map<std::string, void*> hFunctions;
 
-  GraphModule(const std::string &source) {
+  ExecutionModule(const std::string &source) {
     auto encoded_params = get_between(source, "// GLOBALS: ", "\n");
     auto params = ssplit(encoded_params, " -> ");
     global_inputs = parse_properties(params[0]), global_outputs = parse_properties(params[1]);
@@ -278,7 +277,7 @@ struct GraphModule {
         idx = next + 1;
       }
 
-      hFunctions[name] = ab::moduleGetFunction(hModule, name.c_str());
+      kp.hFunction = ab::moduleGetFunction(hModule, name);
     }
   }
 
@@ -314,7 +313,7 @@ struct GraphModule {
       for (auto &arg: it->second.args)
         krnl_args.push_back(tensor_memory[arg]);
 
-      ab::launchKernel(hFunctions[name], it->second.threads, krnl_args);
+      ab::launchKernel(it->second.hFunction, it->second.threads, krnl_args);
       // get_funciton(); launch_kernel(krnl_args.data());
 
       int num_inputs = it->second.args.size() - (nodeCnt != local_kernels.size() ? 1 : global_outputs.size());
@@ -340,7 +339,7 @@ int main(int argc, char** argv)
     t.close();
 
 #if 1
-    GraphModule gm(source);
+    ExecutionModule gm(source);
     std::vector<void*> global_args;
     for (int i = 0; i < gm.global_inputs.size(); ++i) {
       auto &it = gm.global_inputs[i];
