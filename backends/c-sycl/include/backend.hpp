@@ -1,8 +1,9 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-//; eval_flags(c-mcpu): -ldl
+//; eval_flags(c-sycl): [dpcpp] -ldl
 
+#include <CL/sycl.hpp>
 #include <dlfcn.h>
 #include <pthread.h>
 #include <malloc.h>
@@ -10,8 +11,15 @@
 namespace ab {
 
   static std::unordered_map<size_t, std::vector<void*>> _cached_memory;
+  static sycl::queue _sycl_queue;
 
   void init(int dev) {
+    try {
+      _sycl_queue = std::move(sycl::queue(sycl::default_selector{}));
+    } catch (sycl::exception const &e) {
+      std::terminate();
+    }
+    // fprintf(stderr, "\nSYCL Device Name: %s\n", _sycl_queue.get_device().get_info<sycl::info::device::name>().c_str());
   }
 
   void* alloc(size_t byteSize, const std::vector<size_t> &shape, const std::string &dtype, const std::string &name) {
@@ -38,71 +46,34 @@ namespace ab {
     FILE *fp = fopen(path.c_str(), "w");
     assert(source.size() == fwrite(source.data(), 1, source.size(), fp));
     fclose(fp);
-    assert(0 == system(("g++ " + path + " -ldl -lpthread -fPIC -shared -O2 -o " + path + ".out").c_str()));
+    assert(0 == system(("dpcpp " + path + " -std=c++17 -lpthread -fPIC -shared -O2 -o " + path + ".out").c_str()));
 
-    void *hmod = dlopen((path + ".out").c_str(), RTLD_LAZY);
+    void *hmod = dlopen((path + ".out").c_str(), RTLD_LAZY | RTLD_GLOBAL);
     assert(0 == system(("rm -rf " + folder).c_str()));
     return hmod;
   }
 
   std::vector<void*> moduleGetFunction(const void *hModule, const std::string &fname, const std::unordered_map<std::string, int> &threads, const std::vector<std::string> &args) {
-    return { dlsym((void*)hModule, fname.c_str()), (void*)(long)threads.find("__rank__")->second };
-  }
-
-  static std::vector<std::vector<void*>> _task_queue;
-  static long _max_threads_in_task_queue;
-  static pthread_barrier_t _thread_barrier;
-
-  static void* thread_worker(void* args) {
-    long rank = (long)args;
-    for (auto &it: _task_queue) {
-      auto func = ((void(*)(int, void* const*))it[0]);
-      if (rank < (long)it[1])
-        func(rank, it.data() + 2);
-      pthread_barrier_wait(&_thread_barrier);
-    }
-    return nullptr;
+    return { dlsym((void*)hModule, fname.c_str()) };
   }
 
   void launchKernel(const std::vector<void*> &hFunction, const std::vector<void*> &krnl_args) {
-    std::vector<void*> task = hFunction;
-    task.insert(task.end(), krnl_args.begin(), krnl_args.end());
-    _task_queue.push_back(std::move(task));
-
-    _max_threads_in_task_queue = std::max(_max_threads_in_task_queue, (long)hFunction[1]);
+    ((void(*)(void*, void* const*))hFunction[0])(&_sycl_queue, krnl_args.data());
+    _sycl_queue.wait();
   }
 
   void synchronize() {
-    if (_task_queue.size()) {
-      std::vector<pthread_t> tid(_max_threads_in_task_queue);
-      pthread_barrier_init(&_thread_barrier, nullptr, tid.size());
-
-      for (int i = 0; i < tid.size(); ++i)
-        pthread_create(&tid[i], nullptr, thread_worker, (void*)(long)i);
-      for (int i = 0; i < tid.size(); ++i)
-        pthread_join(tid[i], nullptr);
-
-      pthread_barrier_destroy(&_thread_barrier);
-      _max_threads_in_task_queue = 0;
-      _task_queue.clear();
-    }
   }
 
   void memcpyHtoD(void *dptr, void *hptr, size_t byteSize) {
-    ab::synchronize();
-
     memcpy(dptr, hptr, byteSize);
   }
 
   void memcpyDtoH(void *hptr, void *dptr, size_t byteSize) {
-    ab::synchronize();
-
     memcpy(hptr, dptr, byteSize);
   }
 
   void* recordTime() {
-    ab::synchronize();
-
     auto pt = new std::chrono::high_resolution_clock::time_point;
     *pt = std::chrono::high_resolution_clock::now();
     return pt;

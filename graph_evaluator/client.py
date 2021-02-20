@@ -12,7 +12,7 @@ def init(**kwargs):
 
     with open(f'{backend_root}/include/backend.hpp', 'r') as fp:
       eval_flags_pref = f'//; eval_flags({backend}):'
-      eval_flags = ''
+      eval_flags, compiler = '', 'g++'
       while True:
         line = fp.readline()
         if not line:
@@ -20,13 +20,16 @@ def init(**kwargs):
         line = line.strip()
         if line.startswith(eval_flags_pref):
           eval_flags = line[len(eval_flags_pref):].strip()
+          if eval_flags.startswith('['):
+            idx = eval_flags.index(']')
+            eval_flags, compiler = eval_flags[idx+1:].strip(), eval_flags[1:idx].strip()
           break
 
     evaluator_path = '%s/evaluator.%s' % (os.environ['ANTARES_DRIVER_PATH'], backend)
     if not os.path.exists(evaluator_path):
       error_info = f"SDK for `{backend}` is not configured correctly, please look into the error messages and reconfigure the corresponding environment."
       pre_define_macro = backend.upper().replace('-', '_')
-      assert 0 == os.system(f'timeout 10s g++ {source_root}/run_graph.cpp -D__BACKEND__={pre_define_macro} -I{backend_root}/include -std=c++17 -Wno-unused-result -lpthread -o {evaluator_path}.tmp {eval_flags}'), error_info
+      assert 0 == os.system(f'timeout 10s {compiler} {source_root}/run_graph.cpp -D__BACKEND__={pre_define_macro} -I{backend_root}/include -std=c++17 -Wno-unused-result -Wno-unused-value -lpthread -o {evaluator_path}.tmp {eval_flags}'), error_info
       os.system(f'mv {evaluator_path}.tmp {evaluator_path} >/dev/null 2>&1')
 
 def eval(kernel_path, **kwargs):

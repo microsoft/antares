@@ -34,7 +34,6 @@ namespace ab {
     assert(0 == system(("g++ " + path + " -ldl -lpthread -fPIC -shared -O2 -o " + path + ".out").c_str()));
 
     void *hmod = dlopen((path + ".out").c_str(), RTLD_LAZY);
-
     assert(0 == system(("rm -rf " + folder).c_str()));
     return hmod;
   }

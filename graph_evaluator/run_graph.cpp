@@ -100,7 +100,8 @@ std::vector<tensor_property> parse_properties(const std::string &encoded_inputs)
 }
 
 void *allocate_tensor(tensor_property &tp) {
-  return ab::alloc(tp.mem_size(), tp.shape, tp.dtype, tp.name);
+  size_t align_size = ((tp.mem_size() - 1) | 1023) + 1;
+  return ab::alloc(align_size, tp.shape, tp.dtype, tp.name);
 }
 
 struct ExecutionModule {
