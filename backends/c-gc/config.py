@@ -12,14 +12,11 @@ def get_execution_parallism():
   return 1
 
 def do_native_translation_v2(codeset, **kwargs):
-  kernel_name, args, body = codeset
-
-  # body = body.replace('blockIdx.', 'axis_').replace('\n', '\n    ')
-
-  arg_bufs = AntaresGlobal.local_arg_pros
-
   if 'einstein_v2' not in kwargs['attrs'].ir:
     raise Exception("Program for graphcore must be based on Antares IR")
+
+  kernel_name, args, body = codeset
+  arg_bufs = AntaresGlobal.local_arg_pros
 
   func_args, delta_args = '', []
   for buf in arg_bufs['_in']:
