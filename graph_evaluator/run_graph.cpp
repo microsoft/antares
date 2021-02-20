@@ -20,6 +20,8 @@
 #include <pthread.h>
 #include <unistd.h>
 
+#include "backend.hpp"
+
 std::string get_between(const std::string &str, const std::string &begin, const std::string &end, int start_idx = 0, const std::string &def_ret = "") {
     if (start_idx < 0)
         return def_ret;
@@ -64,15 +66,19 @@ struct tensor_property {
         throw std::runtime_error(("Unrecognized type size for `" + dtype + "`").c_str());
     }
 
-    size_t mem_size() const {
-        return element_size() * type_size();
+    size_t mem_size() {
+        if (!_mem_size)
+            _mem_size = element_size() * type_size();
+        return _mem_size;
     }
+private:
+    int _mem_size = 0;
 };
 
 struct kernel_property {
   std::vector<std::string> args;
   std::unordered_map<std::string, int> threads;
-  void* hFunction;
+  std::vector<void*> hFunction;
 };
 
 std::vector<tensor_property> parse_properties(const std::string &encoded_inputs) {
@@ -93,7 +99,9 @@ std::vector<tensor_property> parse_properties(const std::string &encoded_inputs)
     return std::move(ret);
 }
 
-#include "backend.hpp"
+void *allocate_tensor(tensor_property &tp) {
+  return ab::alloc(tp.mem_size(), tp.shape, tp.dtype, tp.name);
+}
 
 struct ExecutionModule {
   std::vector<tensor_property> global_inputs, global_outputs;
@@ -104,7 +112,16 @@ struct ExecutionModule {
 
   void *hModule;
 
-  ExecutionModule(const std::string &source) {
+  ExecutionModule(std::string source) {
+    static const char file_proto[] = "file:///";
+
+    if (0 == strncmp(source.c_str(), file_proto, sizeof(file_proto) - 1)) {
+      std::ifstream t(source.c_str() + sizeof(file_proto) - 1);
+      std::string _((std::istreambuf_iterator<char>(t)), std::istreambuf_iterator<char>());
+      t.close();
+      source = std::move(_);
+    }
+
     auto encoded_params = get_between(source, "// GLOBALS: ", "\n");
     auto params = ssplit(encoded_params, " -> ");
     global_inputs = parse_properties(params[0]), global_outputs = parse_properties(params[1]);
@@ -138,7 +155,7 @@ struct ExecutionModule {
         idx = next + 1;
       }
 
-      kp.hFunction = ab::moduleGetFunction(hModule, name);
+      kp.hFunction = ab::moduleGetFunction(hModule, name, kp.threads, kp.args);
     }
   }
 
@@ -168,19 +185,19 @@ struct ExecutionModule {
         auto &arg_name = it->second.args.back();
         auto &memptr = tensor_memory[arg_name];
         assert(memptr == nullptr);
-        memptr = ab::alloc(local_tensors[arg_name]);
+        memptr = allocate_tensor(local_tensors[arg_name]);
       }
       std::vector<void*> krnl_args;
       for (auto &arg: it->second.args)
         krnl_args.push_back(tensor_memory[arg]);
 
-      ab::launchKernel(it->second.hFunction, it->second.threads, krnl_args);
+      ab::launchKernel(it->second.hFunction, krnl_args);
       // get_funciton(); launch_kernel(krnl_args.data());
 
       int num_inputs = it->second.args.size() - (nodeCnt != local_kernels.size() ? 1 : global_outputs.size());
       for (int i = 0; i < num_inputs; ++i)
         if (--tensor_used[it->second.args[i]] == 0) {
-          ab::release(tensor_memory[it->second.args[i]]);
+          ab::release(tensor_memory[it->second.args[i]], local_tensors[it->second.args[i]].mem_size());
         }
     }
     return 0;
@@ -199,18 +216,15 @@ int main(int argc, char** argv)
     pthread_create(&p_timeout_monitor, NULL, timeout_monitor, NULL);
     pthread_detach(p_timeout_monitor);
 
-    ab::init();
+    int dev = getenv("DEV_ID") ? std::atoi(getenv("DEV_ID")) : 0;
+    ab::init(dev);
 
-    std::ifstream t("my_kernel.cc");
-    std::string source((std::istreambuf_iterator<char>(t)), std::istreambuf_iterator<char>());
-    t.close();
+    ExecutionModule gm("file:///my_kernel.cc");
 
-#if 1
-    ExecutionModule gm(source);
     std::vector<void*> global_args;
     for (int i = 0; i < gm.global_inputs.size(); ++i) {
       auto &it = gm.global_inputs[i];
-      void *dptr = ab::alloc(it);
+      void *dptr = allocate_tensor(it);
       global_args.push_back(dptr);
 
       std::vector<char> hptr(it.mem_size());
@@ -232,7 +246,7 @@ int main(int argc, char** argv)
       ab::synchronize();
     }
     for (auto &it: gm.global_outputs) {
-      void *dptr = ab::alloc(it);
+      void *dptr = allocate_tensor(it);
       global_args.push_back(dptr);
     }
 
@@ -280,191 +294,5 @@ int main(int argc, char** argv)
       tpr = ab::convertToElapsedTime(x, y) / num_runs;
       printf("\n- TPR: %g\n", tpr);
     }
-    return 0;
-#else
-    struct kernel_prop {
-      std::vector<void*> args;
-      std::vector<void**> pargs;
-      std::vector<int> kthreads;
-      CUfunction hfunc;
-    };
-
-    std::unordered_map<std::string, void*> mediate_ptrs;
-    std::map<std::string, kernel_prop> kernels;
-
-    auto mediate_params = get_between(source, "// TENSORS: ", "\n");
-    for (auto mediate: ssplit(mediate_params, "], ")) {
-      auto parts = ssplit(mediate, ":");
-      auto name = parts[0];
-      parts = ssplit(parts[1], "[");
-      tensor_property tp = {name, parts[0]};
-      for (auto dim: ssplit(parts[1], ", ")) {
-        tp.shape.push_back(std::atoi(dim.c_str()));
-      }
-      assert(0 == cuMemAlloc((CUdeviceptr*)&mediate_ptrs[name], tp.mem_size()));
-      // fprintf(stderr, ">> (%s) -> (%p)\n", name.c_str(), mediate_ptrs[name]);
-    }
-    auto get_extent = [](const std::string &thread_name, const std::string &source, int start_idx = 0) -> int {
-      return std::atoi(get_between(source, "// [thread_extent] " + thread_name + " =", "\n", start_idx, "1").c_str());
-    };
-    int idx = 0, next, tail;
-    while (next = source.find(" void ", idx), next >= 0) {
-      tail = source.find("\n}", next);
-      assert(tail >= 0);
-      auto kernel_func = source.substr(next, tail + 2 - next);
-      auto func_name = get_between(kernel_func, " void ", "(");
-      auto args_str = get_between(kernel_func, "(", ")");
-      auto &prop = kernels[func_name];
-      for (auto item: ssplit(args_str, ", ")) {
-        auto arg_name = ssplit(item, " ").back();
-        if (arg_name.size() > 2 && arg_name[0] == '_' && arg_name[1] == '_')
-          arg_name = arg_name.substr(2);
-        auto ptr = mediate_ptrs[arg_name];
-        assert(ptr != nullptr);
-        prop.args.push_back(ptr);
-      }
-      prop.pargs.resize(prop.args.size());
-      for (int i = 0; i < prop.args.size(); ++i)
-        prop.pargs[i] = &prop.args[i];
-
-      auto &thv = prop.kthreads;
-      thv.push_back(get_extent("blockIdx.x", kernel_func));
-      thv.push_back(get_extent("blockIdx.y", kernel_func));
-      thv.push_back(get_extent("blockIdx.z", kernel_func));
-      thv.push_back(get_extent("threadIdx.x", kernel_func));
-      thv.push_back(get_extent("threadIdx.y", kernel_func));
-      thv.push_back(get_extent("threadIdx.z", kernel_func));
-      // fprintf(stderr, "------- %s %s (%d %d %d, %d %d %d)\n", func_name.c_str(), args_str.c_str(), thv[0], thv[1], thv[2], thv[3], thv[4], thv[5]);
-
-      idx = next + 1;
-    }
-
-    auto encoded_params = get_between(source, "// GLOBALS: ", "\n");
-    auto params = ssplit(encoded_params, " -> ");
-    auto inputs = parse_properties(params[0]), outputs = parse_properties(params[1]);
-
-    std::vector<void*> h_args, d_args;
-    for (int i = 0; i < inputs.size(); ++i) {
-      auto &it = inputs[i];
-      std::pair<void*, void*> ptrs = {nullptr, mediate_ptrs[it.name]};
-      assert(0 == cuMemAllocHost(&ptrs.first, it.mem_size()));
-      h_args.push_back(ptrs.first);
-      d_args.push_back(ptrs.second);
-
-      size_t size = it.element_size();
-      if (it.dtype == "int32") {
-        for (size_t x = 0; x < size; ++x)
-          ((int*)(ptrs.first))[x] = (x + i + 1) % 71;
-      } else if (it.dtype == "float32") {
-        for (size_t x = 0; x < size; ++x)
-          ((float*)(ptrs.first))[x] = (x + i + 1) % 71;
-      } else {
-        size_t byte_size = size * it.type_size();
-        for (size_t x = 0; x < byte_size / sizeof(int); ++x)
-          ((int*)(ptrs.first))[x] = (x + i + 1) % 71;
-        for (size_t x = byte_size - byte_size % sizeof(int); x < byte_size; x++)
-          ((char*)(ptrs.first))[x] = 1;
-      }
-      if (ptrs.first != ptrs.second)
-        assert(0 == cuMemcpyHtoDAsync((CUdeviceptr)ptrs.second, ptrs.first, size * it.type_size(), nullptr));
-    }
-    for (auto it: outputs) {
-      std::pair<void*, void*> ptrs = {nullptr, mediate_ptrs[it.name]};
-      assert(0 == cuMemAllocHost(&ptrs.first, it.mem_size()));
-      h_args.push_back(ptrs.first);
-      d_args.push_back(ptrs.second);
-
-      memset(ptrs.first, 0, it.element_size() * it.type_size());
-      if (ptrs.first != ptrs.second)
-        assert(0 == cuMemcpyHtoDAsync((CUdeviceptr)ptrs.second, ptrs.first, it.element_size() * it.type_size(), nullptr));
-    }
-
-    CUmodule hmod;
-    CUfunction hfunc;
-    assert(0 == cuModuleLoad(&hmod, "my_kernel.out"));
-    for (auto &it: kernels)
-      assert(0 == cuModuleGetFunction(&it.second.hfunc, hmod, it.first.c_str()));
-
-    auto launch_kernel = [&]() -> void {
-      for (auto &it: kernels) {
-        auto &p = it.second;
-        assert(0 == cuLaunchKernel(p.hfunc, p.kthreads[0], p.kthreads[1], p.kthreads[2], p.kthreads[3], p.kthreads[4], p.kthreads[5], 0, nullptr, (void**)p.pargs.data(), nullptr));
-      }
-    };
-
-    launch_kernel();
-
-    for (int c = 0; c < outputs.size(); ++c) {
-      size_t byte_size = outputs[c].mem_size();
-      if (h_args[inputs.size() + c] != d_args[inputs.size() + c])
-        assert(0 == cuMemcpyDtoHAsync(h_args[inputs.size() + c], (CUdeviceptr)d_args[inputs.size() + c], byte_size, nullptr));
-    }
-    assert(0 == cuStreamSynchronize(nullptr));
-
-    for (int c = 0; c < outputs.size(); ++c) {
-      size_t byte_size = outputs[c].mem_size();
-      double digest = 0.0;
-      if (outputs[c].dtype == "int32") {
-        for (size_t i = 0; i < byte_size / sizeof(int); ++i)
-          digest += (i + 1) % 83 * ((int*)h_args[inputs.size() + c])[i];
-      } else {
-        for (size_t i = 0; i < byte_size / sizeof(float); ++i)
-          digest += (i + 1) % 83 * ((float*)h_args[inputs.size() + c])[i];
-        for (size_t i = byte_size - byte_size % sizeof(int); i < byte_size; i++)
-          digest += ((char*)h_args[inputs.size() + c])[i];
-      }
-      printf("- K/%d: %.10e\n", c, digest);
-    }
-
-    CUevent hStart, hStop;
-    float ms;
-    assert(0 == cuEventCreate(&hStart, 0));
-    assert(0 == cuEventCreate(&hStop, 0));
-
-    assert(0 == cuEventRecord(hStart, nullptr));
-    launch_kernel();
-    assert(0 == cuEventRecord(hStop, nullptr));
-    assert(0 == cuStreamSynchronize(nullptr));
-    assert(0 == cuEventElapsedTime(&ms, hStart, hStop));
-    float tpr = ms * 1e-3;
-
-    const char *expected_timeout = getenv("EXPECTED_TIMEOUT");
-    if (expected_timeout && *expected_timeout && tpr > std::atof(expected_timeout)) {
-        throw std::runtime_error(("Time limit exceeded: " + std::to_string(tpr) + " v.s. (expected) " + expected_timeout).c_str());
-    }
-
-    int num_runs = std::max(1, std::min(10000, int(1.0 / tpr)));
-    bool flush_global_memory = (getenv("FLUSH_MEM") != nullptr);
-
-    tpr = 0.0f;
-    if (flush_global_memory) {
-      num_runs = 10;
-      for (int i = 0; i < num_runs; ++i) {
-        for (int j = 0; j < inputs.size(); ++j)
-           assert(0 == cuMemcpyHtoDAsync((CUdeviceptr)d_args[j], h_args[j], inputs[j].mem_size(), nullptr));
-        assert(0 == cuEventRecord(hStart, nullptr));
-        launch_kernel();
-        assert(0 == cuEventRecord(hStop, nullptr));
-        assert(0 == cuStreamSynchronize(nullptr));
-        assert(0 == cuEventElapsedTime(&ms, hStart, hStop));
-        tpr += ms * 1e-3;
-      }
-      tpr /= num_runs;
-    } else {
-      assert(0 == cuEventRecord(hStart, nullptr));
-      for (int i = 0; i < num_runs; ++i)
-        launch_kernel();
-      assert(0 == cuEventRecord(hStop, nullptr));
-      assert(0 == cuStreamSynchronize(nullptr));
-      assert(0 == cuEventElapsedTime(&ms, hStart, hStop));
-      tpr = ms * 1e-3 / num_runs;
-    }
-    printf("- TPR: %g\n", tpr);
-
-    for (auto &it: h_args)
-      assert(0 == cuMemFreeHost(it));
-    for (auto &it: d_args)
-      assert(0 == cuMemFree((CUdeviceptr)it));
-#endif
     return 0;
 }

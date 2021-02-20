@@ -5,8 +5,12 @@
 //; eval_flags(c-cuda): -lcuda -lcudart -I/usr/local/cuda/include -L/usr/local/cuda/lib64
 
 #if !defined(__HIP_PLATFORM_HCC__)
+
 #include <cuda.h>
+#define BACKEND_TYPE "NVIDIA CUDA"
+
 #else
+
 #include <hip/hip_runtime.h>
 #define cuInit hipInit
 #define cuMemAlloc hipMalloc
@@ -27,103 +31,113 @@
 #define cuEventCreate hipEventCreateWithFlags
 #define cuEventDestroy hipEventDestroy
 #define cuEventRecord hipEventRecord
-
 #define CUcontext long
 #define cuDevicePrimaryCtxRetain(x, y) hipSetDevice(y)
 #define cuCtxSetCurrent(x) 0
+#define BACKEND_TYPE "AMD ROCM"
+
 #endif
 
 namespace ab {
 
-  void init() {
+  static int _current_device;
+  static std::unordered_map<size_t, std::vector<void*>> _cached_memory;
+
+  void init(int dev) {
     CUcontext ctx;
-    const char *dev = getenv("DEV_ID") ? getenv("DEV_ID") : "0";
-    setenv("CUDA_VISIBLE_DEVICES", dev, 1);
-    if (0 != cuInit(0) || 0 != cuDevicePrimaryCtxRetain(&ctx, 0) || 0 != cuCtxSetCurrent(ctx))
-        throw std::runtime_error("GPU device is not found.");
+    // Just one of many methods to set target device id by visiblity
+    setenv("CUDA_VISIBLE_DEVICES", std::to_string(dev).c_str(), 1);
+    if (0 != cuInit(0) || 0 != cuDevicePrimaryCtxRetain(&ctx, _current_device) || 0 != cuCtxSetCurrent(ctx))
+        throw std::runtime_error("GPU device for `" + std::string(BACKEND_TYPE) + "` is not found.\n");
   }
 
-  void* alloc(const tensor_property &tp) {
-    static std::unordered_map<std::string, void*> cached_mem;
-    void* &dptr = cached_mem[tp.name];
-    if (dptr)
+  void* alloc(size_t byteSize, const std::vector<size_t> &shape, const std::string &dtype, const std::string &name) {
+    auto &it = _cached_memory[byteSize];
+    if (it.size()) {
+      auto dptr = it.back();
+      it.pop_back();
       return dptr;
-    assert(0 == cuMemAlloc((CUdeviceptr*)&dptr, tp.mem_size()));
-    fprintf(stderr, "alloc(%p, `%s`);\n", dptr, tp.name.c_str());
+    }
+    void *dptr = nullptr;
+    assert(0 == cuMemAlloc((CUdeviceptr*)&dptr, byteSize));
     return dptr;
   }
 
-  void release(void *dptr) {
-    fprintf(stderr, "release(%p);\n", dptr);
+  void release(void *dptr, size_t byteSize) {
+    auto &it = _cached_memory[byteSize];
+    it.push_back(dptr);
   }
 
   void* moduleLoad(const std::string &source) {
     char temp_name[] = ".antares-module-XXXXXX";
     auto folder = std::string(mkdtemp(temp_name));
+    static std::string arch;
+
 #if !defined(__HIP_PLATFORM_HCC__)
+    if (!arch.size()) {
+      int major, minor;
+      assert(0 == cuDeviceGetAttribute(&major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, _current_device));
+      assert(0 == cuDeviceGetAttribute(&minor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, _current_device));
+      arch = std::to_string(major * 10 + minor);
+    }
     auto path = folder + "/module.cu";
-    FILE *fp = fopen(path.c_str(), "w");
-    assert(source.size() == fwrite(source.data(), 1, source.size(), fp));
-    fclose(fp);
-    assert(0 == system(("/usr/local/cuda/bin/nvcc " + path + " --fatbin -O2 -gencode arch=compute_70,code=sm_70 -O2 -o " + path + ".out").c_str()));
+    auto compile_cmd = "/usr/local/cuda/bin/nvcc " + path + " --fatbin -O2 -gencode arch=compute_" + arch + ",code=sm_" + arch + " -O2 -o " + path + ".out";
 #else
+    if (!arch.size()) {
+      hipDeviceProp_t prop;
+      assert(0 == hipGetDeviceProperties(&prop, _current_device));
+      arch = std::to_string(prop.gcnArch);
+    }
     auto path = folder + "/module.cc";
+    auto compile_cmd = "/opt/rocm/bin/hipcc " + path + " --amdgpu-target=gfx" + arch + " --genco -Wno-ignored-attributes -O2 -o " + path + ".out";
+#endif
     FILE *fp = fopen(path.c_str(), "w");
     assert(source.size() == fwrite(source.data(), 1, source.size(), fp));
     fclose(fp);
-    assert(0 == system(("/opt/rocm/bin/hipcc " + path + " --amdgpu-target=gfx906 --genco -Wno-ignored-attributes -O2 -o " + path + ".out").c_str()));
-#endif
+    if (0 != system(compile_cmd.c_str()))
+      throw std::runtime_error("Failed to compile module: " + compile_cmd + "\n");
+
     CUmodule hmod = nullptr;
     assert(0 == cuModuleLoad(&hmod, (path + ".out").c_str()));
 
     assert(0 == system(("rm -rf " + folder).c_str()));
-    fprintf(stderr, "load(%s)\n", folder.c_str());
     return hmod;
   }
 
-  void* moduleGetFunction(const void *hModule, const std::string &fname) {
-    CUfunction hfunc = nullptr;
-    assert(0 == cuModuleGetFunction(&hfunc, (CUmodule)hModule, fname.c_str()));
-    return hfunc;
-  }
-
-  void launchKernel(const void* hFunction, const std::unordered_map<std::string, int> &threads, const std::vector<void*> &krnl_args) {
-    auto query = [&](const std::string &axis, int defval = 1) {
+  std::vector<void*> moduleGetFunction(const void *hModule, const std::string &fname, const std::unordered_map<std::string, int> &threads, const std::vector<std::string> &args) {
+    auto query = [&](const std::string &axis, long defval = 1) -> void* {
       auto it = threads.find(axis);
       if (it == threads.end())
-        return defval;
-      return it->second;
+        return (void*)defval;
+      return (void*)(long)it->second;
     };
+
+    CUfunction hfunc = nullptr;
+    assert(0 == cuModuleGetFunction(&hfunc, (CUmodule)hModule, fname.c_str()));
+    return { hfunc, query("blockIdx.x"), query("blockIdx.y"), query("blockIdx.z"), query("threadIdx.x"), query("threadIdx.y"), query("threadIdx.z") };
+  }
+
+  void launchKernel(const std::vector<void*> &hFunc, const std::vector<void*> &krnl_args) {
     std::vector<void* const*> pargs(krnl_args.size());
     for (int i = 0; i < pargs.size(); ++i)
       pargs[i] = &krnl_args[i];
-    assert(0 == cuLaunchKernel((CUfunction)hFunction, query("blockIdx.x"), query("blockIdx.y"), query("blockIdx.z"), query("threadIdx.x"), query("threadIdx.y"), query("threadIdx.z"), 0, nullptr, (void**)pargs.data(), nullptr));
-    return;
-
-    fprintf(stderr, "launch(");
-    for (int i = 0; i < krnl_args.size(); ++i)
-      fprintf(stderr, "%p,", krnl_args[i]);
-    fprintf(stderr, "\b);\n");
+    assert(0 == cuLaunchKernel((CUfunction)hFunc[0], (long)hFunc[1], (long)hFunc[2], (long)hFunc[3], (long)hFunc[4], (long)hFunc[5], (long)hFunc[6], 0, nullptr, (void**)pargs.data(), nullptr));
   }
 
   void memcpyHtoD(void *dptr, void *hptr, size_t byteSize) {
-    fprintf(stderr, "memcpyHtoD(%zd)\n", byteSize);
     assert(0 == cuMemcpyHtoDAsync((CUdeviceptr)dptr, hptr, byteSize, nullptr));
   }
 
   void memcpyDtoH(void *hptr, void *dptr, size_t byteSize) {
-    fprintf(stderr, "memcpyDtoH(%zd)\n", byteSize);
     assert(0 == cuMemcpyDtoHAsync(hptr, (CUdeviceptr)dptr, byteSize, nullptr));
   }
 
   void synchronize() {
-    fprintf(stderr, "synchronize()\n");
     assert(0 == cuStreamSynchronize(nullptr));
   }
 
   void* recordTime() {
     CUevent hEvent;
-    fprintf(stderr, "recordTime()\n");
     assert(0 == cuEventCreate(&hEvent, 0));
     assert(0 == cuEventRecord(hEvent, nullptr));
     return hEvent;
@@ -131,7 +145,7 @@ namespace ab {
 
   double convertToElapsedTime(void *hStart, void *hStop) {
     synchronize();
-    fprintf(stderr, "convertToElapsedTime()\n");
+
     float ms;
     assert(0 == cuEventElapsedTime(&ms, (CUevent)hStart, (CUevent)hStop));
     assert(0 == cuEventDestroy((CUevent)hStart));
@@ -139,4 +153,3 @@ namespace ab {
     return ms * 1e-3;
   }
 }
-
