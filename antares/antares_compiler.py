@@ -21,6 +21,7 @@ from tvm.autotvm.task import ConfigEntity
 
 from antares.common import *
 from lang.generic import custom_dtypes, refactor_multiple_names
+from graph_evaluator import client as eval_client
 
 compiler_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -42,7 +43,8 @@ krnl_compile_timeout = 20
 verbose = int(os.environ.get('VERBOSE', '1'))
 
 try:
-  platform_config = importlib.import_module('backends.%s.config' % backend)
+  backend_config = importlib.import_module('backends.%s.config' % backend)
+  backend_root = os.path.dirname(backend_config.__file__)
 except ModuleNotFoundError:
   raise Exception('>> Platform config for backend %s not found' % backend)
 except:
@@ -104,12 +106,12 @@ def translate_code(code, config):
     body = kernel[idx+3:kernel.index('\n}', idx)].strip()
     args = [(x.split('*')[0].strip(), x.split()[-1]) for x in kernel[idy+1:idx].split(',')]
     arg_names = ', '.join([f'{x[1]}({x[0]})' for x in args])
-    kernel = f'// LOCAL: {kernel_name} - {arg_names}\n\n' + platform_config.do_native_translation_v2((kernel_name, args, body), attrs=AntaresGlobal.attrs)
+    kernel = f'// LOCAL: {kernel_name} - {arg_names}\n\n' + backend_config.do_native_translation_v2((kernel_name, args, body), attrs=AntaresGlobal.attrs)
     kernel_slices.append(kernel)
   code = '\n// ---------------------------------------------------------------------------\n'.join(kernel_slices)
 
   try:
-    defs = platform_config.get_intrisic_defs() + '\n'
+    defs = backend_config.get_intrisic_defs() + '\n'
   except:
     defs = ''
   return '%s\n%s%s' % (get_kernel_metadata(), defs, code)
@@ -269,6 +271,8 @@ def code_suffix(tpr=-1.0, step_prod=0, step_plan=-1):
   return '\n// Saved Perf = %.6e sec / run; Step Produced = %d; Planned Steps = %d;' % (tpr, step_prod, step_plan)
 
 def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True, expected_timeout=None):
+  if verbose:
+    print("\n[EvalAgent] Evaluating Modules..")
 
   def handle_result(result):
     if verbose:
@@ -297,15 +301,6 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
 
   def do_evaluate(expected_timeout):
     try:
-      try:
-        eval_client = importlib.import_module('backends.%s.evaluator.client' % backend)
-      except ModuleNotFoundError:
-        print('>> Evaluator for backend %s not found, skipping evaluation.' % backend)
-        return None
-      except:
-        traceback.print_exc()
-        return None
-
       if expected_timeout is None:
         expected_timeout = os.environ.get('EXPECTED_TIMEOUT', 'inf')
       if expected_timeout in ('', 'inf'):
@@ -316,7 +311,7 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
 
       results = eval_client.eval(kernel_path=local_get_dir_file('my_kernel.cc', dir_sid=dir_sid),
                   expected_timeout=expected_timeout,
-                  dev_id=dev_id,
+                  dev_id=dev_id, backend_root=backend_root
                 )
       return results
     except SystemExit:
@@ -425,7 +420,7 @@ def main_compute(code_only=False):
     print("\n>> Search Space: %s" % (json_space))
     exit(0)
   elif num_trials > 0:
-    dev_num = platform_config.get_execution_parallism()
+    dev_num = backend_config.get_execution_parallism()
     if dev_num <= 0:
         raise Exception("No valid device found for backend: %s." % backend)
     batch_size = int(os.environ.get('BATCH', '16'))
@@ -468,6 +463,7 @@ def main_compute(code_only=False):
 
     if tuner is not None:
       AntaresGlobal.current_step = 0
+      eval_client.init(backend_root=backend_root)
 
       def measure_batch(inputs):
         results, futures = [], []
@@ -575,11 +571,12 @@ def main_compute(code_only=False):
     return device_source
 
   if verbose:
+    print()
     print("// ---------------------------------------------------------------------------")
     print(device_source)
     print("// ---------------------------------------------------------------------------")
-    print("// Evaluating Modules..\n")
 
+  eval_client.init(backend_root=backend_root)
   dev_id = int(os.environ.get('DEV_ID', '0'))
   result = evaluate_perf(kernel_path, dev_id, device_source)
   exit(0 if result is not None and len(result) > 1 else 1)
