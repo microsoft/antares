@@ -11,7 +11,7 @@ def init(**kwargs):
     source_root = f'{backend_root}/../../graph_evaluator'
 
     if not os.path.exists(f'{backend_root}/include/backend.hpp'):
-      print('>> Evaluator for backend `%s` not found, skipping evaluation.' % backend)
+      print('\n[EvalAgent] Evaluator for backend `%s` not found, skipping evaluation.' % backend)
       exit(1)
 
     with open(f'{backend_root}/include/backend.hpp', 'r') as fp:
