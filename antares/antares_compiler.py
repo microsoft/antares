@@ -21,6 +21,7 @@ from tvm.autotvm.task import ConfigEntity
 
 from antares.common import *
 from lang.generic import custom_dtypes, refactor_multiple_names
+from graph_evaluator import client as eval_client
 
 compiler_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -42,7 +43,8 @@ krnl_compile_timeout = 20
 verbose = int(os.environ.get('VERBOSE', '1'))
 
 try:
-  platform_config = importlib.import_module('backends.%s.config' % backend)
+  backend_config = importlib.import_module('backends.%s.config' % backend)
+  backend_root = os.path.dirname(backend_config.__file__)
 except ModuleNotFoundError:
   raise Exception('>> Platform config for backend %s not found' % backend)
 except:
@@ -82,33 +84,34 @@ def translate_code(code, config):
         # Just for Auto Shard
         assert(buf['dtype'] == 'int32' and buf['shape'] == [1])
         continue
-      inp_args.append('-'.join([str(x) for x in buf['shape']]) + '/' + buf['dtype'] + '/' + buf['name'])
+      inp_args.append('%s:%s%s' % (buf['name'], buf['dtype'], buf['shape']))
     for buf in global_arg_props['_out']:
-      outp_args.append('-'.join([str(x) for x in buf['shape']]) + '/' + buf['dtype'] + '/' + buf['name'])
+      outp_args.append('%s:%s%s' % (buf['name'], buf['dtype'], buf['shape']))
 
     device_code = os.environ.get('DEVICE_NAME', '')
     device_code = device_code if device_code else 'default'
-    header_meta = '///' + ','.join(inp_args) + ':' + ','.join(outp_args) + '\n// BACKEND = %s (%s)\n' % (backend, device_code)
+    header_meta = '// GLOBALS: ' + ', '.join(inp_args) + ' -> ' + ', '.join(outp_args) + '\n// BACKEND: %s (%s)\n' % (backend, device_code)
     properties = "// CONFIG: %s\n// COMPUTE_V1: %s\n" % (config.strip() if isinstance(config, str) else '', os.environ['COMPUTE_V1'])
     return header_meta + properties
 
 
   code = refactor_multiple_names(code, global_arg_props)
-  kernel_slices = ['// -- ' + os.environ.get('MEDIATE_SHAPES', '')]
+  kernel_slices = ['// TENSORS: ' + os.environ.get('MEDIATE_SHAPES', '')]
   for kernel in ('\n' + code).split('\nextern ')[1:]:
     kernel = 'extern %s\n' % kernel[:kernel.index('\n}') + 2]
     idx = kernel.index(' void ') + 6
     idy = kernel.index('(', idx)
     kernel_name = kernel[idx:idy]
     idx = kernel.index(') {', idy)
-    arg_names = [x.split() for x in kernel[idy+1:idx].split(',')]
-    arg_names = ', '.join([f'{x[-1]}({x[0][:-1]})' for x in arg_names])
-    kernel = f'// ; {kernel_name} : {arg_names}\n\n' + platform_config.do_native_translation(kernel, attrs=AntaresGlobal.attrs)
+    body = kernel[idx+3:kernel.index('\n}', idx)].strip()
+    args = [(x.split('*')[0].strip(), x.split()[-1]) for x in kernel[idy+1:idx].split(',')]
+    arg_names = ', '.join([f'{x[1]}({x[0]})' for x in args])
+    kernel = f'// LOCAL: {kernel_name} - {arg_names}\n\n' + backend_config.do_native_translation_v2((kernel_name, args, body), attrs=AntaresGlobal.attrs)
     kernel_slices.append(kernel)
   code = '\n// ---------------------------------------------------------------------------\n'.join(kernel_slices)
 
   try:
-    defs = platform_config.get_intrisic_defs() + '\n'
+    defs = backend_config.get_intrisic_defs() + '\n'
   except:
     defs = ''
   return '%s\n%s%s' % (get_kernel_metadata(), defs, code)
@@ -138,12 +141,6 @@ def compute_gflops(flop, t):
     return flop / (t * 1e3) / 1e6
   except:
     return 0.0
-
-def do_compilation(compile_args, verbose=True):
-  if verbose:
-    print('[Build (pid=%d)]' % os.getpid(), ' '.join(compile_args))
-  assert os.path.exists(compile_args[0]), "Compiler program `%s` is not found." % compile_args[0]
-  assert run_process_with_timeout(compile_args, krnl_compile_timeout), "Compilation failed for: Bad kernel code reported by native compiler.\nFailure command: %s\n" % ' '.join(compile_args)
 
 def codehub_db(compute_key, source_code=None, erase=False):
   compute_key = compute_key.split('##')[0].strip()
@@ -268,15 +265,14 @@ def get_target_source(best_config, dir_sid=None):
   kernel_path = local_get_dir_file('my_kernel.cc', dir_sid=dir_sid)
   with open(kernel_path, 'w') as fp:
     fp.write(device_source)
-
-  kernel_out = local_get_dir_file('my_kernel.out', dir_sid=dir_sid)
-  compile_args = platform_config.get_compile_kernel_args(kernel_path, kernel_out, device_properties())
-  return device_source, kernel_path, compile_args
+  return device_source, kernel_path
 
 def code_suffix(tpr=-1.0, step_prod=0, step_plan=-1):
   return '\n// Saved Perf = %.6e sec / run; Step Produced = %d; Planned Steps = %d;' % (tpr, step_prod, step_plan)
 
 def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True, expected_timeout=None):
+  if verbose:
+    print("\n[EvalAgent] Evaluating Modules..")
 
   def handle_result(result):
     if verbose:
@@ -305,15 +301,6 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
 
   def do_evaluate(expected_timeout):
     try:
-      try:
-        eval_client = importlib.import_module('backends.%s.evaluator.client' % backend)
-      except ModuleNotFoundError:
-        print('>> Evaluator for backend %s not found, skipping evaluation.' % backend)
-        return None
-      except:
-        traceback.print_exc()
-        return None
-
       if expected_timeout is None:
         expected_timeout = os.environ.get('EXPECTED_TIMEOUT', 'inf')
       if expected_timeout in ('', 'inf'):
@@ -324,7 +311,7 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
 
       results = eval_client.eval(kernel_path=local_get_dir_file('my_kernel.cc', dir_sid=dir_sid),
                   expected_timeout=expected_timeout,
-                  dev_id=dev_id,
+                  dev_id=dev_id, backend_root=backend_root
                 )
       return results
     except SystemExit:
@@ -366,9 +353,8 @@ def run_config_entity(target_source, config_str, dir_sid, expected_timecost='inf
   print("  >> [ ] Param_entity on sid = %s: config = '%s', dev_id = %d, upper_bound_tpr = %.6e s" % (dir_sid, config_str_short, dev_id, expected_timecost))
   try:
     assert target_source is not None, "Invalid target source detected in verification stage."
-    device_source, kernel_path, compile_args = target_source
+    device_source, kernel_path = target_source
 
-    do_compilation(compile_args, verbose=False)
     results = evaluate_perf(kernel_path, dev_id, device_source, dir_sid, verbose=False, expected_timeout=expected_timecost)
     assert results is not None and 'TPR' in results, "Invalid target output detected in evaluation stage."
     digest = ','.join(['%.6e' % float(results['K/%d' % i]) for i in range(len(results) - 1)])
@@ -434,18 +420,13 @@ def main_compute(code_only=False):
     print("\n>> Search Space: %s" % (json_space))
     exit(0)
   elif num_trials > 0:
-    dev_num = platform_config.get_execution_parallism()
+    dev_num = backend_config.get_execution_parallism()
     if dev_num <= 0:
         raise Exception("No valid device found for backend: %s." % backend)
     batch_size = int(os.environ.get('BATCH', '16'))
 
     from concurrent.futures import ThreadPoolExecutor
-    try:
-      if platform_config.allow_concurrent_compile_execution():
-        raise Exception()
-      worker_size = 1
-    except:
-      worker_size = batch_size
+    worker_size = batch_size
     thread_pool = ThreadPoolExecutor(max_workers=worker_size)
 
     tuner_type = os.environ.get('TUNER', '')
@@ -482,6 +463,7 @@ def main_compute(code_only=False):
 
     if tuner is not None:
       AntaresGlobal.current_step = 0
+      eval_client.init(backend_root=backend_root)
 
       def measure_batch(inputs):
         results, futures = [], []
@@ -574,27 +556,28 @@ def main_compute(code_only=False):
     saved_code = codehub_db(os.environ['COMPUTE_V1'])
     if saved_code is not None:
       print("  >> Using Saved Code from Codehub:")
-      print("===========================")
+      print("// ---------------------------------------------------------------------------")
       print(saved_code)
-      print("===========================")
+      print("// ---------------------------------------------------------------------------")
       exit(0)
     best_config = ''
 
   assert isinstance(best_config, str)
 
   best_config = best_config if best_config else task.config_space
-  device_source, kernel_path, compile_args = get_target_source(best_config)
+  device_source, kernel_path = get_target_source(best_config)
 
   if code_only:
     return device_source
 
   if verbose:
-    print("====================================")
+    print()
+    print("// ---------------------------------------------------------------------------")
     print(device_source)
-    print("====================================\n")
+    print("// ---------------------------------------------------------------------------")
 
-  do_compilation(compile_args)
-  dev_id = int(os.environ.get('DEV_KEY', '0'))
+  eval_client.init(backend_root=backend_root)
+  dev_id = int(os.environ.get('DEV_ID', '0'))
   result = evaluate_perf(kernel_path, dev_id, device_source)
   exit(0 if result is not None and len(result) > 1 else 1)
 

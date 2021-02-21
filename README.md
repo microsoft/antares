@@ -32,7 +32,7 @@ cd antares/
 sudo BACKEND=c-cuda make
 
 # If you need Antares to extend/boost Tensorflow operators, please also run:
-sudo python3 ./frameworks/antares/tensorflow/setup.py
+sudo python3 ./frameworks/tensorflow/setup.py
 
 # Reference - Recommended Installation Package Choices for Tensorflow 1.x & 2.x (tested in Ubuntu 20.04):
 #   Tensorflow-1 for NVIDIA CUDA 10.0: python3 -m pip install --upgrade pip && python3 -m pip install tensorflow-gpu==1.15.4
@@ -42,7 +42,7 @@ sudo python3 ./frameworks/antares/tensorflow/setup.py
 #   Tensorflow-2 for AMD ROCm 4.0:  python3 -m pip install tensorflow-rocm==2.4.0
 
 # If you need Antares to extend/boost Pytorch operators, please also run:
-sudo python3 ./frameworks/antares/pytorch/setup.py
+sudo python3 ./frameworks/pytorch/setup.py
 
 # Reference - Recommended Installation Package Choices for Pytorch (tested in Ubuntu 20.04):
 #   Pytorch for NVIDIA CUDA 10.0: python3 -m pip install torch==1.5.0 torchvision==0.6.0 -f https://download.pytorch.org/whl/torch_stable.html
