@@ -67,13 +67,13 @@ class CustomOp(torch.nn.Module):
 
     source = self.request_server()
     try:
-      meta_bgn = source.index('///') + len('///')
+      meta_bgn = source.index('// GLOBALS: ') + len('// GLOBALS: ')
     except:
       raise Exception("Illegal syntax for Antares expression: %s" % expression)
-    meta_pos = source.index(':', meta_bgn)
+    meta_pos = source.index(' -> ', meta_bgn)
     meta_end = source.index('\n', meta_pos)
-    meta_inputs = source[meta_bgn:meta_pos].split(',')
-    meta_outputs = source[meta_pos + 1:meta_end].split(',')
+    meta_inputs = source[meta_bgn:meta_pos - 1].split('], ')
+    meta_outputs = source[meta_pos + len(' -> '):meta_end - 1].split('], ')
 
     code_name = 'Antares' + expr_hash
     source_path = '/tmp/antares_torch_%s.cc.kernel.cu' % code_name
@@ -81,7 +81,13 @@ class CustomOp(torch.nn.Module):
     # Compile Kernel object
     with open(source_path, 'w') as fp:
       fp.write(source)
-    output_names = [x.split('/')[-1].strip() for x in meta_outputs]
+
+    def parse_tensor(encoded_tensor):
+      name, parts = encoded_tensor.split(':')
+      dtype, shapes = parts.split('[')
+      return name, dtype, [int(x) for x in shapes.split(', ')]
+
+    output_names = [parse_tensor(x)[0] for x in meta_outputs]
     return output_names, (source, source_path, expr_hash, meta_inputs, meta_outputs)
 
   def tune(self, step=100, use_cache=False, timeout=-1):

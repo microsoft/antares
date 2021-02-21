@@ -108,12 +108,13 @@ std::vector<torch::Tensor> custom_op_forward(std::vector<torch::Tensor> inputs,
 
   std::vector<std::vector<int64_t>> output_shapes;
   output_shapes.clear();
-  for (int y = 0; y < meta_outputs.size(); ++y) {
-    auto meta_shape = meta_outputs[y].substr(0, meta_outputs[y].find('/')) + "-";
+  for (auto &meta_output: meta_outputs) {
+    int idx = meta_output.find('[');
+    CHECK_EQ(true, idx > 0);
     std::vector<int64_t> shape_builder;
-    for (int i = 0, j = 1; j < meta_shape.size(); ++j) {
-      if (meta_shape[j] == '-')
-        shape_builder.push_back(std::atoi(meta_shape.c_str() + i)), i = j + 1;
+    for (int i = idx + 1, j = i + 1; j <= meta_output.size(); ++j) {
+      if (j == meta_output.size() || meta_output[j] == ',')
+        shape_builder.push_back(std::atoi(meta_output.c_str() + i)), i = j + 2, ++j;
     }
     output_shapes.push_back(std::move(shape_builder));
   }

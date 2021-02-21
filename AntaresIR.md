@@ -46,7 +46,7 @@ Einstein Expression Parsing:
              for (int R1 = 0; R1 < input.shape[0]; R1++)
                for (int R2 = 0; R2 < input.shape[1]; R2++)
                  for (..)
-                   output[D1, D2, ..] = f(input[D1, D2, .., R1, R2, ..]);
+                   output[D1, D2, ..] += f(input[D1, D2, .., R1, R2, ..]);
 
      * Specific Example (Conv2D Op): output0[N, F, HO, WO] +=! input0[N, C, HO + KH, WO + KW] * input1[F, C, KH, KW] where HO in 30, WO in 30
 
