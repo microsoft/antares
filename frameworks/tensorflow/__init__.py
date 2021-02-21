@@ -115,15 +115,20 @@ def make_op(ir, feed_dict, extra_outputs=[]):
   def emit():
     source = request_server()
     try:
-      meta_bgn = source.index('///') + len('///')
+      meta_bgn = source.index('// GLOBALS: ') + len('// GLOBALS: ')
     except:
       raise Exception("Illegal syntax for Antares expression: %s" % expression)
-    meta_pos = source.index(':', meta_bgn)
+    meta_pos = source.index(' -> ', meta_bgn)
     meta_end = source.index('\n', meta_pos)
-    meta_inputs = source[meta_bgn:meta_pos].split(',')
-    meta_outputs = source[meta_pos + 1:meta_end].split(',')
+    meta_inputs = source[meta_bgn:meta_pos - 1].split('], ')
+    meta_outputs = source[meta_pos + len(' -> '):meta_end - 1].split('], ')
     kwargs['source'] = source
     kwargs['antares_ir'] = ir
+
+    def parse_tensor(encoded_tensor):
+      name, parts = encoded_tensor.split(':')
+      dtype, shapes = parts.split('[')
+      return name, dtype, [int(x) for x in shapes.split(', ')]
 
     code_name = 'Antares' + hashlib.sha256(expression.encode()).hexdigest()
     tf_module_path = '/tmp/antares_tf_%s.cc' % code_name
@@ -132,15 +137,16 @@ def make_op(ir, feed_dict, extra_outputs=[]):
     with open(tf_module_path, 'a') as fp:
       fp.write('REGISTER_OP(OP_NAME)')
       for i in range(len(meta_inputs)):
-        shape, dtype, name = meta_inputs[i].split('/')
-        fp.write('\n  .Input("%s: %s") // %s' % (name, dtype, shape.replace('-', ', ')))
+        name, dtype, shape = parse_tensor(meta_inputs[i])
+        fp.write(f'\n  .Input("{name}: {dtype}") // {shape}')
       for i in range(len(meta_outputs)):
-        shape, dtype, name = meta_outputs[i].split('/')
-        fp.write('\n  .Output("%s: %s") // %s' % (name, dtype, shape.replace('-', ', ')))
+        name, dtype, shape = parse_tensor(meta_outputs[i])
+        fp.write(f'\n  .Output("{name}: {dtype}") // {shape}')
       fp.write('\n  .Attr("source: string").Attr("antares_ir: string").Attr("tf_module_path: string").Attr("meta_inputs: list(string)").Attr("meta_outputs: list(string)").SetIsStateful()')
       fp.write('\n  .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {')
       for i in range(len(meta_outputs)):
-        fp.write('\n    c->set_output(%d, c->MakeShape({%s}));' % (i, meta_outputs[i].split('/')[0].replace('-', ', ')))
+        name, dtype, shape = parse_tensor(meta_outputs[i])
+        fp.write(f'\n    c->set_output({i}, c->MakeShape({{ {str(shape)[1:-1]} }}));')
       fp.write('\n    return ::tensorflow::Status::OK();\n  });')
 
     libops_path = get_tensorflow_antares_component(tf_module_path, code_name)
@@ -158,7 +164,7 @@ def make_op(ir, feed_dict, extra_outputs=[]):
     kwargs['meta_outputs'] = meta_outputs
     result = antares_func(**kwargs)
 
-    output_names = [x.split('/')[-1].strip() for x in meta_outputs]
+    output_names = [parse_tensor(x)[0] for x in meta_outputs]
     if len(output_names) == 1:
       result = tf.identity(result, name=output_names[0])
     else:
