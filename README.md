@@ -1,6 +1,6 @@
 # What is Antares:
 - Antares is an automatic engine for multi-platform kernel generation and optimization (targeting to CUDA/ROCm/CPU/DirectX12/Graphcore/OneAPI).
-- Antares simplifies most TVM's low-level features, making it easier to use for DNN developers on Microsoft related platforms.
+- Antares simplifies most TVM's low-level features, making it easier for DNN developers to translate computation to Microsoft related platforms.
 - Antares follows "_One Language Syntax for All Platforms_" principle to reduce the description complexity on different platforms.
 
 ## Documentation for Quick Start
@@ -12,10 +12,10 @@
 - Antares can convert computing operators from your DNN models into low-level source codes of the target device (e.g. kernels, shaders, ..).
 - Antares can also automatically tune and optimize these DNN operators on end-to-end device using efficient mechanisms and algorithms.
 
-# Antares can especially help you on these cases:
+# Helpful Use Cases:
 - You want to modify fine-grain DNN workloads, but Tensorflow/Pytorch's built-in implementation are limited.
 - You notice some operators are inefficent, and you want to replace it with a better one easily.
-- Plus MSRA's NNfusion project, you can port your full DNN models into Window executable and get acceleration with DirectX12 + Intel/AMD/NVIDIA graphic cards.
+- You can port your full DNN models into Window executable and get acceleration with DirectX12 + Intel/AMD/NVIDIA graphic cards.
 - You want to split fine-grain operator workloads into the local tile node of Graphcore, which benifits the on-ship memory usage and reduces BSP communication overhead.
 - Evaluate the compiler or potential runtime efficiency within Antares supported accelerators, e.g. A100.
 - Antares provides a large domain for researchers to develop on kernel optimizations, e.g. custom tuners, custom schedule policies, custom platforms, etc.
@@ -104,8 +104,6 @@ result = custom_op()
 print('The result of tensor `%s` is:\n%s' % (result.id, result))
 ```
 
-If you want the operator you just extended to run more efficiently, you can take a look at "How to Tune Expressions" section below.
-
 # Documentation for Other Advanced Examples:
 
 For more syntax usage or examples, please follow documentation here: [Antares IR & Examples](AntaresIR.md)
@@ -124,6 +122,7 @@ Antares can support multi-line statements as long as they are fuse-able, for exa
 
 |       | HIP-C(c-rocm) | CUDA(c-cuda) | CPU(c-mcpu) | DirectX12(c-hlsl) | Graphcore(c-gc) | Intel OneAPI(c-sycl) | (..coming soon..) |
 |---|---|---|---|---|---|---|---|
+| Target Device | AMDGPU | NVGPU | Generic CPU | Generic Graphic Card | IPU Device | Intel CPU/HD Graphic/FPGA |   |
 | Global schedules  | Y | Y | Y | Y | Y | Y |   |
 | Local schedules   | Y | Y | Y | Y |   | Y |   |
 | Head fusion       | Y | Y | Y | Y | Y | Y |   |
@@ -135,46 +134,43 @@ Antares can support multi-line statements as long as they are fuse-able, for exa
 
 -----------
 
-# How to Tune Expressions:
+# For non Tensorflow/Pytorch users:
 
-If you want automatic ways to optimize the operator (described in your environmental variable `COMPUTE_V1`), you just need to add one more variable in your first-run examples: `STEP=1000`,
-which means Antares will take 1000 chances to search for a potenially better kernel version. For example,
+## How to Tune Expressions Manually and Get Tuned Source Code:
+
+Firstly, you need to describe what kind of computing logic according to standard Antares IR, and set the IR string to environmental variable `COMPUTE_V1`.
+Plus environmental variable `BACKEND` to choice target backend type, these 2 environment settings can help you quickly generate a reference kernel code, regardless of the execution performance.
+If you want to further optimize the operator automatically, you just need to add one more variable in your first-run examples: `STEP=1000`,
+which means Antares will take 1000 chances to try and search a potenially faster kernel version. For example,
 
 ```sh
-    STEP=1000 BACKEND=c-cuda COMPUTE_V1='- einstein_v2("output0[N, F, HO, WO] +=! input0[N, C, HO * 4 + KH, WO * 4 + KW] * input1[F, C, KH, KW] where HO in 55, WO in 55", input_dict={"input0": {"dtype": "float32", "shape": [64, 3, 227, 227]}, "input1": {"dtype": "float32", "shape": [96, 3, 11, 11]}});' make
+    STEP=100 BACKEND=c-cuda COMPUTE_V1='- einstein_v2("output0[N, F, HO, WO] +=! input0[N, C, HO * 4 + KH, WO * 4 + KW] * input1[F, C, KH, KW] where HO in 55, WO in 55", input_dict={"input0": {"dtype": "float32", "shape": [64, 3, 227, 227]}, "input1": {"dtype": "float32", "shape": [96, 3, 11, 11]}});' make
 ```
 
-This will take some times to finish, and as long as your environment is correctly configured, you will finally get a JSON-format configuration which represents the best kernel version Antares found, then you can do 2 things:
+Tuning will take several times to finish. As long as your environment is correctly configured, you will finally get a JSON-format configuration which represents the best kernel version Antares found, then you can do 2 things:
 
-1) Re-evalutation on the case Antares found using `CONFIG` variable:
+1) Re-evalutation on the Antares-tuned case by adding `CONFIG` variable, whose content is exactly the JSON-format configuration you get from your last corresponding tuning reports:
 ```sh
     CONFIG='{"axis_0": [-1, 16, 64, 1], "reorder": [0]}' COMPUTE_V1='- einstein_v2("output0[N] = input0[N] + input1[N]", input_dict={"input0": {"dtype": "float32", "shape": [1024 * 512]}, "input1": {"dtype": "float32", "shape": [1024 * 512]}})' BACKEND=c-cuda make
 ```
 
-2) If you want to save the result so that frontends like Tensorflow/NNfusion can utilize the optimized kernel, you need to append `COMMIT=1` for your case, like:
+2) If you want to save the kernel code, you need to append `COMMIT=1` for your case, like:
 ```sh
     COMMIT=1 CONFIG='{"axis_0": [-1, 16, 64, 1], "reorder": [0]}' COMPUTE_V1='- einstein_v2("output0[N] = input0[N] + input1[N]", input_dict={"input0": {"dtype": "float32", "shape": [1024 * 512]}, "input1": {"dtype": "float32", "shape": [1024 * 512]}})' BACKEND=c-cuda make
 ```
-If you want to auto commit the result together with tuning procedure, you can just merge `STEP` and `COMMIT` together:
+The generated kernel code will be saved in codehub folder as a determistic filename.
+
+Environment variable `COMMIT` works in not only re-evalutation command, but also tuning command, e.g.:
 ```sh
     COMMIT=1 STEP=1000 BACKEND=c-cuda COMPUTE_V1='- einstein_v2("output0[N, F, HO, WO] +=! input0[N, C, HO * 4 + KH, WO * 4 + KW] * input1[F, C, KH, KW] where HO in 55, WO in 55", input_dict={"input0": {"dtype": "float32", "shape": [64, 3, 227, 227]}, "input1": {"dtype": "float32", "shape": [96, 3, 11, 11]}});' make
 ```
-
-After you commit the results, the Antares REST Server will detect this record and response this code version to other frameworks once they newly requests the expression case you saved.
+If a same case (with same `COMPUTE_V1` value) has been tuned and saved in history already, the setting of `COMMIT=1` will block you from tuning it again to avoid the overwritten of history kernel code in codehub. But Yyu can set `COMMI=force` to allow such overwritten regardless the block.
 
 ## Tunning DirectX12 Compute Shader:
 
 For DirectX12 platform, you could use "Win10 as server + Linux/WSL as client" mode to tune expressions. Please refer documentation [here](backends/c-hlsl/evaluator/AntaresEvalAgent).
 
-# How to run Antares REST Server for different backends:
-You can add environment variable `HTTP_PORT=<portnum>` to change the listening port, by default, it will be listening on localhost:8880:
-```sh
-    HTTP_PORT=8880 BACKEND=c-cuda make rest-server
-    HTTP_PORT=8881 BACKEND=c-hlsl make rest-server
-    ...
-```
-
-# How to use custom tuners as searching algorithms:
+## How to use custom tuners as searching algorithms:
 Custom tuners can be chosen by adding variable `TUNER=..`, and the value can be selected from any filename under folder `tuner/`, e.g.:
 ```sh
     TUNER=Ansor STEP=100 BACKEND=c-cuda make

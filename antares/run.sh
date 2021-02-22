@@ -19,7 +19,11 @@ fi
 
 export BACKEND=$(./antares/get_backend.sh)
 
-export ANTARES_DRIVER_PATH=/tmp/libAntares
+if [[ "$(id -u)" == "0" ]]; then
+  export ANTARES_DRIVER_PATH=${ANTARES_ROOT}/.tmp/libAntares
+else
+  export ANTARES_DRIVER_PATH=/tmp/libAntares
+fi
 
 mkdir -p ${ANTARES_DRIVER_PATH}
 
