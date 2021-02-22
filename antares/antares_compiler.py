@@ -426,7 +426,7 @@ def main_compute(code_only=False):
     batch_size = int(os.environ.get('BATCH', '16'))
 
     from concurrent.futures import ThreadPoolExecutor
-    worker_size = batch_size
+    worker_size = batch_size if batch_size < dev_num else dev_num
     thread_pool = ThreadPoolExecutor(max_workers=worker_size)
 
     tuner_type = os.environ.get('TUNER', '')
