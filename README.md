@@ -139,7 +139,7 @@ Antares can support multi-line statements as long as they are fuse-able, for exa
 ## How to Tune Expressions Manually and Get Tuned Source Code:
 
 Firstly, you need to describe what kind of computing logic according to standard Antares IR, and set the IR string to environmental variable `COMPUTE_V1`.
-Plus environmental variable `BACKEND` to choice target backend type, these 2 environment settings can help you quickly generate a reference kernel code, regardless of the execution performance.
+Plus environmental variable `BACKEND` to select the target backend type, these 2 environment settings can help you quickly generate a reference kernel code, regardless of the execution performance.
 If you want to further optimize the operator automatically, you just need to add one more variable in your first-run examples: `STEP=1000`,
 which means Antares will take 1000 chances to try and search a potenially faster kernel version. For example,
 
@@ -164,7 +164,7 @@ Environment variable `COMMIT` works in not only re-evalutation command, but also
 ```sh
     COMMIT=1 STEP=1000 BACKEND=c-cuda COMPUTE_V1='- einstein_v2("output0[N, F, HO, WO] +=! input0[N, C, HO * 4 + KH, WO * 4 + KW] * input1[F, C, KH, KW] where HO in 55, WO in 55", input_dict={"input0": {"dtype": "float32", "shape": [64, 3, 227, 227]}, "input1": {"dtype": "float32", "shape": [96, 3, 11, 11]}});' make
 ```
-If a same case (with same `COMPUTE_V1` value) has been tuned and saved in history already, the setting of `COMMIT=1` will block you from tuning it again to avoid the overwritten of history kernel code in codehub. But Yyu can set `COMMI=force` to allow such overwritten regardless the block.
+If a same case (with same `COMPUTE_V1` value) has been tuned and saved in history already, the setting of `COMMIT=1` will block you from tuning it again to avoid the overwritten of history kernel code in codehub. But You can still set `COMMI=force` to allow such overwritten.
 
 ## Tunning DirectX12 Compute Shader:
 

@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-import os, time, math
+import os, sys, time, math
 import numpy as np
 import subprocess
 
@@ -11,8 +11,17 @@ def init(**kwargs):
     source_root = f'{backend_root}/../../graph_evaluator'
 
     if not os.path.exists(f'{backend_root}/include/backend.hpp'):
-      print('\n[EvalAgent] Evaluator for backend `%s` not found, skipping evaluation.' % backend)
-      exit(1)
+      global eval_client
+      try:
+        import importlib
+        eval_client = importlib.import_module('backends.%s.evaluator.client' % backend)
+      except ModuleNotFoundError:
+        print('\n[EvalAgent] Evaluator for backend `%s` not found, skipping evaluation.' % backend)
+        exit(1)
+      except:
+        traceback.print_exc()
+        exit(1)
+      return eval_client.init(**kwargs)
 
     with open(f'{backend_root}/include/backend.hpp', 'r') as fp:
       eval_flags_pref = f'//; eval_flags({backend}):'
@@ -41,7 +50,9 @@ def eval(kernel_path, **kwargs):
     backend = os.path.basename(kwargs['backend_root'])
 
     evaluator_path = '%s/evaluator.%s' % (os.environ['ANTARES_DRIVER_PATH'], backend)
-    assert os.path.exists(evaluator_path)
+    if not os.path.exists(evaluator_path):
+      global eval_client
+      return eval_client.eval(kernel_path, **kwargs)
 
     exec_cmd = 'sh -c "cd %s && DEV_ID=%d EXPECTED_TIMEOUT=%s %s"' % (os.path.dirname(kernel_path), dev_id, kwargs['expected_timeout'], evaluator_path)
     try:
