@@ -3,6 +3,14 @@
 cd $(dirname $0)/..
 ANTARES_ROOT=$(pwd)
 
+BASE_HOME=$(cd ~ && pwd)
+export ANTARES_DRIVER_PATH=${BASE_HOME:-/tmp}/.libAntares
+
+if [[ "$@" == "clean" ]]; then
+  rm -rf "${ANTARES_DRIVER_PATH}"
+  exit 0
+fi
+
 export PYTHONDONTWRITEBYTECODE=1
 export TVM_HOME=$(cat engine/install_antares_host.sh | grep ^TVM_HOME | head -n 1 | awk -F\= '{print $NF}')
 export PYTHONPATH=${TVM_HOME}/python:${TVM_HOME}/topi/python:${TVM_HOME}/nnvm/python:${ANTARES_ROOT}
@@ -18,8 +26,6 @@ if [[ "$COMPUTE_V1" == "" ]]; then
 fi
 
 export BACKEND=$(./antares/get_backend.sh)
-
-export ANTARES_DRIVER_PATH=${HOME:-/tmp}/.libAntares
 
 mkdir -p ${ANTARES_DRIVER_PATH}
 
