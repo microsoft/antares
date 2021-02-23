@@ -7,8 +7,8 @@ def get_execution_parallism():
   return 1
 
 def do_native_translation_v2(codeset, **kwargs):
-  kernel_name, args, body = codeset
-  expand_args = ', '.join([f'__global {x[0]}* {x[1]}' for x in args])
+  kernel_name, in_args, out_args, body = codeset
+  expand_args = ', '.join([f'__global {x[0]}* {x[1]}' for x in in_args + out_args])
 
   body = body.replace('__syncthreads()', 'barrier(CLK_LOCAL_MEM_FENCE)').replace('__shared__', '__local')
   for i, key in enumerate(['blockIdx.x', 'blockIdx.y', 'blockIdx.z']):

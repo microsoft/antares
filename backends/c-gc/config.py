@@ -6,7 +6,6 @@ import json
 import hashlib
 import numpy as np
 
-from antares.common import type_to_c as _native_dtype, AntaresGlobal
 
 def get_execution_parallism():
   return 1
@@ -15,19 +14,17 @@ def do_native_translation_v2(codeset, **kwargs):
   if 'einstein_v2' not in kwargs['attrs'].ir:
     raise Exception("Program for graphcore must be based on Antares IR")
 
-  kernel_name, args, body = codeset
-  arg_bufs = AntaresGlobal.local_arg_pros
+  kernel_name, in_args, out_args, body = codeset
 
   func_args, delta_args = '', []
-  for buf in arg_bufs['_in']:
-    if buf['name'].startswith('_'):
-      delta_args.append(buf['name'])
+  for buf in in_args:
+    if buf[1].startswith('_'):
+      delta_args.append(buf[1])
       continue
-    func_args += ' Input<Vector<%s>> %s; // local size: %s\n' % (_native_dtype(buf['dtype']), buf['name'], buf['shape'])
-  for buf in arg_bufs['_out']:
-    func_args += ' Output<Vector<%s>> %s; // local size: %s\n' % (_native_dtype(buf['dtype']), buf['name'], buf['shape'])
+    func_args += ' Input<Vector<%s>> %s;\n' % (buf[0], buf[1])
+  for buf in out_args:
+    func_args += ' Output<Vector<%s>> %s;\n' % (buf[0], buf[1])
 
-  codelet_id = 'Vuid_%s' % hashlib.sha1(body.encode()).hexdigest()
   blend_code = kwargs['attrs'].blend.strip()
   blend_code = 'namespace {\n%s\n}\n\n' if blend_code else ''
 

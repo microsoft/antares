@@ -79,7 +79,8 @@ private:
 };
 
 struct kernel_property {
-  std::vector<std::string> args;
+  std::string fname;
+  std::vector<std::string> in_args, out_args;
   std::unordered_map<std::string, int> threads;
   std::vector<void*> hFunction;
 };
@@ -110,14 +111,14 @@ void *allocate_tensor(tensor_property &tp) {
 struct ExecutionModule {
   std::vector<tensor_property> global_inputs, global_outputs;
   std::unordered_map<std::string, tensor_property> local_tensors;
-  std::map<std::string, kernel_property> local_kernels;
+  std::vector<kernel_property> local_kernels;
 
   std::string backend;
 
   void *hModule;
 
   ExecutionModule(std::string source) {
-    static const char file_proto[] = "file:///";
+    static const char file_proto[] = "file://";
 
     if (0 == strncmp(source.c_str(), file_proto, sizeof(file_proto) - 1)) {
       FILE *fp = fopen(source.c_str() + sizeof(file_proto) - 1, "rb");
@@ -133,11 +134,6 @@ struct ExecutionModule {
     auto params = ssplit(encoded_params, " -> ");
     global_inputs = parse_properties(params[0]), global_outputs = parse_properties(params[1]);
 
-    encoded_params = get_between(source, "// TENSORS: ", "\n");
-    for (auto &tensor: parse_properties(encoded_params)) {
-      local_tensors[tensor.name] = tensor;
-    }
-
     backend = get_between(source, "// BACKEND: ", " (");
     // fprintf(stderr, "%s\n", backend.c_str());
 
@@ -145,12 +141,22 @@ struct ExecutionModule {
 
     auto kernel_slices = ssplit(source, "-------\n");
     for (int i = 1; i < kernel_slices.size(); ++i) {
-      auto name = get_between(kernel_slices[i], "// LOCAL: ", " - ");
-      auto &kp = local_kernels[name];
-      for (auto arg: ssplit(get_between(kernel_slices[i], " - ", "\n"), ", "))
-        kp.args.push_back(arg.substr(0, arg.find('(')));
-      // for (auto &it: kp.args)
-      //   fprintf(stderr, "  arg(%s) = %s\n", name.c_str(), it.c_str());
+      auto name = get_between(kernel_slices[i], "// LOCAL: ", " -- ");
+      local_kernels.push_back(kernel_property{});
+      auto &kp = local_kernels[local_kernels.size() - 1];
+      kp.fname = name;
+      auto inputs_outputs = ssplit(get_between(kernel_slices[i], " -- ", "\n"), " -> ");
+      auto local_inputs = parse_properties(inputs_outputs[0]);
+      auto local_outputs = parse_properties(inputs_outputs[1]);
+
+      for (auto &arg: local_inputs) {
+        kp.in_args.push_back(arg.name);
+        local_tensors[arg.name] = arg;
+      }
+      for (auto &arg: local_outputs) {
+        kp.out_args.push_back(arg.name);
+        local_tensors[arg.name] = arg;
+      }
       int idx = 0, next;
       while (next = kernel_slices[i].find("// [thread_extent] ", idx), next >= 0) {
         auto thread_key = get_between(kernel_slices[i], "] ", " = ", next);
@@ -162,7 +168,7 @@ struct ExecutionModule {
         idx = next + 1;
       }
 
-      kp.hFunction = ab::moduleGetFunction(hModule, name, kp.threads, kp.args);
+      kp.hFunction = ab::moduleGetFunction(hModule, name, kp.threads);
     }
   }
 
@@ -172,13 +178,8 @@ struct ExecutionModule {
       ++tensor_used[global_inputs[i].name];
     int nodeCnt = local_kernels.size();
     for (auto it = --local_kernels.end(); nodeCnt > 0; --it, --nodeCnt) {
-      if (nodeCnt == local_kernels.size()) {
-        for (int i = 0; i < it->second.args.size() - global_outputs.size(); ++i)
-          ++tensor_used[it->second.args[i]];
-      } else {
-        for (int i = 0; i < it->second.args.size() - 1; ++i)
-          ++tensor_used[it->second.args[i]];
-      }
+      for (int i = 0; i < it->in_args.size(); ++i)
+          ++tensor_used[it->in_args[i]];
     }
     std::unordered_map<std::string, void*> tensor_memory;
     for (int i = 0; i < global_inputs.size(); ++i)
@@ -187,24 +188,26 @@ struct ExecutionModule {
       tensor_memory[global_outputs[i].name] = args[i + global_inputs.size()];
 
     for (auto it = local_kernels.begin(); ++nodeCnt <= local_kernels.size(); ++it) {
-      const std::string &name = it->first;
+      const std::string &name = it->fname;
       if (nodeCnt != local_kernels.size()) {
-        auto &arg_name = it->second.args.back();
+        assert(it->out_args.size() == 1);
+        auto &arg_name = it->out_args[0];
         auto &memptr = tensor_memory[arg_name];
         assert(memptr == nullptr);
-        memptr = allocate_tensor(local_tensors[arg_name]);
+        memptr = allocate_tensor(local_tensors.find(arg_name)->second);
       }
       std::vector<void*> krnl_args;
-      for (auto &arg: it->second.args)
+      for (auto &arg: it->in_args)
+        krnl_args.push_back(tensor_memory[arg]);
+      for (auto &arg: it->out_args)
         krnl_args.push_back(tensor_memory[arg]);
 
-      ab::launchKernel(it->second.hFunction, krnl_args);
-      // get_funciton(); launch_kernel(krnl_args.data());
+      ab::launchKernel(it->hFunction, krnl_args);
 
-      int num_inputs = it->second.args.size() - (nodeCnt != local_kernels.size() ? 1 : global_outputs.size());
+      int num_inputs = it->in_args.size();
       for (int i = 0; i < num_inputs; ++i)
-        if (--tensor_used[it->second.args[i]] == 0) {
-          ab::release(tensor_memory[it->second.args[i]], local_tensors[it->second.args[i]].mem_size());
+        if (--tensor_used[it->in_args[i]] == 0) {
+          ab::release(tensor_memory[it->in_args[i]], local_tensors[it->in_args[i]].mem_size());
         }
     }
     return 0;
@@ -227,7 +230,7 @@ int main(int argc, char** argv)
     int dev = getenv("DEV_ID") ? std::atoi(getenv("DEV_ID")) : 0;
     ab::init(dev);
 
-    ExecutionModule gm("file:///my_kernel.cc");
+    ExecutionModule gm("file://./my_kernel.cc");
 
     std::vector<void*> global_args;
     for (int i = 0; i < gm.global_inputs.size(); ++i) {

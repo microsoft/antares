@@ -188,18 +188,19 @@ COMPUTE_V1='- einstein_v2("output0[N, M] = input0[N, M] & ~input1[N, M]", { "inp
 # Sigmoid
 COMPUTE_V1='- einstein_v2("output0[N, M] = 1.0 / (1.0 + (-input0[N, M]).call(`exp`))", { "input0": {"dtype": "float32", "shape": [1024, 512]} })' make
 
-####### Experimental (Platform-dependent)
+# AddMatMul Head Fusion
+COMPUTE_V1='- einstein_v2("temp0[K, N] = input0[N, K] + 100; output0[N, M] +=! temp0[K, N] * input1[K, M] where K in 10", { "input0": {"dtype": "float32", "shape": [1024, 512]}, "input1": {"dtype": "float32", "shape": [512, 512]}})' make
+
+# ConvBiasRelu Tail Fusion
+COMPUTE_V1='- einstein_v2("conv_out[N, F, HO, WO] +=! input0[N, C, HO + KH, WO + KW] * input1[KH, KW, C, F] where HO in 256, WO in 256; conv_bias[N, F, HO, WO] = conv_out[N, F, HO, WO] + input2[0, 0, 0, F]; output0[N, F, HO, WO] = conv_bias[N, F, HO, WO].when(conv_bias[N, F, HO, WO] > 0.0, 0.0)", input_dict={"input0": {"dtype": "float32", "shape": [1, 16, 256, 256]}, "input1": {"dtype": "float32", "shape": [1, 1, 16, 16]}, "input2": {"dtype": "float32", "shape": [1, 1, 1, 16]}})' make
+
+
+####### Experimental (platform-dependent, unverified in every backend)
 # MatMul (explicit plan)
 COMPUTE_V1='- einstein_v2("output0[N, M] +=! input0[N, K] * input1[K, M]", { "input0": {"dtype": "float32", "shape": [1024, 512]}, "input1": {"dtype": "float32", "shape": [512, 512]}})  ## @: plan/matmul_v1' make
 
 # ReduceSum (backend-related explicit plan combinations)
 COMPUTE_V1='- einstein_v2("output0[N] +=! input0[N, M]", {"input0": {"dtype": "float32", "shape": [1024, 3072]}})  ## @: plan/c-cuda=reduce_sum_v1,c-rocm=reduce_sum_v1,default' make
-
-# AddMatMul Head Fusion
-COMPUTE_V1='- einstein_v2("temp0[K, N] = input0[N, K] + 100; output0[N, M] +=! temp0[K, N] * input1[K, M] where K in 10", { "input0": {"dtype": "float32", "shape": [1024, 512]}, "input1": {"dtype": "float32", "shape": [512, 512]}})' make
-
-# ConvBiasRelu Tail Fusion
-COMPUTE_V1='- einstein_v2("conv_out[N, F, HO, WO] +=! input0[N, C, HO + KH, WO + KW] * input1[KH, KW, C, F] where HO in 256, WO in 256; conv_bias[N, F, HO, WO] = conv_out[N, F, HO, WO] + input2[0, 0, 0, F]; output0[N, F, HO, WO] = conv_bias[N, F, HO, WO].when(conv_bias[N, F, HO, WO] > 0.0, 0.0)", input_dict={"input0": {"dtype": "float32", "shape": [1, 16, 256, 256]}, "input1": {"dtype": "float32", "shape": [1, 1, 16, 16]}, "input2": {"dtype": "float32", "shape": [1, 1, 1, 16]}})  ## @: plan/convfwd_nchw_v1' make
 
 # [INTRISIC SPEC] ROCm/CUDA's Custom Argmax2D
 BACKEND=c-rocm COMPUTE_V1='- einstein_v2("output0[N] argmax(0, N)=! input0[N, C].call(`index_of`, [N], dtype=`int32`)", input_dict={"input0": {"dtype": "float32", "shape": [32, 128]}})  ## @: plan/c-cuda=blend.my_argmax,c-rocm=blend.my_argmax' make

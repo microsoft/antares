@@ -38,7 +38,7 @@ namespace ab {
     return hmod;
   }
 
-  std::vector<void*> moduleGetFunction(const void *hModule, const std::string &fname, const std::unordered_map<std::string, int> &threads, const std::vector<std::string> &args) {
+  std::vector<void*> moduleGetFunction(const void *hModule, const std::string &fname, const std::unordered_map<std::string, int> &threads) {
     // fprintf(stderr, "moduleGetFunction(%s)\n", fname.c_str());
     return { dlsym((void*)hModule, fname.c_str()) };
   }
