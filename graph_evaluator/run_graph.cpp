@@ -17,8 +17,11 @@
 #include <cstring>
 #include <functional>
 #include <numeric>
+
+#if !defined(_WIN64) || defined(__MINGW64__)
 #include <pthread.h>
 #include <unistd.h>
+#endif
 
 #include "backend.hpp"
 
@@ -117,10 +120,13 @@ struct ExecutionModule {
     static const char file_proto[] = "file:///";
 
     if (0 == strncmp(source.c_str(), file_proto, sizeof(file_proto) - 1)) {
-      std::ifstream t(source.c_str() + sizeof(file_proto) - 1);
-      std::string _((std::istreambuf_iterator<char>(t)), std::istreambuf_iterator<char>());
-      t.close();
-      source = std::move(_);
+      FILE *fp = fopen(source.c_str() + sizeof(file_proto) - 1, "rb");
+      fseek(fp, 0, SEEK_END);
+      size_t filesize = ftell(fp);
+      fseek(fp, 0, SEEK_SET);
+      source.resize(filesize);
+      assert(filesize = fread(source.data(), 1, filesize, fp));
+      fclose(fp);
     }
 
     auto encoded_params = get_between(source, "// GLOBALS: ", "\n");
@@ -205,18 +211,19 @@ struct ExecutionModule {
   }
 };
 
-static void *timeout_monitor(void *arg) {
-    sleep(30);
-    fprintf(stderr, "[FATAL] Time limit exceeded for this evaluation.\n");
-    exit(1);
-}
 
 int main(int argc, char** argv)
 {
+#if !defined(_WIN64) || defined(__MINGW64__)
     pthread_t p_timeout_monitor;
-    pthread_create(&p_timeout_monitor, NULL, timeout_monitor, NULL);
+    pthread_create(&p_timeout_monitor, NULL, [](void *arg) -> void* {
+      sleep(30);
+      fprintf(stderr, "[FATAL] Time limit exceeded for this evaluation.\n");
+      exit(1);
+      return nullptr;
+    }, NULL);
     pthread_detach(p_timeout_monitor);
-
+#endif
     int dev = getenv("DEV_ID") ? std::atoi(getenv("DEV_ID")) : 0;
     ab::init(dev);
 
