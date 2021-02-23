@@ -4,20 +4,18 @@
 import subprocess
 import re
 
-from antares.common import type_to_c, AntaresGlobal
 
 def get_execution_parallism():
     return 1
 
 def do_native_translation_v2(codeset, **kwargs):
-    kernel_name, args, body = codeset
-    arg_bufs = AntaresGlobal.local_arg_pros
+    kernel_name, in_args, out_args, body = codeset
 
     registers = []
-    for i, buf in enumerate(arg_bufs['_in']):
-      registers.append('StructuredBuffer<%s> %s: register(t%d);\n' % (type_to_c(buf['dtype']), buf['name'], i))
-    for i, buf in enumerate(arg_bufs['_out']):
-      registers.append('RWStructuredBuffer<%s> %s: register(u%d);\n' % (type_to_c(buf['dtype']), buf['name'], i))
+    for i, buf in enumerate(in_args):
+      registers.append('StructuredBuffer<%s> %s: register(t%d);\n' % (buf[0], buf[1], i))
+    for i, buf in enumerate(out_args):
+      registers.append('RWStructuredBuffer<%s> %s: register(u%d);\n' % (buf[0], buf[1], i))
 
     def get_extent(key, defval=1):
       str_pat = f'// [thread_extent] {key} = '
