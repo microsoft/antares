@@ -167,7 +167,7 @@ namespace AntaresHlslEvalAgent
             if (!File.Exists(HlslDllName))
             {
                 Console.WriteLine("[INFO] Downloading required DLL dependencies..");
-                runSystemCommand("curl.exe", "-LOs https://github.com/microsoft/antares/raw/library/" + HlslDllName);
+                runSystemCommand("curl.exe", "-LOs https://github.com/microsoft/antares/releases/download/v0.1.0/" + HlslDllName);
             }
 
             runSystemCommand("netsh.exe", "advfirewall firewall add rule name=AntaresEvalAgent dir=in action=allow protocol=TCP localport=" + LISTEN_PORT);
