@@ -14,9 +14,9 @@ def eval(kernel_path, **kwargs):
     evaluator_path = '%s/evaluator.%s' % (os.environ['ANTARES_DRIVER_PATH'], backend)
     if not os.path.exists(evaluator_path):
       if backend == 'c-rocm':
-        assert 0 == os.system('timeout 10s /opt/rocm/bin/hipcc %s -std=c++17 -lpthread -o %s.tmp' % (source_file, evaluator_path)), "ROCm SDK is not found, please setup the graphcore environment."
+        assert 0 == os.system('timeout 10s /opt/rocm/bin/hipcc %s -std=c++17 -lpthread -o %s.tmp' % (source_file, evaluator_path)), "ROCm SDK is not found, please setup the corresponding environment."
       elif backend == 'c-cuda':
-        assert 0 == os.system('timeout 10s g++ %s -std=c++17 -lcuda -lcudart -lpthread -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -o %s.tmp' % (source_file, evaluator_path)), "CUDA SDK is not found, please setup the graphcore environment."
+        assert 0 == os.system('timeout 10s g++ %s -std=c++17 -lcuda -lcudart -lpthread -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -o %s.tmp' % (source_file, evaluator_path)), "CUDA SDK is not found, please setup the corresponding environment."
       else:
         raise Exception("Unrecognized backend type for `%s`" % backend)
       os.system('mv %s.tmp %s >/dev/null 2>&1' % (evaluator_path, evaluator_path))
