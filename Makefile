@@ -46,3 +46,6 @@ install_docker:
 
 install_host:
 	./engine/install_antares_host.sh
+
+clean:
+	rm -rf {HOME:-/tmp}/.libAntares
