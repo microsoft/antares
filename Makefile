@@ -27,7 +27,7 @@ HTTP_NAME ?= $(HTTP_PREF)$(BACKEND)
 HTTP_EXEC ?= $(PARAMS) -d --name=$(HTTP_NAME) -p $(HTTP_PORT):$(HTTP_PORT) antares
 
 eval:
-	@if [ "x$(HOST_MODE)" = "x0" ] && pgrep dockerd >/dev/null 2>&1; then $(MAKE) install_docker; $(PARAMS) -it --rm antares $(INNER_CMD) || true; else ./$(INNER_CMD) || true; fi
+	@if [ "x$(HOST_MODE)" = "x0" ] && pgrep dockerd >/dev/null 2>&1; then $(MAKE) install_docker; $(PARAMS) -it --rm antares $(INNER_CMD) || true; else $(INNER_CMD) || true; fi
 
 shell: install_docker
 	$(PARAMS) -it --rm --network=host antares bash || true
@@ -42,10 +42,10 @@ stop-server:
 	docker rm $(HTTP_NAME) >/dev/null 2>&1 || true
 
 install_docker:
-	docker build -t antares --network=host . -f docker/Dockerfile.$(BACKEND)*
+	docker build -t antares --network=host . -f docker/Dockerfile.$(BACKEND)
 
 install_host:
 	./engine/install_antares_host.sh
 
 clean:
-	rm -rf {HOME:-/tmp}/.libAntares
+	$(INNER_CMD) clean
