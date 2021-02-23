@@ -104,7 +104,7 @@ namespace ab {
     return hmod;
   }
 
-  std::vector<void*> moduleGetFunction(const void *hModule, const std::string &fname, const std::unordered_map<std::string, int> &threads, const std::vector<std::string> &args) {
+  std::vector<void*> moduleGetFunction(const void *hModule, const std::string &fname, const std::unordered_map<std::string, int> &threads) {
     auto query = [&](const std::string &axis, long defval = 1) -> void* {
       auto it = threads.find(axis);
       if (it == threads.end())

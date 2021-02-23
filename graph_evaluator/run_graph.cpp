@@ -168,7 +168,7 @@ struct ExecutionModule {
         idx = next + 1;
       }
 
-      kp.hFunction = ab::moduleGetFunction(hModule, name, kp.threads, kp.in_args, kp.out_args);
+      kp.hFunction = ab::moduleGetFunction(hModule, name, kp.threads);
     }
   }
 
@@ -179,7 +179,7 @@ struct ExecutionModule {
     int nodeCnt = local_kernels.size();
     for (auto it = --local_kernels.end(); nodeCnt > 0; --it, --nodeCnt) {
       for (int i = 0; i < it->in_args.size(); ++i)
-          ++tensor_used[it->args[i]];
+          ++tensor_used[it->in_args[i]];
     }
     std::unordered_map<std::string, void*> tensor_memory;
     for (int i = 0; i < global_inputs.size(); ++i)
