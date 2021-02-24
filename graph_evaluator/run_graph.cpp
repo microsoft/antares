@@ -46,7 +46,8 @@ std::vector<std::string> ssplit(const std::string &str, const std::string &sub) 
           ret.push_back(str.substr(it, next - it));
         it = next + sub.size();
     }
-    ret.push_back(str.substr(it));
+    if (it < str.size())
+        ret.push_back(str.substr(it));
     return std::move(ret);
 }
 

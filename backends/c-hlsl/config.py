@@ -1,9 +1,12 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-import subprocess
+import os, subprocess
 import re
 
+local_dll_path = '%s/antares_hlsl_v0.2dev0_x64.dll' % os.environ['ANTARES_DRIVER_PATH']
+if not os.path.exists(local_dll_path):
+    os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.1.0/antares_hlsl_v0.2dev0_x64.dll -o {local_dll_path}')
 
 def get_execution_parallism():
     return 1
