@@ -59,7 +59,7 @@ def eval(kernel_path, **kwargs):
       global eval_client
       return eval_client.eval(kernel_path, **kwargs)
 
-    exec_cmd = 'sh -c "cd %s && DEV_ID=%d EXPECTED_TIMEOUT=%s %s"' % (os.path.dirname(kernel_path), dev_id, kwargs['expected_timeout'], evaluator_path)
+    exec_cmd = 'sh -c "cd %s && DEV_ID=%d EXPECTED_TIMEOUT=%s %s" || true' % (os.path.dirname(kernel_path), dev_id, kwargs['expected_timeout'], evaluator_path)
     try:
       output = subprocess.check_output(exec_cmd, shell=True).decode()
     except:

@@ -3,11 +3,6 @@
 - Antares simplifies most TVM's low-level features, making it easier for DNN developers to translate computation to Microsoft related platforms.
 - Antares follows "_One Language Syntax for All Platforms_" principle to reduce the description complexity on different platforms.
 
-## Documentation for Quick Start
-1. [Quick Start to install Antares for DirectX12](backends/c-hlsl/evaluator/AntaresEvalAgent)
-2. [Quick Start to write A + B shaders for DirectX12 using CUDA-like interfaces](backends/c-hlsl/evaluator/AntaresHlslLib/examples)
-3. [Quick Start for Antares IR examples](AntaresIR.md)
-
 # Antares Functionality:
 - Antares can convert computing operators from your DNN models into low-level source codes of the target device (e.g. kernels, shaders, ..).
 - Antares can also automatically tune and optimize these DNN operators on end-to-end device using efficient mechanisms and algorithms.
@@ -29,9 +24,10 @@ sudo apt install docker.io
 git clone https://github.com/microsoft/antares
 
 cd antares/
-sudo BACKEND=c-cuda make
+sudo BACKEND=c-cuda make  # If you have NVIDIA GPU with CUDA driver installed
+sudo BACKEND=c-rocm make  # If you have AMD GPU with ROCm driver installed
 
-# If you need Antares to extend/boost Tensorflow operators, please also run:
+# If you need Antares to extend/boost Tensorflow-GPU operators, please also run:
 sudo python3 ./frameworks/tensorflow/setup.py
 
 # Reference - Recommended Installation Package Choices for Tensorflow 1.x & 2.x (tested in Ubuntu 20.04):
@@ -41,7 +37,7 @@ sudo python3 ./frameworks/tensorflow/setup.py
 #   Tensorflow-1 for AMD ROCm 4.0:  python3 -m pip install tensorflow-rocm==1.15.9
 #   Tensorflow-2 for AMD ROCm 4.0:  python3 -m pip install tensorflow-rocm==2.4.0
 
-# If you need Antares to extend/boost Pytorch operators, please also run:
+# If you need Antares to extend/boost Pytorch-GPU operators, please also run:
 sudo python3 ./frameworks/pytorch/setup.py
 
 # Reference - Recommended Installation Package Choices for Pytorch (tested in Ubuntu 20.04):
@@ -104,7 +100,25 @@ result = custom_op()
 print('The result of tensor `%s` is:\n%s' % (result.id, result))
 ```
 
-# Documentation for Other Advanced Examples:
+# Codegen for More Backends:
+
+Generally, you can generate SYCL source kernels that work for most CPUs, e.g:
+```sh
+    BACKEND=c-sycl COMPUTE_V1='- einstein_v2("output0[N, F, HO, WO] +=! input0[N, C, HO * 4 + KH, WO * 4 + KW] * input1[F, C, KH, KW] where HO in 55, WO in 55", input_dict={"input0": {"dtype": "float32", "shape": [64, 3, 227, 227]}, "input1": {"dtype": "float32", "shape": [96, 3, 11, 11]}});' make
+```
+
+To generate codes for Windows 10 with DX12 enabled, you can setup WSL1.0 and make the following setup in WSL1.0:
+```sh
+    sudo make install_host
+    BACKEND=c-hlsl COMPUTE_V1='- einstein_v2("output0[N, F, HO, WO] = input0[N] where F in 32, HO in 2, WO in 2", input_dict={"input0": {"dtype": "float32", "shape": [16]}})' make
+```
+
+For multi-core CPU (c-mcpu) or single-core CPU (c-scpu):
+```sh
+    BACKEND=c-mcpu COMPUTE_V1='- einstein_v2("output0[N, C, H, W] = input0[N, H, W, C]", input_dict={"input0": {"dtype": "float32", "shape": [32, 229, 229, 3]}})' make
+```
+
+# Documentation for Advanced Examples:
 
 For more syntax usage or examples, please follow documentation here: [Antares IR & Examples](AntaresIR.md)
 
@@ -120,7 +134,7 @@ Antares can support multi-line statements as long as they are fuse-able, for exa
 
 # Current Feature Table:
 
-|       | HIP-C(c-rocm) | CUDA(c-cuda) | CPU(c-mcpu) | DirectX12(c-hlsl) | Graphcore(c-gc) | Intel OneAPI(c-sycl) | (..coming soon..) |
+|       | HIP-C(c-rocm) | CUDA(c-cuda) | CPU(c-mcpu/c-scpu) | DirectX12(c-hlsl) | Graphcore(c-gc) | Intel OneAPI(c-sycl) | (..coming soon..) |
 |---|---|---|---|---|---|---|---|
 | Target Device | AMDGPU | NVGPU | Generic CPU | Generic Graphic Card | IPU Device | Intel CPU/HD Graphic/FPGA |   |
 | Global schedules  | Y | Y | Y | Y | Y | Y |   |
