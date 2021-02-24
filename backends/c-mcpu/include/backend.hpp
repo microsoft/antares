@@ -114,6 +114,6 @@ namespace ab {
 
     double et = 1e-9 * std::chrono::duration_cast<std::chrono::nanoseconds>(*h2 - *h1).count();
     delete h1, h2;
-    return et;
+    return std::max(et, 1e-9);
   }
 }
