@@ -81,7 +81,7 @@ namespace ab {
       arch = std::to_string(major * 10 + minor);
     }
     auto path = folder + "/module.cu";
-    auto compile_cmd = "/usr/local/cuda/bin/nvcc " + path + " --fatbin -O2 -gencode arch=compute_" + arch + ",code=sm_" + arch + " -O2 -o " + path + ".out";
+    auto compile_cmd = "timeout --foreground 10s /usr/local/cuda/bin/nvcc " + path + " --fatbin -O2 -gencode arch=compute_" + arch + ",code=sm_" + arch + " -O2 -o " + path + ".out";
 #else
     if (!arch.size()) {
       hipDeviceProp_t prop;
@@ -89,7 +89,7 @@ namespace ab {
       arch = std::to_string(prop.gcnArch);
     }
     auto path = folder + "/module.cc";
-    auto compile_cmd = "/opt/rocm/bin/hipcc " + path + " --amdgpu-target=gfx" + arch + " --genco -Wno-ignored-attributes -O2 -o " + path + ".out";
+    auto compile_cmd = "timeout --foreground 10s /opt/rocm/bin/hipcc " + path + " --amdgpu-target=gfx" + arch + " --genco -Wno-ignored-attributes -O2 -o " + path + ".out";
 #endif
     FILE *fp = fopen(path.c_str(), "w");
     assert(source.size() == fwrite(source.data(), 1, source.size(), fp));
