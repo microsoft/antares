@@ -50,7 +50,6 @@ def init(**kwargs):
       os.system(f"cp {backend_root}/include/backend.hpp {os.environ['ANTARES_DRIVER_PATH']}/backend.hpp-{backend}")
       os.system(f'mv {evaluator_path}.tmp {evaluator_path} >/dev/null 2>&1')
       is_wsl = 1 if (os.environ.get('IS_WSL', '0') == '1') else 0
-      assert is_wsl != os.system(f'file {evaluator_path} | grep "MS Windows" >/dev/null 2>&1'), f"Antares should run under WSL1.0 for this backend({backend}), otherwise, evaluation would be skipped."
 
 def eval(kernel_path, **kwargs):
     dev_id = kwargs['dev_id']
@@ -60,6 +59,11 @@ def eval(kernel_path, **kwargs):
     if not os.path.exists(evaluator_path):
       global eval_client
       return eval_client.eval(kernel_path, **kwargs)
+
+    is_wsl = 1 if (os.environ.get('IS_WSL', '0') == '1') else 0
+    if is_wsl == os.system(f'file {evaluator_path} | grep "MS Windows" >/dev/null 2>&1'):
+      print(f"Antares should run under WSL1.0 for this backend({backend}), otherwise, evaluation would be skipped.")
+      exit(1)
 
     exec_cmd = 'sh -c "cd %s && DEV_ID=%d EXPECTED_TIMEOUT=%s %s" || true' % (os.path.dirname(kernel_path), dev_id, kwargs['expected_timeout'], evaluator_path)
     try:
