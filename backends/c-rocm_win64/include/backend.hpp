@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-//; eval_flags(c-rocm_wsl64): [x86_64-w64-mingw32-g++] -O2 -static
+//; eval_flags(c-rocm_win64): [x86_64-w64-mingw32-g++] -O2 -static
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -11,7 +11,7 @@
 
 #define AMDHIP64_LIBRARY_PATH R"(C:\Windows\System32\amdhip64.dll)"
 
-#define CHECK(stat, reason, ...)  ((stat) ? 1 : (fprintf(stderr, "[HIP:DBG] "), fprintf(stderr, reason, ##__VA_ARGS__), fprintf(stderr, "\n\n"), fflush(stderr), exit(1), 0))
+#define CHECK(stat, reason, ...)  ((stat) ? 1 : (fprintf(stderr, "[HIP:DBG] "), fprintf(stderr, reason, ##__VA_ARGS__), fprintf(stderr, "\n"), fflush(stderr), exit(1), 0))
 #define LOAD_ONCE(func, ftype)   static FARPROC __ ## func; if (!__ ## func) { __ ## func = GetProcAddress(hLibDll, #func); CHECK(__ ## func, "No such function symbol defined: %s()", #func); } auto func = (ftype)__ ## func;
 
 namespace ab {
@@ -52,7 +52,7 @@ namespace ab {
     FILE *fp = fopen(fname.c_str(), "wb");
     CHECK(source.size() == fwrite(source.data(), 1, source.size(), fp), "Failed to save temp source code.");
     fclose(fp);
-    CHECK(0 == system(("wsl sh -cx '/opt/rocm/bin/hipcc " + fname + " --amdgpu-target=gfx803 --amdgpu-target=gfx900 --amdgpu-target=gfx906 --amdgpu-target=gfx908 --amdgpu-target=gfx1010 --genco -Wno-ignored-attributes -O2 -o " + fname + ".out'").c_str()), "Failed to compiler source code with command /opt/rocm/bin/hipcc from WSL. You need to install package `rocm-dev` (ROCm >= 4.0) in WSL environment.");
+    CHECK(0 == system(("wsl sh -cx 'timeout --foreground 10s /opt/rocm/bin/hipcc " + fname + " --amdgpu-target=gfx803 --amdgpu-target=gfx900 --amdgpu-target=gfx906 --amdgpu-target=gfx908 --amdgpu-target=gfx1010 --genco -Wno-ignored-attributes -O2 -o " + fname + ".out'").c_str()), "Failed to compiler source code with command /opt/rocm/bin/hipcc from WSL.");
     void *hModule;
     LOAD_ONCE(hipModuleLoad, int (*)(void*, const char*));
     CHECK(0 == hipModuleLoad(&hModule, (fname + ".out").c_str()), "Failed to load ROCm HSACO module.");
