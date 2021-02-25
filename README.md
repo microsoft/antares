@@ -180,15 +180,5 @@ Environment variable `COMMIT` works in not only re-evalutation command, but also
 ```
 If a same case (with same `COMPUTE_V1` value) has been tuned and saved in history already, the setting of `COMMIT=1` will block you from tuning it again to avoid the overwritten of history kernel code in codehub. But You can still set `COMMI=force` to allow such overwritten.
 
-## Tunning DirectX12 Compute Shader:
-
-For DirectX12 platform, you could use "Win10 as server + Linux/WSL as client" mode to tune expressions. Please refer documentation [here](backends/c-hlsl/evaluator/AntaresEvalAgent).
-
-## How to use custom tuners as searching algorithms:
-Custom tuners can be chosen by adding variable `TUNER=..`, and the value can be selected from any filename under folder `tuner/`, e.g.:
-```sh
-    TUNER=Ansor STEP=100 BACKEND=c-cuda make
-```
-
 # About Microsft Open Source
 For more information about Microsoft Open Source Policy, please see [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct)

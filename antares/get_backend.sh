@@ -10,4 +10,4 @@ if [[ "$BACKEND" == "" ]]; then
   fi
 fi
 
-echo "${BACKEND:-c-rocm}"
+echo "${BACKEND:-c-cuda}"
