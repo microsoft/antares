@@ -3,8 +3,7 @@
 cd $(dirname $0)/..
 ANTARES_ROOT=$(pwd)
 
-BASE_HOME=$(cd ~ && pwd)
-export ANTARES_DRIVER_PATH=${BASE_HOME:-/tmp}/.libAntares
+export ANTARES_DRIVER_PATH=${ANTARES_ROOT}/.libAntares
 
 if [[ "$@" == "clean" ]]; then
   rm -rf "${ANTARES_DRIVER_PATH}"
@@ -17,12 +16,16 @@ export PYTHONPATH=${TVM_HOME}/python:${TVM_HOME}/topi/python:${TVM_HOME}/nnvm/py
 
 VERSION_TAG=$(cat engine/install_antares_host.sh | grep ^VERSION_TAG | head -n 1 | awk -F\= '{print $NF}')
 
-if [ ! -e ${TVM_HOME}/build/libtvm.so ]; then
-  echo 'Antares dependencies are not fully installed in this environment. Try installing with: `sudo make install_host`'
-  exit 1
-elif [[ "$(cat ${TVM_HOME}/VERSION_TAG 2>/dev/null)" != "${VERSION_TAG}" ]]; then
+if [[ "$(cat ${TVM_HOME}/VERSION_TAG 2>/dev/null)" != "${VERSION_TAG}" ]]; then
   echo 'Antares dependencies are not up-to-date with current Antares version. Try updating the dependencies with: `sudo make install_host`'
   exit 1
+elif [ ! -e ${TVM_HOME}/build/libtvm.so ]; then
+  if grep Microsoft /proc/sys/kernel/osrelease >/dev/null; then
+    sudo make install_host
+  else
+    echo 'Antares dependencies are not fully installed in this environment. Try installing with: `sudo make install_host`'
+    exit 1
+  fi
 fi
 
 if [[ "$COMPUTE_V1" == "" ]]; then

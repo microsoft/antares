@@ -5,7 +5,9 @@ import subprocess, os
 
 
 def get_execution_parallism():
-  return len(subprocess.getoutput('/opt/rocm/bin/rocm_agent_enumerator | grep -v gfx000').split())
+  ngpus = len(subprocess.getoutput('/opt/rocm/bin/rocm_agent_enumerator 2>/dev/null | grep -v gfx000').split())
+  ngpus = ngpus if ngpus > 0 else 1
+  return ngpus
 
 def do_native_translation_v2(codeset, **kwargs):
   kernel_name, in_args, out_args, body = codeset
