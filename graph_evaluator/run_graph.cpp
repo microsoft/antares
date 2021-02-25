@@ -43,7 +43,7 @@ std::vector<std::string> ssplit(const std::string &str, const std::string &sub) 
     int it = 0, next;
     while (next = str.find(sub, it), next >= 0) {
         if (next > it)
-          ret.push_back(str.substr(it, next - it));
+            ret.push_back(str.substr(it, next - it));
         it = next + sub.size();
     }
     if (it < str.size())
@@ -169,7 +169,7 @@ struct ExecutionModule {
         idx = next + 1;
       }
 
-      kp.hFunction = ab::moduleGetFunction(hModule, name, kp.threads);
+      kp.hFunction = ab::moduleGetFunction(hModule, kp.fname, kp.threads);
     }
   }
 
