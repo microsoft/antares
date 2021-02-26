@@ -51,6 +51,9 @@ namespace ab {
         throw std::runtime_error("GPU device for `" + std::string(BACKEND_TYPE) + "` is not found.\n");
   }
 
+  void finalize() {
+  }
+
   void* alloc(size_t byteSize, const std::vector<size_t> &shape, const std::string &dtype, const std::string &name) {
     auto &it = _cached_memory[byteSize];
     if (it.size()) {

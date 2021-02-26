@@ -11,6 +11,9 @@ namespace ab {
   void init(int dev) {
   }
 
+  void finalize() {
+  }
+
   void* alloc(size_t byteSize, const std::vector<size_t> &shape, const std::string &dtype, const std::string &name) {
     void *dptr = malloc(byteSize);
     // fprintf(stderr, "alloc(%p);\n", dptr);
