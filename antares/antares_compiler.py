@@ -450,11 +450,9 @@ def main_compute(code_only=False):
       explicit_ops = AntaresGlobal.attrs.explicit_ops
       global_outs = get_global_arg_props()['_out']
       if ('|plan/' not in ('|' + '|'.join(AntaresGlobal.attrs.options)) and
-          len(explicit_ops) == 1 and
+          len(explicit_ops) >= 1 and
           len(explicit_ops[-1].reduce_axis) > 0 and
-          len(global_outs) == 1 and
-          global_outs[0]['name'] == explicit_ops[-1].name and
-          backend in ['c-rocm', 'c-cuda', 'c-hlsl_win64', 'c-ocl', 'c-rocm_win64']):
+          backend.split('_win64')[0] in ['c-rocm', 'c-cuda', 'c-hlsl', 'c-ocl']):
         tuner_type = 'Ansor'
       else:
         tuner_type = 'XGBoost'

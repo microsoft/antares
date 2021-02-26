@@ -10,7 +10,7 @@ DEVICE_NAME ?=
 HOST_MODE ?= 0
 EXPECTED_TIMEOUT ?= inf
 
-CPU_THREADS ?= 8
+CPU_THREADS ?=
 INNER_CMD = ./antares/run.sh
 BACKEND = $(shell ./antares/get_backend.sh)
 
