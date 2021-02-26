@@ -339,14 +339,12 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
         traceback.print_exc()
       return None
 
-  exec_fd, _ = system_lock([dev_id])
   try:
     results = do_evaluate(expected_timeout)
     if results is not None:
       handle_result(results)
   except:
     pass
-  exec_fd()
   return results
 
 def compute_mem_ratio(tpr):

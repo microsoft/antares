@@ -41,40 +41,6 @@ def run_process_with_timeout(args, timeout=None, envs=None):
     proc.kill()
     return False
 
-def system_lock(key_ids):
-  import socket, time
-  occupied_sock = None
-  while not occupied_sock:
-    for key_id in key_ids:
-      try:
-        sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind(('127.0.0.1', 9050 + key_id))
-        sock.listen(1)
-        occupied_sock = (sock, key_id)
-        break
-      except:
-        try:
-          sock.shutdown(socket.SHUT_RDWR)
-          sock.close()
-        except:
-          sock.close()
-    if occupied_sock:
-      break
-    # print('still waiting ..')
-    time.sleep(0.2)
-
-  # print('Using key_id = %d' % occupied_sock[1])
-  sock = occupied_sock[0]
-
-  def unlock_fd():
-    try:
-      sock.shutdown(socket.SHUT_RDWR)
-      sock.close()
-    except:
-      sock.close()
-  return unlock_fd, occupied_sock[1]
-
 def type_to_c(dtype):
   idx = dtype.find('@')
   if idx >= 0:
