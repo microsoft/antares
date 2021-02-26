@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-//; eval_flags(c-hlsl): [x86_64-w64-mingw32-g++] -O2 -static
+//; eval_flags(c-hlsl_win64): [x86_64-w64-mingw32-g++] -O2 -static
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>

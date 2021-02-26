@@ -78,7 +78,7 @@ index ca9b80564..8242c129a 100644
    bool is_vol = IsVolatile(buffer);
    if (t.lanes() == 1) {
 -    if (!HandleTypeMatch(buffer, t) || is_vol) {
-+    if (strcmp(getenv("BACKEND"), "c-hlsl") && (!HandleTypeMatch(buffer, t) || is_vol)) {
++    if (strcmp(getenv("BACKEND"), "c-hlsl_win64") && (!HandleTypeMatch(buffer, t) || is_vol)) {
        os << "((";
        if (is_vol) {
          os << "volatile ";

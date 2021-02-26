@@ -456,7 +456,7 @@ def main_compute(code_only=False):
           len(explicit_ops[-1].reduce_axis) > 0 and
           len(global_outs) == 1 and
           global_outs[0]['name'] == explicit_ops[-1].name and
-          backend in ['c-rocm', 'c-cuda', 'c-hlsl', 'c-ocl', 'c-rocm_win64']):
+          backend in ['c-rocm', 'c-cuda', 'c-hlsl_win64', 'c-ocl', 'c-rocm_win64']):
         tuner_type = 'Ansor'
       else:
         tuner_type = 'XGBoost'
