@@ -156,7 +156,7 @@ index 1b58bfa38..d6b30f8e9 100644
                     TVMArrayGet(DataType::UInt(8), handle, builtin::kArrTypeBits) ==
                         IntImm(DataType::UInt(8), dtype.bits()) &&
 diff --git a/src/tir/transforms/split_host_device.cc b/src/tir/transforms/split_host_device.cc
-index 921c7ad79..bc86a265a 100644
+index 921c7ad79..d96f871de 100644
 --- a/src/tir/transforms/split_host_device.cc
 +++ b/src/tir/transforms/split_host_device.cc
 @@ -94,6 +94,7 @@ class VarUseDefAnalysis : public StmtExprMutator {
@@ -175,13 +175,11 @@ index 921c7ad79..bc86a265a 100644
  
   private:
    ExprDeepEqual deep_equal_;
-@@ -233,8 +235,16 @@ class HostDeviceSplitter : public StmtMutator {
-     Array<PrimExpr> arguments;
+@@ -234,7 +236,15 @@ class HostDeviceSplitter : public StmtMutator {
      Map<tir::Var, PrimExpr> remap_vars;
  
--    // Strictly order the arguments: Var pointers, positional arguments.
+     // Strictly order the arguments: Var pointers, positional arguments.
 -    for (Var var : m.undefined_) {
-+    // Strictly order the arguments: Var pointers, positional arguments
 +    std::vector<Var> ordered_args(m.undefined_.begin(), m.undefined_.end());
 +    std::sort(ordered_args.begin(), ordered_args.end(), [&](const Var &x, const Var &y) {
 +      int x_access = m.output_hints.count(x.get()->name_hint);
