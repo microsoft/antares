@@ -33,20 +33,20 @@ inline hipError_t hipDeviceGetAttribute_(int *val, hipDeviceAttribute_t attr, in
 #endif
 
 int main() {
-	int val = -1;
-	CHECK_ENV();
+  int val = -1;
+  CHECK_ENV();
 
-	Q(MaxThreadsPerBlock);
-	Q(WarpSize);
-	Q(MaxSharedMemoryPerBlock);
-	Q(ComputeCapabilityMajor);
-	Q(ComputeCapabilityMinor);
-	Q(ClockRate);
-	Q(MultiProcessorCount);
-	Q(MaxBlockDimX);
-	Q(MaxBlockDimY);
-	Q(MaxBlockDimZ);
-	Q(GlobalMemoryBusWidth);
-	Q(MemoryClockRate);
-	return 0;
+  Q(MaxThreadsPerBlock);
+  Q(WarpSize);
+  Q(MaxSharedMemoryPerBlock);
+  Q(ComputeCapabilityMajor);
+  Q(ComputeCapabilityMinor);
+  Q(ClockRate);
+  Q(MultiProcessorCount);
+  Q(MaxBlockDimX);
+  Q(MaxBlockDimY);
+  Q(MaxBlockDimZ);
+  Q(GlobalMemoryBusWidth);
+  Q(MemoryClockRate);
+  return 0;
 }

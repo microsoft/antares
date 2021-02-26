@@ -5,12 +5,12 @@ import os
 from tvm import te
 
 
-def schedule(antares):
-  cfg, s, output = antares.auto_config, antares.scheduler, antares.outputs[0]
-  th_vals, rd_vals = [antares.get_extent(x) for x in output.op.axis], [antares.get_extent(x) for x in output.op.reduce_axis]
+def schedule(attrs):
+  cfg, s, output = attrs.auto_config, attrs.scheduler, attrs.outputs[0]
+  th_vals, rd_vals = [attrs.get_extent(x) for x in output.op.axis], [attrs.get_extent(x) for x in output.op.reduce_axis]
 
-  inputs = antares.inputs
-  program = antares.ir
+  inputs = attrs.inputs
+  program = attrs.ir
 
   # Global tuning space
   if not os.environ.get('CONFIG', '') and int(os.environ.get('STEP', '0')) > 0:
