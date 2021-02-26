@@ -4,26 +4,25 @@
 from tvm import te
 import numpy as np
 
+def schedule(attrs):
+  cfg, s, output = attrs.auto_config, attrs.scheduler, attrs.outputs[0]
+  th_vals, rd_vals = [attrs.get_extent(x) for x in output.op.axis], [attrs.get_extent(x) for x in output.op.reduce_axis]
 
-def schedule(antares):
-  cfg, s, output = antares.auto_config, antares.scheduler, antares.outputs[0]
-  th_vals, rd_vals = [antares.get_extent(x) for x in output.op.axis], [antares.get_extent(x) for x in output.op.reduce_axis]
+  inputs = attrs.inputs
+  program = attrs.ir
 
-  inputs = antares.inputs
-  program = antares.ir
-
-  import os
-  plan_threads = int(os.environ.get('CPU_THREADS', '8'))
+  if attrs.backend == 'c-scpu':
+    plan_threads = 1
+  else:
+    import os, multiprocessing
+    plan_threads = os.environ.get('CPU_THREADS', '')
+    if not plan_threads:
+      plan_threads = str(multiprocessing.cpu_count())
+    plan_threads = int(plan_threads)
 
   def mcpu_auto_schedule(s, output):
     cfg.define_knob("fuse_axis", [False])
     # fused = s[output].fuse(.. output.op.axis ..)
-    # if len(rd_vals) > 0:
-    #   if output.op in s.outputs:
-    #     output_local = s.cache_write(output, "local")
-    #   else:
-    #     s[output].set_scope('local')
-    #     output_local, output = output, s.outputs[0].output(0)
 
     cfg.define_knob("pa_axis", np.arange(len(th_vals)).tolist())
     pa_id = cfg['pa_axis'].val
@@ -54,8 +53,8 @@ def schedule(antares):
       ex_ord.append(ax_low[i])
     s[output].reorder(*reversed(ex_ord))
 
-    # if len(rd_vals) > 0:
-    #   s[output_local].compute_at(s[output], ex_ord[0])
+    for m in attrs.explicit_ops[:-1]:
+      s[m.output(0)].compute_at(s[output], ex_ord[0])
     return
 
   return mcpu_auto_schedule(s, output)
