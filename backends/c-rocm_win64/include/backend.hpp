@@ -52,7 +52,7 @@ namespace ab {
     FILE *fp = fopen(fname.c_str(), "wb");
     CHECK(source.size() == fwrite(source.data(), 1, source.size(), fp), "Failed to save temp source code.");
     fclose(fp);
-    CHECK(0 == system(("wsl sh -cx 'timeout 10s /opt/rocm/bin/hipcc " + fname + " --amdgpu-target=gfx803 --amdgpu-target=gfx900 --amdgpu-target=gfx906 --amdgpu-target=gfx908 --amdgpu-target=gfx1010 --genco -Wno-ignored-attributes -O2 -o " + fname + ".out'").c_str()), "Failed to compiler source code with command /opt/rocm/bin/hipcc from WSL.");
+    CHECK(0 == system(("wsl sh -cx 'timeout 10s /opt/rocm/bin/hipcc " + fname + " --amdgpu-target=gfx803 --amdgpu-target=gfx900 --amdgpu-target=gfx906 --amdgpu-target=gfx908 --amdgpu-target=gfx1010 --genco -Wno-ignored-attributes -O2 -o " + fname + ".out' 1>&2").c_str()), "Failed to compiler source code with command /opt/rocm/bin/hipcc from WSL.");
     void *hModule;
     LOAD_ONCE(hipModuleLoad, int (*)(void*, const char*));
     CHECK(0 == hipModuleLoad(&hModule, (fname + ".out").c_str()), "Failed to load ROCm HSACO module.");

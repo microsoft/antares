@@ -4,7 +4,9 @@
 import subprocess, os
 
 def get_execution_parallism():
-  return len(subprocess.getoutput('ls /dev/nvidia[0-9]* 2>/dev/null').split())
+  num_gpus = len(subprocess.getoutput('ls /dev/nvidia[0-9]* 2>/dev/null').split())
+  num_gpus = num_gpus if num_gpus > 0 else 1
+  return num_gpus
 
 def do_native_translation_v2(codeset, **kwargs):
   kernel_name, in_args, out_args, body = codeset
@@ -24,11 +26,6 @@ def do_native_translation_v2(codeset, **kwargs):
 #include <cuda_fp16.h>
 #include <mma.h>
 
-#ifndef __HALF_MAXMIN_EX__
-#define __HALF_MAXMIN_EX__
-inline __device__ half max(half x, half y) {{ return x > y ? x : y; }}
-inline __device__ half min(half x, half y) {{ return x < y ? x : y; }}
-#endif
 {kwargs['attrs'].blend}
 
 extern "C" __global__ __launch_bounds__({launch_bounds}) void {kernel_name}({expand_args}) {{
