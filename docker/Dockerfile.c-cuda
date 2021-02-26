@@ -3,6 +3,7 @@ FROM nvidia/cuda:11.0.3-cudnn8-devel-ubuntu20.04
 ENV DEBIAN_FRONTEND noninteractive
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PATH $PATH:/opt/rocm/bin:/usr/local/nvidia/lib64/bin
+ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/local/cuda/compat:$LD_LIBRARY_PATH
 
 RUN env > /etc/environment
 
@@ -18,8 +19,6 @@ RUN /bin/echo -e "set backspace=indent,eol,start\nset nocompatible\nset ts=4" > 
 
 RUN [ -e /usr/lib/x86_64-linux-gnu/libcuda.so.1 ] || ln -s /host/usr/lib/x86_64-linux-gnu/libcuda.so.1 /usr/lib/x86_64-linux-gnu
 RUN ln -sf libcudart.so /usr/local/cuda/targets/x86_64-linux/lib/libcudart_static.a
-
-ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/local/cuda/compat:$LD_LIBRARY_PATH
 
 ADD ./engine /antares/engine
 RUN /antares/engine/install_antares_host.sh && rm -rf /var/lib/apt/lists/* ~/.cache

@@ -6,6 +6,7 @@ ENV HIP_PLATFORM hcc
 ENV PATH $PATH:/opt/rocm/bin:/usr/local/nvidia/lib64/bin
 ENV HSA_USERPTR_FOR_PAGED_MEM=0
 ENV TF_ROCM_FUSION_ENABLE 1
+ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/opt/rocm/lib:$LD_LIBRARY_PATH
 
 RUN env > /etc/environment
 
@@ -23,8 +24,6 @@ RUN curl -sL http://repo.radeon.com/rocm/apt/debian/rocm.gpg.key | apt-key add -
     rocm-dev rocblas hipsparse rccl rocfft rocrand miopen-hip rocthrust hip-rocclr && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN /bin/echo -e "set backspace=indent,eol,start\nset nocompatible\nset ts=4" > /etc/vim/vimrc.tiny
-
-ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/opt/rocm/lib:$LD_LIBRARY_PATH
 
 ADD ./engine /antares/engine
 RUN /antares/engine/install_antares_host.sh && rm -rf /var/lib/apt/lists/* ~/.cache

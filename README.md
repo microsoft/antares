@@ -110,7 +110,7 @@ Generally, you can generate SYCL source kernels that work for most CPUs, e.g:
 To generate codes for Windows 10 with DX12 enabled, you can setup WSL1.0 and make the following setup in WSL1.0:
 ```sh
     sudo make install_host
-    BACKEND=c-hlsl COMPUTE_V1='- einstein_v2("output0[N, F, HO, WO] = input0[N] where F in 32, HO in 2, WO in 2", input_dict={"input0": {"dtype": "float32", "shape": [16]}})' make
+    BACKEND=c-hlsl_win64 COMPUTE_V1='- einstein_v2("output0[N, F, HO, WO] = input0[N] where F in 32, HO in 2, WO in 2", input_dict={"input0": {"dtype": "float32", "shape": [16]}})' make
 ```
 
 For multi-core CPU (c-mcpu) or single-core CPU (c-scpu):
@@ -134,8 +134,9 @@ Antares can support multi-line statements as long as they are fuse-able, for exa
 
 # Current Feature Table:
 
-|       | HIP-C(c-rocm) | CUDA(c-cuda) | CPU(c-mcpu/c-scpu) | DirectX12(c-hlsl) | Graphcore(c-gc) | Intel OneAPI(c-sycl) | (..coming soon..) |
+|       | HIP-C(c-rocm/c-rocm_win64) | CUDA(c-cuda) | CPU(c-mcpu/c-scpu) | DirectX12(c-hlsl_win64) | Graphcore(c-gc) | Intel OneAPI(c-sycl) | (..coming soon..) |
 |---|---|---|---|---|---|---|---|
+| Deploy Environment | Linux/WSL1 | Linux | Linux | WSL1 | Linux | Linux |   |
 | Target Device | AMDGPU | NVGPU | Generic CPU | Generic Graphic Card | IPU Device | Intel CPU/HD Graphic/FPGA |   |
 | Global schedules  | Y | Y | Y | Y | Y | Y |   |
 | Local schedules   | Y | Y | Y | Y |   | Y |   |

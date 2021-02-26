@@ -206,7 +206,7 @@ COMPUTE_V1='- einstein_v2("output0[N] +=! input0[N, M]", {"input0": {"dtype": "f
 BACKEND=c-rocm COMPUTE_V1='- einstein_v2("output0[N] argmax(0, N)=! input0[N, C].call(`index_of`, [N], dtype=`int32`)", input_dict={"input0": {"dtype": "float32", "shape": [32, 128]}})  ## @: plan/c-cuda=blend.my_argmax,c-rocm=blend.my_argmax' make
 
 # [INTRISIC SPEC] HLSL ElementwiseExp of VecFloat
-BACKEND=c-hlsl COMPUTE_V1='- einstein_v2("output0[N] = input0[N].call(`my_exp`)", input_dict={"input0": {"dtype": "float4@128", "shape": [16]}})  ## @: plan/c-hlsl=blend.my_exp' make
+BACKEND=c-hlsl_win64 COMPUTE_V1='- einstein_v2("output0[N] = input0[N].call(`my_exp`)", input_dict={"input0": {"dtype": "float4@128", "shape": [16]}})  ## @: plan/c-hlsl_win64=blend.my_exp' make
 
 # [INTRISIC SPEC] ROCm MatMul (mixed type for float16 -> float16)
 BACKEND=c-rocm COMPUTE_V1='- einstein_v2("temp0[N, M] +=! input0[N, K].call(`dot2h1`, [input1[K, M]]); output0[N, M] = temp0[N, M].call(`dot2h2`, dtype=`float16`)", { "input0": {"dtype": "half2@32", "shape": [1024, 512]}, "input1": {"dtype": "half2@32", "shape": [512, 512]}})  ## @: plan/c-rocm=blend.hgemm_v1' make

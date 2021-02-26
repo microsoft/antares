@@ -67,7 +67,7 @@ def schedule(attrs):
         # s[stage].vectorize(xi)
         s[stage].double_buffer()
 
-    cfg.define_knob('vectorize', [False, True] if attrs.backend != 'c-hlsl' else [False])
+    cfg.define_knob('vectorize', [False, True] if attrs.backend != 'c-hlsl_win64' else [False])
     # cfg.define_knob('storage_align', [16, 48])
     for stage in [AA, BB]:
         # s[stage].storage_align(s[stage].op.axis[0],
