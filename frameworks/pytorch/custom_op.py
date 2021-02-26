@@ -33,6 +33,7 @@ class CustomOp(torch.nn.Module):
 
   def __init__(self, ir, feed_dict, extra_outputs=[]):
     super(CustomOp, self).__init__()
+    ir = ir.replace('"', '`').replace('\n', ' ').strip()
     self.expr = generate_antares_expression(ir, feed_dict, extra_outputs)
     feed_dict = sorted([(k, feed_dict[k]) for k in feed_dict], key=lambda x: x[0])
     self.values = [v for (k, v) in feed_dict]
