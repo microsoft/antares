@@ -28,6 +28,8 @@ except FileExistsError:
   pass
 
 shutil.copyfile(root_path + '/custom_op.py', dist_path + '/custom_op.py')
+shutil.copyfile(root_path + '/../../graph_evaluator/execute_module.hpp', dist_path + '/execute_module.hpp')
+shutil.copyfile(root_path + '/../../backends/c-rocm/include/backend.hpp', dist_path + '/backend.hpp')
 
 is_cuda = (os.system('ldd %s/lib/libtorch.so 2>/dev/null | grep -e libcudart >/dev/null' % torch.__path__[0]) == 0)
 
@@ -37,7 +39,8 @@ setup(
         CUDAExtension(
             'antares_custom_op',
             ['main_ops.cc.cu'],
-            libraries=['cuda'] if is_cuda else []
+            libraries=['cuda'] if is_cuda else [],
+            extra_compile_args={'cxx': [f'-I{dist_path}'], 'nvcc': [f'-I{dist_path}']},
         ),
     ],
     cmdclass={

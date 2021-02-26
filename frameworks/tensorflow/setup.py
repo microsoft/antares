@@ -23,7 +23,10 @@ except FileNotFoundError:
 os.makedirs(dist_path)
 
 shutil.copyfile(root_path + '/__init__.py', dist_path + '/__init__.py')
-shutil.copyfile(root_path + '/main_ops.cc.in', dist_path + '/main_ops.cc.in')
 shutil.copyfile(root_path + '/communicate_ops.cc', dist_path + '/communicate_ops.cc')
+
+shutil.copyfile(root_path + '/main_ops.cc.in', dist_path + '/main_ops.cc.in')
+shutil.copyfile(root_path + '/../../graph_evaluator/execute_module.hpp', dist_path + '/execute_module.hpp')
+shutil.copyfile(root_path + '/../../backends/c-rocm/include/backend.hpp', dist_path + '/backend.hpp')
 
 print("Finish Installation.")

@@ -42,6 +42,7 @@ def get_tensorflow_antares_component(tf_module_path, op_name, using_mpi=False):
   cmd = f'''{compiler} -pthread -DNDEBUG -g -fwrapv -shared -O2 -g -fstack-protector-strong -Wformat -Werror=format-security -Wdate-time -D_FORTIFY_SOURCE=2 -fPIC \
     {tf_module_path} -o {tf_module_path}.so.{self_pid} -std=c++11 -fPIC -O2 -DOP_NAME='"{op_name}"' \
     -I{dist_path}/include -L{dist_path}/ -l:{libtf_so_name} -I/usr/local {with_cuda} \
+    -I {os.path.dirname(__file__)} \
     -pthread -Wl,-rpath -Wl,--enable-new-dtags -D_GLIBCXX_USE_CXX11_ABI={abi_flag}'''
   if os.system(cmd) != 0:
     raise Exception("Failed to compile the tensorflow plugins: %s" % cmd)
@@ -71,8 +72,9 @@ def make_op(ir, feed_dict, extra_outputs=[]):
     }
     kwargs[k] = feed_dict[k]
 
+  ir = ir.replace('"', '`').replace('\n', ' ').strip()
   input_dict = json.dumps(input_dict)
-  expression = '- einstein_v2("%s", input_dict=%s, extra_outputs=%s)' % (ir.replace('"', '`'), input_dict, extra_outputs)
+  expression = '- einstein_v2("%s", input_dict=%s, extra_outputs=%s)' % (ir, input_dict, extra_outputs)
   print('+ [Antares Op]', expression)
 
   def request_server(tune_step=0):
