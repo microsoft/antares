@@ -339,14 +339,12 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
         traceback.print_exc()
       return None
 
-  exec_fd, _ = system_lock([dev_id])
   try:
     results = do_evaluate(expected_timeout)
     if results is not None:
       handle_result(results)
   except:
     pass
-  exec_fd()
   return results
 
 def compute_mem_ratio(tpr):
@@ -456,7 +454,7 @@ def main_compute(code_only=False):
           len(explicit_ops[-1].reduce_axis) > 0 and
           len(global_outs) == 1 and
           global_outs[0]['name'] == explicit_ops[-1].name and
-          backend in ['c-rocm', 'c-cuda', 'c-hlsl', 'c-ocl', 'c-rocm_win64']):
+          backend in ['c-rocm', 'c-cuda', 'c-hlsl_win64', 'c-ocl', 'c-rocm_win64']):
         tuner_type = 'Ansor'
       else:
         tuner_type = 'XGBoost'
