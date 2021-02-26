@@ -23,6 +23,11 @@ namespace ab {
     CHECK(0 == dxInit(0), "Failed initialize DirectX12 device.");
   }
 
+  void finalize() {
+    if (ab::hLibDll != nullptr)
+      FreeLibrary(ab::hLibDll), ab::hLibDll = nullptr;
+  }
+
   void* alloc(size_t byteSize, const std::vector<size_t> &shape, const std::string &dtype, const std::string &name) {
     LOAD_ONCE(dxMemAlloc, void* (*)(size_t bytes));
     void *dptr = dxMemAlloc(byteSize);

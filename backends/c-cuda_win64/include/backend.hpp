@@ -36,6 +36,11 @@ namespace ab {
     _current_device = dev;
   }
 
+  void finalize() {
+    if (ab::hLibDll != nullptr)
+      FreeLibrary(ab::hLibDll), ab::hLibDll = nullptr;
+  }
+
   void* alloc(size_t byteSize, const std::vector<size_t> &shape, const std::string &dtype, const std::string &name) {
     auto &it = _cached_memory[byteSize];
     if (it.size()) {

@@ -22,6 +22,9 @@ namespace ab {
     // fprintf(stderr, "\nSYCL Device Name: %s\n", _sycl_queue.get_device().get_info<sycl::info::device::name>().c_str());
   }
 
+  void finalize() {
+  }
+
   void* alloc(size_t byteSize, const std::vector<size_t> &shape, const std::string &dtype, const std::string &name) {
     auto &it = _cached_memory[byteSize];
     if (it.size()) {

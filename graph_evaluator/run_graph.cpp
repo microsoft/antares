@@ -231,7 +231,8 @@ int main(int argc, char** argv)
     int dev = getenv("DEV_ID") ? std::atoi(getenv("DEV_ID")) : 0;
     ab::init(dev);
 
-    ExecutionModule gm("file://./my_kernel.cc");
+    const char *module_path = argc > 1 ? argv[1] : "./my_kernel.cc";
+    ExecutionModule gm(std::string("file://") + module_path);
 
     std::vector<void*> global_args;
     for (int i = 0; i < gm.global_inputs.size(); ++i) {
@@ -306,5 +307,7 @@ int main(int argc, char** argv)
       tpr = ab::convertToElapsedTime(x, y) / num_runs;
       printf("\n- TPR: %g\n", tpr);
     }
+
+    ab::finalize();
     return 0;
 }
