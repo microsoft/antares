@@ -134,7 +134,7 @@ Antares can support multi-line statements as long as they are fuse-able, for exa
 
 # Current Feature Table:
 
-|       | HIP-C(c-rocm/c-rocm_win64) | CUDA(c-cuda) | CPU(c-mcpu/c-scpu) | DirectX12(c-hlsl_win64) | Graphcore(c-gc) | Intel OneAPI(c-sycl) | (..coming soon..) |
+|       | HIP-C(c-rocm/c-rocm_win64) | CUDA(c-cuda/c-cuda_win64) | CPU(c-mcpu/c-scpu) | DirectX12(c-hlsl_win64) | Graphcore(c-gc) | Intel OneAPI(c-sycl) | (..coming soon..) |
 |---|---|---|---|---|---|---|---|
 | Deploy Environment | Linux/WSL1 | Linux | Linux | WSL1 | Linux | Linux |   |
 | Target Device | AMDGPU | NVGPU | Generic CPU | Generic Graphic Card | IPU Device | Intel CPU/HD Graphic/FPGA |   |
