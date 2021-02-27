@@ -94,6 +94,8 @@ def translate_code(code, config):
     properties = "// CONFIG: %s\n// COMPUTE_V1: %s\n" % (config.strip() if isinstance(config, str) else '', os.environ['COMPUTE_V1'])
     return header_meta + properties
 
+  def decode_name(encoded_name):
+    return encoded_name[2:] if encoded_name.startswith('__') else encoded_name
 
   code = refactor_multiple_names(code, global_arg_props)
   mediate_tensors = json.loads(os.environ.get('MEDIATE_TENSORS', ''))
@@ -108,20 +110,18 @@ def translate_code(code, config):
     kernel_id = int(kernel_name[len(kernel_prefix):])
     idx = kernel.index(') {', idy)
     body = kernel[idx+3:kernel.index('\n}', idx)].strip()
-    args = [(x.split('*')[0].strip(), x.split()[-1]) for x in kernel[idy+1:idx].split(',')]
+    args = [(x.split('*')[0].strip(), x.split()[-1], mediate_tensors[decode_name(x.split()[-1])]) for x in kernel[idy+1:idx].split(',')]
     kernel_slices.append((kernel_id, kernel_name, args, body))
 
-  def tensor_display(encoded_name):
-    tensor_name = encoded_name[2:] if encoded_name.startswith('__') else encoded_name
-    tensor_inst = mediate_tensors[tensor_name]
-    return f'{encoded_name}:{tensor_inst["dtype"]}{str(tensor_inst["shape"])}'
+  def tensor_display(encoded_name, prop):
+    return f'{encoded_name}:{prop["dtype"]}{str(prop["shape"])}'
 
   kernel_slices.sort()
   code = ['']
   for i, (kernel_id, kernel_name, args, body) in enumerate(kernel_slices):
     num_outputs = len(global_arg_props['_out']) if i + 1 == len(kernel_slices) else 1
-    display_inputs = ', '.join([tensor_display(x) for _, x in args[:-num_outputs]])
-    display_outputs = ', '.join([tensor_display(x) for _, x in args[-num_outputs:]])
+    display_inputs = ', '.join([tensor_display(x, prop) for _, x, prop in args[:-num_outputs]])
+    display_outputs = ', '.join([tensor_display(x, prop) for _, x, prop in args[-num_outputs:]])
     kernel = backend_config.do_native_translation_v2((kernel_name, args[:-num_outputs], args[-num_outputs:], body), attrs=AntaresGlobal.attrs).strip()
     code.append(f'// LOCAL: {kernel_name} -- {display_inputs} -> {display_outputs}\n\n{kernel}\n')
 
