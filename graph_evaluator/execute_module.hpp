@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
+#include <cassert>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -106,7 +107,7 @@ std::vector<tensor_property> parse_properties(const std::string &encoded_inputs)
 }
 
 void *allocate_tensor(tensor_property &tp) {
-  size_t align_size = ((tp.mem_size() - 1) | 1023) + 1;
+  size_t align_size = tp.mem_size();
   return ab::alloc(align_size, tp.shape, tp.dtype, tp.name);
 }
 

@@ -32,8 +32,7 @@ namespace ab {
       it.pop_back();
       return dptr;
     }
-    void *dptr = memalign(sysconf(_SC_PAGESIZE), byteSize);
-    return dptr;
+    return memalign(sysconf(_SC_PAGESIZE), byteSize);
   }
 
   void release(void *dptr, size_t byteSize) {
@@ -52,7 +51,7 @@ namespace ab {
     assert(0 == system(("dpcpp " + path + " -std=c++17 -lpthread -fPIC -shared -O2 -o " + path + ".out").c_str()));
 
     void *hmod = dlopen((path + ".out").c_str(), RTLD_LAZY | RTLD_GLOBAL);
-    assert(0 == system(("rm -rf " + folder).c_str()));
+    system(("rm -rf " + folder).c_str());
     return hmod;
   }
 
@@ -62,21 +61,27 @@ namespace ab {
 
   void launchKernel(const std::vector<void*> &hFunction, const std::vector<void*> &krnl_args) {
     ((void(*)(void*, void* const*))hFunction[0])(&_sycl_queue, krnl_args.data());
-    _sycl_queue.wait();
   }
 
   void synchronize() {
+    _sycl_queue.wait();
   }
 
   void memcpyHtoD(void *dptr, void *hptr, size_t byteSize) {
+    ab::synchronize();
+
     memcpy(dptr, hptr, byteSize);
   }
 
   void memcpyDtoH(void *hptr, void *dptr, size_t byteSize) {
+    ab::synchronize();
+
     memcpy(hptr, dptr, byteSize);
   }
 
   void* recordTime() {
+    ab::synchronize();
+
     auto pt = new std::chrono::high_resolution_clock::time_point;
     *pt = std::chrono::high_resolution_clock::now();
     return pt;
