@@ -452,7 +452,7 @@ def main_compute(code_only=False):
       if ('|plan/' not in ('|' + '|'.join(AntaresGlobal.attrs.options)) and
           len(explicit_ops) >= 1 and
           len(explicit_ops[-1].reduce_axis) > 0 and
-          backend.split('_win64')[0] in ['c-rocm', 'c-cuda', 'c-hlsl', 'c-ocl']):
+          backend.split('_')[0] in ['c-rocm', 'c-cuda', 'c-hlsl', 'c-ocl']):
         tuner_type = 'Ansor'
       else:
         tuner_type = 'XGBoost'

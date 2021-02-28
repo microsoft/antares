@@ -11,7 +11,7 @@
 
 #define NVCUDA_LIBRARY_PATH R"(C:\Windows\System32\nvcuda.dll)"
 
-#define CHECK(stat, reason, ...)  ((stat) ? 1 : (fprintf(stderr, "[CUDA:DBG] "), fprintf(stderr, reason, ##__VA_ARGS__), fprintf(stderr, "\n"), fflush(stderr), exit(1), 0))
+#define CHECK(stat, reason, ...)  ((stat) ? 1 : (fprintf(stderr, "[Assertion Failed] "), fprintf(stderr, reason, ##__VA_ARGS__), fprintf(stderr, "\n"), fflush(stderr), exit(1), 0))
 #define LOAD_ONCE(func, ftype)   static FARPROC __ ## func; if (!__ ## func) { __ ## func = GetProcAddress(hLibDll, #func); CHECK(__ ## func, "No such function symbol defined: %s()", #func); } auto func = (ftype)__ ## func;
 
 namespace ab {
@@ -101,7 +101,7 @@ namespace ab {
     std::vector<void* const*> pargs(krnl_args.size());
     for (int i = 0; i < pargs.size(); ++i)
       pargs[i] = &krnl_args[i];
-    assert(0 == cuLaunchKernel(hFunc[0], (int)(size_t)hFunc[1], (int)(size_t)hFunc[2], (int)(size_t)hFunc[3], (int)(size_t)hFunc[4], (int)(size_t)hFunc[5], (int)(size_t)hFunc[6], 0, nullptr, (void**)pargs.data(), nullptr));
+    CHECK(0 == cuLaunchKernel(hFunc[0], (int)(size_t)hFunc[1], (int)(size_t)hFunc[2], (int)(size_t)hFunc[3], (int)(size_t)hFunc[4], (int)(size_t)hFunc[5], (int)(size_t)hFunc[6], 0, nullptr, (void**)pargs.data(), nullptr), "Failed to launch kernel.");
   }
 
   void memcpyHtoD(void *dptr, void *hptr, size_t byteSize) {

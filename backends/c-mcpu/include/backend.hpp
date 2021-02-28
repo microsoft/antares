@@ -39,12 +39,12 @@ namespace ab {
 
     auto path = folder + "/module.cc";
     FILE *fp = fopen(path.c_str(), "w");
-    assert(source.size() == fwrite(source.data(), 1, source.size(), fp));
+    CHECK_OK(source.size() == fwrite(source.data(), 1, source.size(), fp));
     fclose(fp);
-    assert(0 == system(("g++ " + path + " -ldl -lpthread -fPIC -shared -O2 -o " + path + ".out").c_str()));
+    CHECK_OK(0 == system(("timeout 10s g++ " + path + " -ldl -lpthread -fPIC -shared -O2 -o " + path + ".out").c_str()));
 
     void *hmod = dlopen((path + ".out").c_str(), RTLD_LAZY);
-    assert(0 == system(("rm -rf " + folder).c_str()));
+    CHECK_OK(0 == system(("rm -rf " + folder).c_str()));
     return hmod;
   }
 
