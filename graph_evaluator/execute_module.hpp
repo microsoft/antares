@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
-#include <cassert>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -23,7 +22,7 @@
 #include <unistd.h>
 #endif
 
-#define CHECK_OK(x)  ((x) ? 1 : (abort(), 0))
+#define CHECK_OK(x)  ((x) ? 1 : (fprintf(stderr, "[Assertion Failed] %s:%d\n", __FILE__, __LINE__), exit(1), 0))
 
 #include "backend.hpp"
 
