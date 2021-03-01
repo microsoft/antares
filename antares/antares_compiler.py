@@ -348,7 +348,7 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
   return results
 
 def compute_mem_ratio(tpr):
-  if math.isinf(tpr) or math.isinf(float(device_properties().mem_bandwith)):
+  if math.isinf(tpr) or math.isinf(float(device_properties().mem_bandwith)) or device_properties().mem_bandwith <= 0:
     return -1
 
   global_arg_props = get_global_arg_props()
