@@ -2,7 +2,7 @@ FROM nvidia/cuda:11.0.3-cudnn8-devel-ubuntu20.04
 
 ENV DEBIAN_FRONTEND noninteractive
 ENV PYTHONDONTWRITEBYTECODE 1
-ENV PATH $PATH:/opt/rocm/bin:/usr/local/nvidia/lib64/bin
+ENV PATH $PATH:/usr/local/nvidia/lib64/bin
 ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/local/cuda/compat:$LD_LIBRARY_PATH
 
 RUN env > /etc/environment

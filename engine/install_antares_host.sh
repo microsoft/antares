@@ -22,7 +22,7 @@ dpkg -L ${REQUIRED_PACKAGES} >/dev/null 2>&1 || \
 TVM_HOME=/opt/tvm
 rm -rf $TVM_HOME && git clone https://github.com/apache/incubator-tvm $TVM_HOME
 
-pip3 install --upgrade pip cmake==3.18.0 && \
+pip3 install --upgrade pip cmake==3.18.0 setuptools && \
   cp -r ${ANTARES_ROOT}/engine/device-stub ${TVM_HOME}/device-stub && \
   echo '' > /tmp/device-stub.c && gcc /tmp/device-stub.c -shared -o ${TVM_HOME}/device-stub/lib64/libcudart.so
 
