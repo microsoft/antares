@@ -75,10 +75,8 @@ extern "C" void {kernel_name}(sycl::queue* q, void **__args) {{
   using namespace std;
 
   q->submit([&](auto &cgh) {{
-    {expand_accs}
-
     {group_shared}
-
+    {expand_accs}
     cgh.parallel_for(cl::sycl::nd_range<3>(cl::sycl::range<3>({str(gds)[1:-1]}), cl::sycl::range<3>({str(lds)[1:-1]})), [=](cl::sycl::nd_item<3> _item) {{
       {expand_ptrs}
       {index_str}

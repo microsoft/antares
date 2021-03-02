@@ -3,7 +3,7 @@ FROM ubuntu:20.04
 ENV DEBIAN_FRONTEND noninteractive
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV HIP_PLATFORM hcc
-ENV PATH $PATH:/opt/rocm/bin:/usr/local/nvidia/lib64/bin
+ENV PATH $PATH:/opt/rocm/bin:/opt/rocm/opencl/bin
 ENV HSA_USERPTR_FOR_PAGED_MEM=0
 ENV TF_ROCM_FUSION_ENABLE 1
 ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/opt/rocm/lib:$LD_LIBRARY_PATH
@@ -28,5 +28,4 @@ RUN /bin/echo -e "set backspace=indent,eol,start\nset nocompatible\nset ts=4" > 
 ADD ./engine /antares/engine
 RUN /antares/engine/install_antares_host.sh && rm -rf /var/lib/apt/lists/* ~/.cache
 
-ENV PATH $PATH:/opt/rocm-4.0.1/opencl/bin
 RUN apt-get purge -y ocl-icd-libopencl1 && apt-get clean
