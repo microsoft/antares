@@ -24,6 +24,59 @@
 
 #define CHECK_OK(x)  ((x) ? 1 : (fprintf(stderr, "[Assertion Failed] %s:%d\n", __FILE__, __LINE__), exit(1), 0))
 
+namespace ab_utils {
+
+  class TempFile {
+    std::string file_path;
+
+  public:
+    TempFile(const std::string &extension_name, const std::string &file_content) {
+      // FIXME: Be careful it's not thread-safe in shared context. Fortunately, no shared context used in current version.
+      this->file_path = ".antares-module-tempfile." + extension_name;
+
+      FILE *fp = fopen(this->file_path.c_str(), "w");
+      CHECK_OK(fp != nullptr);
+      CHECK_OK(file_content.size() == fwrite(file_content.data(), 1, file_content.size(), fp));
+      fclose(fp);
+    }
+
+    ~TempFile() {
+      remove(this->file_path.c_str());
+    }
+
+    const std::string& get_path() {
+      return this->file_path;
+    }
+  };
+
+  class Process {
+
+  public:
+    Process(const std::vector<std::string> &cmd_args, int timeout_sec = -1) {
+      std::string system_cmd;
+      for (int i = 0; i < cmd_args.size(); ++i) {
+        if (i)
+          system_cmd += ' ';
+        for (int j = 0; j < cmd_args[i].size(); ++j)
+#if defined(__linux__)
+          if (cmd_args[i][j] == '\'')
+            system_cmd += "'\"'\"'";
+          else
+#endif
+            system_cmd += cmd_args[i][j];
+      }
+
+#if defined(__linux__)
+      std::string warp_cmd = "timeout " + std::to_string(timeout_sec) + " sh -c '" + system_cmd + "'";
+#else
+      std::string warp_cmd = system_cmd;
+#endif
+      if (0 != system(warp_cmd.c_str()))
+        throw std::runtime_error("Failed to execute command: sh -c '" + system_cmd + "'\n");
+    }
+  };
+}
+
 #include "backend.hpp"
 
 std::string get_between(const std::string &str, const std::string &begin, const std::string &end, int start_idx = 0, const std::string &def_ret = "") {

@@ -41,17 +41,14 @@ namespace ab {
   }
 
   void* moduleLoad(const std::string &source) {
-    char temp_name[] = ".antares-module-XXXXXX";
-    auto folder = std::string(mkdtemp(temp_name));
+    ab_utils::TempFile tempfile("cpp", source);
+    auto path = tempfile.get_path();
 
-    auto path = folder + "/module.cc";
-    FILE *fp = fopen(path.c_str(), "w");
-    CHECK_OK(source.size() == fwrite(source.data(), 1, source.size(), fp));
-    fclose(fp);
-    CHECK_OK(0 == system(("timeout 10s dpcpp " + path + " -std=c++17 -lpthread -fPIC -shared -O2 -o " + path + ".out").c_str()));
+    ab_utils::Process({"dpcpp", path, "-std=c++17", "-lpthread", "-fPIC", "-shared", "-O2", "-o", path + ".out"}, 10);
 
-    void *hmod = dlopen((path + ".out").c_str(), RTLD_LAZY | RTLD_GLOBAL);
-    system(("rm -rf " + folder).c_str());
+    path = (path[0] == '/' ? path : "./" + path) + ".out";
+    void* hmod = dlopen(path.c_str(), RTLD_NOW | RTLD_GLOBAL);
+    CHECK_OK(hmod != nullptr);
     return hmod;
   }
 

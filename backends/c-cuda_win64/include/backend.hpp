@@ -60,10 +60,8 @@ namespace ab {
   }
 
   void* moduleLoad(const std::string &source) {
-    std::string fname = ".cuda_kernel_temp.cu";
-    FILE *fp = fopen(fname.c_str(), "wb");
-    CHECK(source.size() == fwrite(source.data(), 1, source.size(), fp), "Failed to save temp source code.");
-    fclose(fp);
+    ab_utils::TempFile tempfile("cu", source);
+    auto path = tempfile.get_path();
 
     constexpr int CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR = 75;
     constexpr int CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR = 76;
@@ -73,12 +71,11 @@ namespace ab {
     CHECK(0 == cuDeviceGetAttribute(&minor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, _current_device), "Failed to get device attribution: CAPABILITY_MINOR");
     auto arch = std::to_string(major * 10 + minor);
 
-    CHECK(0 == system(("nvcc.exe " + fname + " --fatbin -gencode arch=compute_" + arch + ",code=sm_" + arch + " -O2 -o " + fname + ".out 1>&2").c_str()), "Failed to compiler source code with command nvcc.exe from Windows PATH.");
+    ab_utils::Process({"nvcc.exe", path, "--fatbin", "-gencode", "arch=compute_" + arch + ",code=sm_" + arch, "-O2", "-o", path + ".out", "1>&2"}, 10);
+
     void *hModule;
     LOAD_ONCE(cuModuleLoad, int (*)(void*, const char*));
-    CHECK(0 == cuModuleLoad(&hModule, (fname + ".out").c_str()), "Failed to load CUDA Fatbin module.");
-    remove(fname.c_str());
-    remove((fname + ".out").c_str());
+    CHECK(0 == cuModuleLoad(&hModule, (path + ".out").c_str()), "Failed to compiler sources with command `nvcc.exe` from Windows PATH and load target to NVIDIA GPU.");
     return hModule;
   }
 

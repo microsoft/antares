@@ -53,16 +53,14 @@ namespace ab {
   }
 
   void* moduleLoad(const std::string &source) {
-    std::string fname = ".hip_kernel_temp.cc";
-    FILE *fp = fopen(fname.c_str(), "wb");
-    CHECK(source.size() == fwrite(source.data(), 1, source.size(), fp), "Failed to save temp source code.");
-    fclose(fp);
-    CHECK(0 == system(("wsl sh -cx 'timeout 10s /opt/rocm/bin/hipcc " + fname + " --amdgpu-target=gfx803 --amdgpu-target=gfx900 --amdgpu-target=gfx906 --amdgpu-target=gfx908 --amdgpu-target=gfx1010 --genco -Wno-ignored-attributes -O2 -o " + fname + ".out' 1>&2").c_str()), "Failed to compiler source code with command /opt/rocm/bin/hipcc from WSL.");
+    ab_utils::TempFile tempfile("cu", source);
+    auto path = tempfile.get_path();
+
+    ab_utils::Process({"wsl.exe", "sh", "-cx", "\"/opt/rocm/bin/hipcc " + path + " --amdgpu-target=gfx803 --amdgpu-target=gfx900 --amdgpu-target=gfx906 --amdgpu-target=gfx908 --amdgpu-target=gfx1010 --genco -Wno-ignored-attributes -O2 -o " + path + ".out 1>&2\""}, 10);
+
     void *hModule;
     LOAD_ONCE(hipModuleLoad, int (*)(void*, const char*));
-    CHECK(0 == hipModuleLoad(&hModule, (fname + ".out").c_str()), "Failed to load ROCm HSACO module.");
-    remove(fname.c_str());
-    remove((fname + ".out").c_str());
+    CHECK(0 == hipModuleLoad(&hModule, (path + ".out").c_str()), "Failed to compiler sources with command `/opt/rocm/bin/hipcc` from WSL environment and load target AMD GPU.");
     return hModule;
   }
 
