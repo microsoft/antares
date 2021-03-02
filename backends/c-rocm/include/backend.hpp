@@ -70,38 +70,31 @@ namespace ab {
   }
 
   void* moduleLoad(const std::string &source) {
-    char temp_name[] = ".antares-module-XXXXXX";
-    auto folder = std::string(mkdtemp(temp_name));
-    static std::string arch;
+    ab_utils::TempFile tempfile("cu", source);
+    auto &path = tempfile.get_path();
 
 #if !defined(__HIP_PLATFORM_HCC__)
-    if (!arch.size()) {
+    static std::string _gpu_arch;
+    if (!_gpu_arch.size()) {
       int major, minor;
       CHECK_OK(0 == cuDeviceGetAttribute(&major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, _current_device));
       CHECK_OK(0 == cuDeviceGetAttribute(&minor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, _current_device));
-      arch = std::to_string(major * 10 + minor);
+      _gpu_arch = std::to_string(major * 10 + minor);
     }
-    auto path = folder + "/module.cu";
-    auto compile_cmd = "timeout 10s /usr/local/cuda/bin/nvcc " + path + " --fatbin -O2 -gencode arch=compute_" + arch + ",code=sm_" + arch + " -O2 -o " + path + ".out";
+    std::vector<std::string> compile_args = {"/usr/local/cuda/bin/nvcc", path, "--fatbin", "-O2", "-gencode", ("arch=compute_" + _gpu_arch + ",code=sm_" + _gpu_arch), "-o", (path + ".out")};
 #else
-    if (!arch.size()) {
+    static std::string _gpu_arch;
+    if (!_gpu_arch.size()) {
       hipDeviceProp_t prop;
       CHECK_OK(0 == hipGetDeviceProperties(&prop, _current_device));
-      arch = std::to_string(prop.gcnArch);
+      _gpu_arch = std::to_string(prop.gcnArch);
     }
-    auto path = folder + "/module.cc";
-    auto compile_cmd = "timeout 10s /opt/rocm/bin/hipcc " + path + " --amdgpu-target=gfx" + arch + " --genco -Wno-ignored-attributes -O2 -o " + path + ".out";
+    std::vector<std::string> compile_args = {"/opt/rocm/bin/hipcc", path, "--genco", "-O2", ("--amdgpu-target=gfx" + _gpu_arch), "-Wno-ignored-attributes", "-o", (path + ".out")};
 #endif
-    FILE *fp = fopen(path.c_str(), "w");
-    CHECK_OK(source.size() == fwrite(source.data(), 1, source.size(), fp));
-    fclose(fp);
-    if (0 != system(compile_cmd.c_str()))
-      throw std::runtime_error("Failed to compile module: " + compile_cmd + "\n");
 
+    ab_utils::Process(compile_args, 10);
     CUmodule hmod = nullptr;
     CHECK_OK(0 == cuModuleLoad(&hmod, (path + ".out").c_str()));
-
-    CHECK_OK(0 == system(("rm -rf " + folder).c_str()));
     return hmod;
   }
 
