@@ -102,9 +102,9 @@ print('The result of tensor `%s` is:\n%s' % (result.id, result))
 
 # Codegen for More Backends:
 
-Generally, you can generate SYCL source kernels that work for most CPUs, e.g:
+Generally, you can generate SYCL source kernels that work for most Intel CPUs, e.g:
 ```sh
-    BACKEND=c-sycl COMPUTE_V1='- einstein_v2("output0[N, F, HO, WO] +=! input0[N, C, HO * 4 + KH, WO * 4 + KW] * input1[F, C, KH, KW] where HO in 55, WO in 55", input_dict={"input0": {"dtype": "float32", "shape": [64, 3, 227, 227]}, "input1": {"dtype": "float32", "shape": [96, 3, 11, 11]}});' make
+    BACKEND=c-sycl_intel COMPUTE_V1='- einstein_v2("output0[N, F, HO, WO] +=! input0[N, C, HO * 4 + KH, WO * 4 + KW] * input1[F, C, KH, KW] where HO in 55, WO in 55", input_dict={"input0": {"dtype": "float32", "shape": [64, 3, 227, 227]}, "input1": {"dtype": "float32", "shape": [96, 3, 11, 11]}});' make
 ```
 
 To generate codes for Windows 10 with DX12 enabled, you can setup WSL1.0 and make the following setup in WSL1.0:
@@ -134,7 +134,7 @@ Antares can support multi-line statements as long as they are fuse-able, for exa
 
 # Current Feature Table:
 
-|       | HIP-C(c-rocm/c-rocm_win64) | CUDA(c-cuda/c-cuda_win64) | CPU(c-mcpu/c-scpu) | DirectX12(c-hlsl_win64) | Graphcore(c-gc) | Intel OneAPI(c-sycl) | (..coming soon..) |
+|       | HIP-C(c-rocm/c-rocm_win64) | CUDA(c-cuda/c-cuda_win64) | CPU(c-mcpu/c-scpu) | DirectX12(c-hlsl_win64) | Graphcore(c-gc) | Intel OneAPI(c-sycl_intel) | (..coming soon..) |
 |---|---|---|---|---|---|---|---|
 | Deploy Environment | Linux/WSL1 | Linux | Linux | WSL1 | Linux | Linux |   |
 | Target Device | AMDGPU | NVGPU | Generic CPU | Generic Graphic Card | IPU Device | Intel CPU/HD Graphic/FPGA |   |

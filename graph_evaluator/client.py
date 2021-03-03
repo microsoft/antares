@@ -43,8 +43,7 @@ def init(**kwargs):
             break
 
       error_info = f"SDK for `{backend}` is not configured correctly, please look into the error messages and reconfigure the corresponding environment."
-      pre_define_macro = backend.upper().replace('-', '_')
-      compile_cmd = f'{compiler} {source_root}/run_graph.cpp -D__BACKEND__={pre_define_macro} -I{backend_root}/include -std=c++17 -Wno-unused-result -Wno-unused-value -lpthread -o {evaluator_path}.tmp {eval_flags}'
+      compile_cmd = f'{compiler} {source_root}/run_graph.cpp -D__BACKEND__=\\"{backend}\\" -I{backend_root}/include -std=c++17 -Wno-string-compare -Wno-unused-result -Wno-unused-value -lpthread -o {evaluator_path}.tmp {eval_flags}'
       print(f'\n[EvalAgent] Compiling Evaluator: {compile_cmd}')
       assert 0 == os.system(f'timeout 10s {compile_cmd}'), error_info
       os.system(f"cp {backend_root}/include/backend.hpp {os.environ['ANTARES_DRIVER_PATH']}/backend.hpp-{backend}")
