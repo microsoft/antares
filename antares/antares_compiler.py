@@ -290,7 +290,7 @@ def code_suffix(tpr=-1.0, step_prod=0, step_plan=-1):
 
 def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True, expected_timeout=None):
   if verbose:
-    print("\n[EvalAgent] Evaluating Modules..")
+    print("\n[EvalAgent] Evaluating Modules..\n")
 
   def handle_result(result):
     if verbose:

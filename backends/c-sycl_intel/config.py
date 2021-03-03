@@ -4,10 +4,12 @@
 import subprocess, os
 import numpy as np
 
+from common import backend
+
 def get_execution_parallism():
   return 1
 
-using_buffer_accessor = False  # Intel CPU device is slow when using_buffer_accessor
+using_buffer_accessor = (backend == 'c-sycl_cuda')  # Intel CPU device is slow when using_buffer_accessor
 
 def do_native_translation_v2(codeset, **kwargs):
   kernel_name, in_args, out_args, body = codeset
