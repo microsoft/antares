@@ -64,6 +64,6 @@ class MainTuner(object):
     global GLOBAL_TUNER
     GLOBAL_TUNER = self
     try:
-      auto_scheduler.auto_schedule(self.auto_task, tuning_options=auto_scheduler.TuningOptions(num_measure_trials=n_trial, runner=self.measure_ctx.runner, measure_callbacks=[]))
+      auto_scheduler.auto_schedule(self.auto_task, tuning_options=auto_scheduler.TuningOptions(num_measure_trials=n_trial, num_measures_per_round=self.task.n_parallel, runner=self.measure_ctx.runner, measure_callbacks=[]))
     except:
       pass

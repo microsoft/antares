@@ -33,7 +33,12 @@ namespace ab {
       it.pop_back();
       return dptr;
     }
-    return memalign(sysconf(_SC_PAGESIZE), byteSize);
+    if (__BACKEND__ == "c-sycl_intel")
+      return memalign(sysconf(_SC_PAGESIZE), byteSize);
+
+    // FIXME: Only handle dtype = float32 in this version (SYCL buffer is bind to datatype at compile time?)
+    CHECK_OK(dtype == "float32" && byteSize % sizeof(float) == 0);
+    return new cl::sycl::buffer<float>((float*)malloc(byteSize), cl::sycl::range<1>(byteSize / sizeof(float)));
   }
 
   void release(void *dptr, size_t byteSize) {
@@ -45,10 +50,10 @@ namespace ab {
     ab_utils::TempFile tempfile("cpp", source);
     auto path = tempfile.get_path();
 
-    if (__BACKEND__ == "c-sycl_cuda")
-      ab_utils::Process({"/usr/local/dpcpp-cuda/bin/clang++", path, "-std=c++17", "-ldl", "-fPIC", "-shared", "-O2", "-I/usr/local/dpcpp-cuda/include/sycl", "-L/usr/local/dpcpp-cuda/lib", "-lsycl", "-fsycl", "-fsycl-targets=nvptx64-nvidia-cuda-sycldevice", "-fsycl-unnamed-lambda", "-Wno-unknown-cuda-version", "-o", path + ".out"}, 10);
-    else
+    if (__BACKEND__ == "c-sycl_intel")
       ab_utils::Process({"dpcpp", path, "-std=c++17", "-lpthread", "-fPIC", "-shared", "-O2", "-o", path + ".out"}, 10);
+    else
+      ab_utils::Process({"/usr/local/dpcpp-cuda/bin/clang++", path, "-std=c++17", "-ldl", "-fPIC", "-shared", "-O2", "-I/usr/local/dpcpp-cuda/include/sycl", "-L/usr/local/dpcpp-cuda/lib", "-lsycl", "-fsycl", "-fsycl-targets=nvptx64-nvidia-cuda-sycldevice", "-fsycl-unnamed-lambda", "-Wno-unknown-cuda-version", "-o", path + ".out"}, 20);
 
     path = (path[0] == '/' ? path : "./" + path) + ".out";
     void* hmod = dlopen(path.c_str(), RTLD_NOW | RTLD_GLOBAL);
@@ -69,15 +74,33 @@ namespace ab {
   }
 
   void memcpyHtoD(void *dptr, void *hptr, size_t byteSize) {
-    ab::synchronize();
+    if (__BACKEND__ == "c-sycl_intel") {
+      ab::synchronize();
+      memcpy(dptr, hptr, byteSize);
+      return;
+    }
 
-    memcpy(dptr, hptr, byteSize);
+    auto &buff = *((cl::sycl::buffer<float>*)dptr);
+    _sycl_queue.submit([&](cl::sycl::handler& cgh) {
+      auto d_data = buff.get_access<cl::sycl::access::mode::discard_write>(cgh);
+      cgh.copy(hptr, d_data);
+    });
+    ab::synchronize();
   }
 
   void memcpyDtoH(void *hptr, void *dptr, size_t byteSize) {
-    ab::synchronize();
+    if (__BACKEND__ == "c-sycl_intel") {
+      ab::synchronize();
+      memcpy(hptr, dptr, byteSize);
+      return;
+    }
 
-    memcpy(hptr, dptr, byteSize);
+    auto &buff = *((cl::sycl::buffer<float>*)dptr);
+    _sycl_queue.submit([&](cl::sycl::handler& cgh) {
+      auto d_data = buff.get_access<cl::sycl::access::mode::read>(cgh);
+      cgh.copy(d_data, hptr);
+    });
+    ab::synchronize();
   }
 
   void* recordTime() {

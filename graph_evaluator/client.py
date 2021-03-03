@@ -45,7 +45,7 @@ def init(**kwargs):
       error_info = f"SDK for `{backend}` is not configured correctly, please look into the error messages and reconfigure the corresponding environment."
       compile_cmd = f'{compiler} {source_root}/run_graph.cpp -D__BACKEND__=\\"{backend}\\" -I{backend_root}/include -std=c++17 -Wno-string-compare -Wno-unused-result -Wno-unused-value -lpthread -o {evaluator_path}.tmp {eval_flags}'
       print(f'\n[EvalAgent] Compiling Evaluator: {compile_cmd}')
-      assert 0 == os.system(f'timeout 10s {compile_cmd}'), error_info
+      assert 0 == os.system(f'timeout 30s {compile_cmd}'), error_info
       os.system(f"cp {backend_root}/include/backend.hpp {os.environ['ANTARES_DRIVER_PATH']}/backend.hpp-{backend}")
       os.system(f'mv {evaluator_path}.tmp {evaluator_path} >/dev/null 2>&1')
       is_wsl = 1 if (os.environ.get('IS_WSL', '0') == '1') else 0

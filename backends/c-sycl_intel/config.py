@@ -2,25 +2,21 @@
 # Licensed under the MIT license.
 
 import subprocess, os
-import numpy as np
-
 from common import backend
 
 def get_execution_parallism():
   return 1
 
-using_buffer_accessor = (backend == 'c-sycl_cuda')  # Intel CPU device is slow when using_buffer_accessor
-
 def do_native_translation_v2(codeset, **kwargs):
   kernel_name, in_args, out_args, body = codeset
 
-  if using_buffer_accessor:
-    expand_args = '\n  '.join([f'auto __args_{i} = cl::sycl::buffer<{x[0]}>(({x[0]}*)__args[{i}], cl::sycl::range<1>({int(np.product(x[2]["shape"]))}));' for i, x in enumerate(in_args + out_args)])
-    expand_accs = '\n    '.join([f'auto __accs_{i} = __args_{i}.get_access<cl::sycl::access::mode::{"read" if i < len(in_args) else "write"}>(cgh);' for i, x in enumerate(in_args + out_args)]) + '\n'
-    expand_ptrs = '\n      '.join([f'{x[0]}* {x[1]} = __accs_{i}.get_pointer();' for i, x in enumerate(in_args + out_args)]) + '\n'
-  else:
+  if backend == 'c-sycl_intel':  # Issue: Data over SYCL Buffer & Accessor is very slow on Intel CPU
     expand_args = ' '.join([f'{x[0]}* {x[1]} = ({x[0]}*)__args[{i}];' for i, x in enumerate(in_args + out_args)])
     expand_accs = expand_ptrs = ''
+  else:                          # Using standard SYCL Buffer & Accessor
+    expand_args = '\n  '.join([f'auto &__args_{i} = *((cl::sycl::buffer<{x[0]}>*)__args[{i}]);' for i, x in enumerate(in_args + out_args)])
+    expand_accs = '\n    '.join([f'auto __accs_{i} = __args_{i}.get_access<cl::sycl::access::mode::{"read" if i < len(in_args) else "discard_write"}>(cgh);' for i, x in enumerate(in_args + out_args)]) + '\n'
+    expand_ptrs = '\n      '.join([f'{x[0]}* {x[1]} = ({x[0]}*)__accs_{i}.get_pointer();' for i, x in enumerate(in_args + out_args)]) + '\n'
 
   def get_extent(key, defval=1):
     str_pat = f'// [thread_extent] {key} = '
@@ -64,8 +60,8 @@ struct int4 {{ int x, y, z, w; }};
 struct float2 {{ float x, y; }};
 struct float4 {{ float x, y, z, w; }};
 
-#define make_int4(x, y)  (int2{{x, y}})
-#define make_float4(x, y)  (float4{{x, y}})
+#define make_int4(x, y, z, w)  (int4{{x, y, z, w}})
+#define make_float4(x, y, z, w)  (float4{{x, y, z, w}})
 #define make_int2(x, y)  (int2{{x, y}})
 #define make_float2(x, y)  (float2{{x, y}})
 
@@ -75,6 +71,7 @@ extern "C" void {kernel_name}(sycl::queue* q, void **__args) {{
   {expand_args}
 
   using namespace std;
+  // using namespace cl::sycl;
 
   q->submit([&](auto &cgh) {{
     {group_shared}
