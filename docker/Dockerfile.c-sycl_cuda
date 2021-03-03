@@ -1,0 +1,22 @@
+FROM mehdigoli/dpcpp-workshop:latest
+
+ENV DEBIAN_FRONTEND noninteractive
+ENV PYTHONDONTWRITEBYTECODE 1
+
+RUN env > /etc/environment
+
+RUN sed -i 's/^#deb /deb /g' /etc/apt/sources.list
+
+RUN apt-get update && apt install -y --no-install-recommends git ca-certificates \
+    vim-tiny less netcat-openbsd inetutils-ping curl patch iproute2 \
+    g++ libpci3 libnuma-dev make file openssh-server kmod gdb libopenmpi-dev openmpi-bin psmisc \
+        autoconf automake autotools-dev libtool llvm-dev \
+        zlib1g-dev rename zip unzip librdmacm-dev gnupg \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+RUN /bin/echo -e "set backspace=indent,eol,start\nset nocompatible\nset ts=4" > /etc/vim/vimrc.tiny
+
+ADD ./engine /antares/engine
+RUN /antares/engine/install_antares_host.sh && rm -rf /var/lib/apt/lists/* ~/.cache
+
+RUN [ -e /usr/lib/x86_64-linux-gnu/libcuda.so.1 ] || ln -s /host/usr/lib/x86_64-linux-gnu/libcuda.so.1 /usr/lib/x86_64-linux-gnu
