@@ -1,7 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-//; eval_flags(c-sycl): [dpcpp] -ldl
+//; eval_flags(c-sycl_intel): [dpcpp] -ldl
+//; eval_flags(c-sycl_cuda): [/usr/local/dpcpp-cuda/bin/clang++] -ldl -I/usr/local/dpcpp-cuda/include/sycl -L/usr/local/dpcpp-cuda/lib -lsycl -fsycl -fsycl-targets=nvptx64-nvidia-cuda-sycldevice -fsycl-unnamed-lambda
 
 #include <CL/sycl.hpp>
 #include <dlfcn.h>
@@ -15,11 +16,11 @@ namespace ab {
 
   void init(int dev) {
     try {
-      _sycl_queue = std::move(sycl::queue(sycl::default_selector{}));
+       _sycl_queue = std::move(sycl::queue(sycl::default_selector{}));
     } catch (sycl::exception const &e) {
       std::terminate();
     }
-    // fprintf(stderr, "\nSYCL Device Name: %s\n", _sycl_queue.get_device().get_info<sycl::info::device::name>().c_str());
+    fprintf(stderr, "   (SYCL_INFO: SYCL Device Name = %s)\n", _sycl_queue.get_device().get_info<sycl::info::device::name>().c_str());
   }
 
   void finalize() {
@@ -44,7 +45,10 @@ namespace ab {
     ab_utils::TempFile tempfile("cpp", source);
     auto path = tempfile.get_path();
 
-    ab_utils::Process({"dpcpp", path, "-std=c++17", "-lpthread", "-fPIC", "-shared", "-O2", "-o", path + ".out"}, 10);
+    if (__BACKEND__ == "c-sycl_cuda")
+      ab_utils::Process({"/usr/local/dpcpp-cuda/bin/clang++", path, "-std=c++17", "-ldl", "-fPIC", "-shared", "-O2", "-I/usr/local/dpcpp-cuda/include/sycl", "-L/usr/local/dpcpp-cuda/lib", "-lsycl", "-fsycl", "-fsycl-targets=nvptx64-nvidia-cuda-sycldevice", "-fsycl-unnamed-lambda", "-Wno-unknown-cuda-version", "-o", path + ".out"}, 10);
+    else
+      ab_utils::Process({"dpcpp", path, "-std=c++17", "-lpthread", "-fPIC", "-shared", "-O2", "-o", path + ".out"}, 10);
 
     path = (path[0] == '/' ? path : "./" + path) + ".out";
     void* hmod = dlopen(path.c_str(), RTLD_NOW | RTLD_GLOBAL);

@@ -41,8 +41,8 @@ elif [ ! -e ${TVM_HOME}/build/libtvm.so ]; then
 fi
 
 if [[ "$COMPUTE_V1" == "" ]]; then
-  echo "  >> Using a default computing expression."
-  export COMPUTE_V1='- einstein_v2("output0[N] = input0[N] + input1[N]", input_dict={"input0": {"dtype": "float32", "shape": [1024 * 512]}, "input1": {"dtype": "float32", "shape": [1024 * 512]}})'
+  export COMPUTE_V1='- einstein_v2("output0[N, M] = input0[N, M] + input1[N, M]", input_dict={"input0": {"dtype": "float32", "shape": [1024, 512]}, "input1": {"dtype": "float32", "shape": [1024, 512]}})'
+  echo "  >> Using a default computing expression for testing."
 fi
 
 export BACKEND=$(./antares/get_backend.sh)

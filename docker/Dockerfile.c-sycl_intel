@@ -16,7 +16,5 @@ RUN apt-get update && apt install -y --no-install-recommends git ca-certificates
 
 RUN /bin/echo -e "set backspace=indent,eol,start\nset nocompatible\nset ts=4" > /etc/vim/vimrc.tiny
 
-RUN ln -sf pip /opt/intel/oneapi/intelpython/latest/bin/pip3
-
 ADD ./engine /antares/engine
 RUN /antares/engine/install_antares_host.sh && rm -rf /var/lib/apt/lists/* ~/.cache
