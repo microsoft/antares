@@ -11,7 +11,7 @@
 
 #define AMDHIP64_LIBRARY_PATH R"(C:\Windows\System32\amdhip64.dll)"
 
-#define CHECK(stat, reason, ...)  ((stat) ? 1 : (fprintf(stderr, "[Assertion Failed] "), fprintf(stderr, reason, ##__VA_ARGS__), fprintf(stderr, "\n"), fflush(stderr), exit(1), 0))
+#define CHECK(stat, reason, ...)  ((stat) ? 1 : (fprintf(stderr, "[CheckFail] "), fprintf(stderr, reason, ##__VA_ARGS__), fprintf(stderr, "\n"), fflush(stderr), exit(1), 0))
 #define LOAD_ONCE(func, ftype)   static FARPROC __ ## func; if (!__ ## func) { __ ## func = GetProcAddress(hLibDll, #func); CHECK(__ ## func, "No such function symbol defined: %s()", #func); } auto func = (ftype)__ ## func;
 
 namespace ab {

@@ -26,6 +26,31 @@ def do_native_translation_v2(codeset, **kwargs):
 #include <cuda_fp16.h>
 #include <mma.h>
 
+#ifndef __CUDA_COMMON_MACRO__
+#define __CUDA_COMMON_MACRO__
+
+#define __ITEM_0_OF__(v) (v).x
+#define __ITEM_1_OF__(v) (v).y
+#define __ITEM_2_OF__(v) (v).z
+#define __ITEM_3_OF__(v) (v).w
+
+#define MAKE_VEC4_OP(type) \\
+  __forceinline__ __device__ type operator+(const type &l, const type &r) {{ return make_##type(l.x + r.x, l.y + r.y, l.z + r.z, l.w + r.w); }} \\
+  __forceinline__ __device__ type operator-(const type &l, const type &r) {{ return make_##type(l.x - r.x, l.y - r.y, l.z - r.z, l.w - r.w); }} \\
+  __forceinline__ __device__ type operator*(const type &l, const type &r) {{ return make_##type(l.x * r.x, l.y * r.y, l.z * r.z, l.w * r.w); }} \\
+  __forceinline__ __device__ type operator/(const type &l, const type &r) {{ return make_##type(l.x / r.x, l.y / r.y, l.z / r.z, l.w / r.w); }} \\
+  __forceinline__ __device__ type operator%(const type &l, const type &r) {{ return make_##type(l.x % r.x, l.y % r.y, l.z % r.z, l.w % r.w); }}
+#define MAKE_VEC2_OP(type) \\
+  __forceinline__ __device__ type operator+(const type &l, const type &r) {{ return make_##type(l.x + r.x, l.y + r.y); }} \\
+  __forceinline__ __device__ type operator-(const type &l, const type &r) {{ return make_##type(l.x - r.x, l.y - r.y); }} \\
+  __forceinline__ __device__ type operator*(const type &l, const type &r) {{ return make_##type(l.x * r.x, l.y * r.y); }} \\
+  __forceinline__ __device__ type operator/(const type &l, const type &r) {{ return make_##type(l.x / r.x, l.y / r.y); }} \\
+  __forceinline__ __device__ type operator%(const type &l, const type &r) {{ return make_##type(l.x % r.x, l.y % r.y); }}
+
+MAKE_VEC4_OP(int4)
+MAKE_VEC2_OP(int2)
+
+#endif
 {kwargs['attrs'].blend}
 
 extern "C" __global__ __launch_bounds__({launch_bounds}) void {kernel_name}({expand_args}) {{

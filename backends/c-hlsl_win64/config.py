@@ -4,9 +4,10 @@
 import os, subprocess
 import re
 
-local_dll_path = '%s/antares_hlsl_v0.2dev0_x64.dll' % os.environ['ANTARES_DRIVER_PATH']
+dll_name = 'antares_hlsl_v0.2dev1_x64.dll'
+local_dll_path = f'{os.environ["ANTARES_DRIVER_PATH"]}/antares_hlsl_v0.2_x64.dll'
 if not os.path.exists(local_dll_path):
-    os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.1.0/antares_hlsl_v0.2dev0_x64.dll -o {local_dll_path}')
+    os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.1.0/{dll_name} -o {local_dll_path}')
 
 def get_execution_parallism():
     return 1
@@ -74,7 +75,21 @@ def do_native_translation_v2(codeset, **kwargs):
     lds = '\n'.join(lds)
     registers = ''.join(registers)
 
-    full_body = f'''{lds}
+    full_body = f'''
+#ifndef __CUDA_COMMON_MACRO__
+#define __CUDA_COMMON_MACRO__
+
+#define __ITEM_0_OF__(v) (v).x
+#define __ITEM_1_OF__(v) (v).y
+#define __ITEM_2_OF__(v) (v).z
+#define __ITEM_3_OF__(v) (v).w
+
+#define make_int2(x, y) ((int2)(x, y))
+#define make_int4(x, y, z, w) ((int4)(x, y, z, w))
+
+#endif
+
+{lds}
 {registers}{kwargs['attrs'].blend}
 [numthreads({get_extent('threadIdx.x')}, {get_extent('threadIdx.y')}, {get_extent('threadIdx.z')})]
 void CSMain(uint3 threadIdx: SV_GroupThreadID, uint3 blockIdx: SV_GroupID, uint3 dispatchIdx: SV_DispatchThreadID) {{
