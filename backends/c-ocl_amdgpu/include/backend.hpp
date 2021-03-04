@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 //; eval_flags(c-ocl_amdgpu): -I/opt/rocm/opencl/include -L/opt/rocm/opencl/lib -lOpenCL -DCL_TARGET_OPENCL_VERSION=120
+//; eval_flags(c-ocl_nvidia): -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -lOpenCL
 
 #include <CL/cl.h>
 
@@ -10,6 +11,7 @@ namespace ab {
   static cl_command_queue cmdqueue;
   static cl_device_id device_id;
   static cl_int stat;
+  static size_t max_work_group_size;
 
   void init(int dev) {
     cl_uint num_dev;
@@ -28,7 +30,6 @@ namespace ab {
     cmdqueue = clCreateCommandQueue(context, device_id, 0, &stat), CHECK_OK(stat == 0);
 
     std::vector<char> dev_name(1024);
-    size_t max_work_group_size = 0;
     CHECK_OK(0 == clGetDeviceInfo(device_id, CL_DEVICE_NAME, dev_name.size(), dev_name.data(), NULL));
     CHECK_OK(0 == clGetDeviceInfo(device_id, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(max_work_group_size), &max_work_group_size, NULL));
     fprintf(stderr, "    (OCL_INFO: OCL Device Name = %s [max_work_groups: %zd])\n", dev_name.data(), max_work_group_size);
@@ -74,6 +75,8 @@ namespace ab {
     };
     size_t lx = query("get_local_id(0)"), ly = query("get_local_id(1)"), lz = query("get_local_id(2)");
     size_t gx = query("get_group_id(0)"), gy = query("get_group_id(1)"), gz = query("get_group_id(2)");
+
+    CHECK_OK(lx * ly * lz <= max_work_group_size);
     return { kernel, (void*)(gx * lx), (void*)(gy * ly), (void*)(gz * lz), (void*)lx, (void*)ly, (void*)lz };
   }
 
