@@ -26,6 +26,12 @@ namespace ab {
     device_id = devices[dev];
     context = clCreateContext(NULL, 1, &device_id, NULL, NULL, &stat), CHECK_OK(stat == 0);
     cmdqueue = clCreateCommandQueue(context, device_id, 0, &stat), CHECK_OK(stat == 0);
+
+    std::vector<char> dev_name(1024);
+    size_t max_work_group_size = 0;
+    CHECK_OK(0 == clGetDeviceInfo(device_id, CL_DEVICE_NAME, dev_name.size(), dev_name.data(), NULL));
+    CHECK_OK(0 == clGetDeviceInfo(device_id, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(max_work_group_size), &max_work_group_size, NULL));
+    fprintf(stderr, "    (OCL_INFO: OCL Device Name = %s [max_work_groups: %zd])\n", dev_name.data(), max_work_group_size);
   }
 
   void finalize() {
