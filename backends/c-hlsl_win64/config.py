@@ -74,7 +74,18 @@ def do_native_translation_v2(codeset, **kwargs):
     lds = '\n'.join(lds)
     registers = ''.join(registers)
 
-    full_body = f'''{lds}
+    full_body = f'''
+#ifndef __CUDA_COMMON_MACRO__
+#define __CUDA_COMMON_MACRO__
+
+#define __ITEM_0_OF__(v) (v).x
+#define __ITEM_1_OF__(v) (v).y
+#define __ITEM_2_OF__(v) (v).z
+#define __ITEM_3_OF__(v) (v).w
+
+#endif
+
+{lds}
 {registers}{kwargs['attrs'].blend}
 [numthreads({get_extent('threadIdx.x')}, {get_extent('threadIdx.y')}, {get_extent('threadIdx.z')})]
 void CSMain(uint3 threadIdx: SV_GroupThreadID, uint3 blockIdx: SV_GroupID, uint3 dispatchIdx: SV_DispatchThreadID) {{

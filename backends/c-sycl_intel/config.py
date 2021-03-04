@@ -41,7 +41,6 @@ def do_native_translation_v2(codeset, **kwargs):
   del parsed_lines
 
   body = body.replace('Idx.', 'Idx_').replace('__syncthreads()', '_item.barrier(cl::sycl::access::fence_space::global_and_local);').replace('\n', '\n    ')
-  body = body.replace('(make_int4)', 'make_int4').replace('(make_int2)', 'make_int2')
   index_str = 'const int blockIdx_x = _item.get_group(0), blockIdx_y = _item.get_group(1), blockIdx_z = _item.get_group(2), threadIdx_x = _item.get_local_id(0), threadIdx_y = _item.get_local_id(1), threadIdx_z = _item.get_local_id(2);'
 
   lds = [get_extent('threadIdx_x'), get_extent('threadIdx_y'), get_extent('threadIdx_z')]
@@ -52,18 +51,49 @@ def do_native_translation_v2(codeset, **kwargs):
 #include <CL/sycl.hpp>
 {kwargs['attrs'].blend}
 
-#ifndef __MAKE_DATA_ARRAY__
-#define __MAKE_DATA_ARRAY__
+#ifndef __SYCL_COMMON_MACRO__
+#define __SYCL_COMMON_MACRO__
+
+#define make_int4(x, y, z, w)  (int4{{x, y, z, w}})
+#define make_int2(x, y)  (int2{{x, y}})
+
+#define USING_NATIVE_VECTELEM
+
+#ifdef USING_NATIVE_VECTELEM
+
+#define __ITEM_0_OF__(v) (v).x()
+#define __ITEM_1_OF__(v) (v).y()
+#define __ITEM_2_OF__(v) (v).z()
+#define __ITEM_3_OF__(v) (v).w()
+
+using namespace cl::sycl;
+
+#else
 
 struct int2 {{ int x, y; }};
 struct int4 {{ int x, y, z, w; }};
-struct float2 {{ float x, y; }};
-struct float4 {{ float x, y, z, w; }};
+#define __ITEM_0_OF__(v) (v).x
+#define __ITEM_1_OF__(v) (v).y
+#define __ITEM_2_OF__(v) (v).z
+#define __ITEM_3_OF__(v) (v).w
 
-#define make_int4(x, y, z, w)  (int4{{x, y, z, w}})
-#define make_float4(x, y, z, w)  (float4{{x, y, z, w}})
-#define make_int2(x, y)  (int2{{x, y}})
-#define make_float2(x, y)  (float2{{x, y}})
+#define MAKE_VEC4_OP(type) \\
+  inline type operator+(const type &l, const type &r) {{ return make_##type(l.x + r.x, l.y + r.y, l.z + r.z, l.w + r.w); }} \\
+  inline type operator-(const type &l, const type &r) {{ return make_##type(l.x - r.x, l.y - r.y, l.z - r.z, l.w - r.w); }} \\
+  inline type operator*(const type &l, const type &r) {{ return make_##type(l.x * r.x, l.y * r.y, l.z * r.z, l.w * r.w); }} \\
+  inline type operator/(const type &l, const type &r) {{ return make_##type(l.x / r.x, l.y / r.y, l.z / r.z, l.w / r.w); }} \\
+  inline type operator%(const type &l, const type &r) {{ return make_##type(l.x % r.x, l.y % r.y, l.z % r.z, l.w % r.w); }}
+#define MAKE_VEC2_OP(type) \\
+  inline type operator+(const type &l, const type &r) {{ return make_##type(l.x + r.x, l.y + r.y); }} \\
+  inline type operator-(const type &l, const type &r) {{ return make_##type(l.x - r.x, l.y - r.y); }} \\
+  inline type operator*(const type &l, const type &r) {{ return make_##type(l.x * r.x, l.y * r.y); }} \\
+  inline type operator/(const type &l, const type &r) {{ return make_##type(l.x / r.x, l.y / r.y); }} \\
+  inline type operator%(const type &l, const type &r) {{ return make_##type(l.x % r.x, l.y % r.y); }}
+
+MAKE_VEC4_OP(int4)
+MAKE_VEC2_OP(int2)
+
+#endif // USING_NATIVE_VECTELEM
 
 #endif
 
@@ -71,7 +101,6 @@ extern "C" void {kernel_name}(sycl::queue* q, void **__args) {{
   {expand_args}
 
   using namespace std;
-  // using namespace cl::sycl;
 
   q->submit([&](auto &cgh) {{
     {group_shared}
