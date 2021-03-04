@@ -40,11 +40,13 @@ def do_native_translation_v2(codeset, **kwargs):
   group_shared = '    \n'.join(group_shared)
   del parsed_lines
 
-  body = body.replace('Idx.', 'Idx_').replace('__syncthreads()', '_item.barrier(cl::sycl::access::fence_space::global_and_local);').replace('\n', '\n    ')
-  index_str = 'const int blockIdx_x = _item.get_group(0), blockIdx_y = _item.get_group(1), blockIdx_z = _item.get_group(2), threadIdx_x = _item.get_local_id(0), threadIdx_y = _item.get_local_id(1), threadIdx_z = _item.get_local_id(2);'
+  body = body.replace('Idx.', 'Idx_')
+  body = body.replace('__syncthreads()', '_item.barrier(cl::sycl::access::fence_space::local_space);').replace('\n', '\n    ')
 
-  lds = [get_extent('threadIdx_x'), get_extent('threadIdx_y'), get_extent('threadIdx_z')]
-  gds = [get_extent('blockIdx_x') * lds[0], get_extent('blockIdx_y') * lds[1], get_extent('blockIdx_z') * lds[2]]
+  # Reversed order in dim configs
+  index_str = 'const int blockIdx_x = _item.get_group(2), blockIdx_y = _item.get_group(1), blockIdx_z = _item.get_group(0), threadIdx_x = _item.get_local_id(2), threadIdx_y = _item.get_local_id(1), threadIdx_z = _item.get_local_id(0);'
+  lds = [get_extent('threadIdx_z'), get_extent('threadIdx_y'), get_extent('threadIdx_x')]
+  gds = [get_extent('blockIdx_z') * lds[0], get_extent('blockIdx_y') * lds[1], get_extent('blockIdx_x') * lds[2]]
 
   full_body = f'''#include <math.h>
 #include <algorithm>
