@@ -11,7 +11,6 @@ def do_native_translation_v2(codeset, **kwargs):
   expand_args = ', '.join([f'__global {x[0]}* {x[1]}' for x in in_args + out_args])
 
   body = body.replace('__syncthreads()', 'barrier(CLK_LOCAL_MEM_FENCE)').replace('__shared__', '__local')
-  body = body.replace('(make_int4)', 'make_int4').replace('(make_int2)', 'make_int2')
   parsed_lines, body = [], body.split('\n')
   for line in body:
     parts = line.split(' = ')

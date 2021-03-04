@@ -4,9 +4,10 @@
 import os, subprocess
 import re
 
-local_dll_path = '%s/antares_hlsl_v0.2dev0_x64.dll' % os.environ['ANTARES_DRIVER_PATH']
+dll_name = 'antares_hlsl_v0.2dev1_x64.dll'
+local_dll_path = f'{os.environ["ANTARES_DRIVER_PATH"]}/antares_hlsl_v0.2_x64.dll'
 if not os.path.exists(local_dll_path):
-    os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.1.0/antares_hlsl_v0.2dev0_x64.dll -o {local_dll_path}')
+    os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.1.0/{dll_name} -o {local_dll_path}')
 
 def get_execution_parallism():
     return 1
@@ -82,6 +83,9 @@ def do_native_translation_v2(codeset, **kwargs):
 #define __ITEM_1_OF__(v) (v).y
 #define __ITEM_2_OF__(v) (v).z
 #define __ITEM_3_OF__(v) (v).w
+
+#define make_int2(x, y) ((int2)(x, y))
+#define make_int4(x, y, z, w) ((int4)(x, y, z, w))
 
 #endif
 
