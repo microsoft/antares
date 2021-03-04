@@ -70,7 +70,7 @@ index 471fefb23..9a6d9c033 100644
 +
  #endif  // TVM_RUNTIME_CUDA_CUDA_COMMON_H_
 diff --git a/src/target/source/codegen_c.cc b/src/target/source/codegen_c.cc
-index ca9b80564..8242c129a 100644
+index ca9b80564..802fc8cd9 100644
 --- a/src/target/source/codegen_c.cc
 +++ b/src/target/source/codegen_c.cc
 @@ -160,7 +160,7 @@ std::string CodeGenC::GetBufferRef(DataType t, const VarNode* buffer, PrimExpr i
@@ -78,11 +78,39 @@ index ca9b80564..8242c129a 100644
    bool is_vol = IsVolatile(buffer);
    if (t.lanes() == 1) {
 -    if (!HandleTypeMatch(buffer, t) || is_vol) {
-+    if (strcmp(getenv("BACKEND"), "c-hlsl_win64") && (!HandleTypeMatch(buffer, t) || is_vol)) {
++    if (strncmp(getenv("BACKEND"), "c-hlsl_", 7) && (!HandleTypeMatch(buffer, t) || is_vol)) {
        os << "((";
        if (is_vol) {
          os << "volatile ";
-@@ -850,6 +850,9 @@ void CodeGenC::VisitStmt_(const AttrStmtNode* op) {
+@@ -732,7 +732,26 @@ void CodeGenC::VisitStmt_(const StoreNode* op) {
+ 
+     if (arith::ramp(base, 1, t.lanes()).Match(op->index)) {
+       std::string value = this->PrintExpr(op->value);
+-      this->PrintVecStore(op->buffer_var.get(), t, base.Eval(), value);
++      if (value.size() >= 5 && value.substr(0, 5) == "make_") {
++        // Expand Vectorize Load/Store to avoid irregular cast.
++        int idx = int(value.find('(')) + 1, stk = 0, nxt;
++        for (int i = 0; i < t.lanes(); ++i) {
++          std::string field;
++          for (nxt = idx; field.size() == 0; ++nxt) {
++            if (value[nxt] == '(' || value[nxt] == '[')
++              ++stk;
++            else if (stk > 0 && (value[nxt] == ')' || value[nxt] == ']'))
++              --stk;
++            else if (!stk && (value[nxt] == ',' || value[nxt] == ')'))
++              field = value.substr(idx, nxt - idx), idx = nxt + 1;
++          }
++          this->PrintIndent();
++          stream << GetVarID(op->buffer_var.get()) << "[(";
++          PrintExpr(base.Eval(), stream);
++          stream << ") + " << i << "] = " << field << ";\n";
++        }
++      } else
++        this->PrintVecStore(op->buffer_var.get(), t, base.Eval(), value);
+     } else {
+       // store elements seperately
+       std::string index = SSAGetID(PrintExpr(op->index), op->index.dtype());
+@@ -850,6 +869,9 @@ void CodeGenC::VisitStmt_(const AttrStmtNode* op) {
      IterVar iv = Downcast<IterVar>(op->node);
      if (iv->thread_tag.length() != 0) {
        if (!var_idmap_.count(iv->var.get())) {
@@ -93,7 +121,7 @@ index ca9b80564..8242c129a 100644
        }
      }
 diff --git a/src/target/source/codegen_cuda.cc b/src/target/source/codegen_cuda.cc
-index 51fcbb633..ccdade699 100644
+index 51fcbb633..c07ff1bda 100644
 --- a/src/target/source/codegen_cuda.cc
 +++ b/src/target/source/codegen_cuda.cc
 @@ -22,7 +22,7 @@
@@ -124,6 +152,66 @@ index 51fcbb633..ccdade699 100644
    LOG(FATAL) << "Cannot convert type " << t << " to CUDA type";
  }
  
+@@ -279,23 +284,13 @@ void CodeGenCUDA::PrintVecBinaryOp(const std::string& op, DataType t, PrimExpr l
+     std::string vlhs = SSAGetID(PrintExpr(lhs), lhs.dtype());
+     std::string vrhs = SSAGetID(PrintExpr(rhs), rhs.dtype());
+ 
+-    for (int i = 0, lanes = t.lanes(); i < lanes; ++i) {
+-      std::ostringstream value_temp;
+-      if (isalpha(op[0])) {
+-        value_temp << op << "(";
+-        PrintVecElemLoad(vlhs, lhs.dtype(), i, value_temp);
+-        value_temp << ", ";
+-        PrintVecElemLoad(vrhs, rhs.dtype(), i, value_temp);
+-        value_temp << ")";
+-      } else {
+-        value_temp << "(";
+-        PrintVecElemLoad(vlhs, lhs.dtype(), i, value_temp);
+-        value_temp << op;
+-        PrintVecElemLoad(vrhs, rhs.dtype(), i, value_temp);
+-        value_temp << ")";
+-      }
+-      PrintVecElemStore(sret, t, i, value_temp.str());
+-    }
++    std::ostringstream value_temp;
++    value_temp << "(" << vlhs;
++    value_temp << op;
++    value_temp << vrhs << ")";
++
++    this->PrintIndent();
++    stream << sret << " = " << value_temp.str() << ";\n";
+   }
+   os << sret;
+ }
+@@ -307,6 +302,9 @@ void CodeGenCUDA::PrintVecElemLoad(const std::string& vec, DataType t, int i,
+     return;
+   }
+ 
++  os << "__ITEM_" << i << "_OF__(" << vec << ")";
++  return;
++
+   static const char access[] = {'x', 'y', 'z', 'w'};
+   ICHECK(i >= 0 && i < (t.is_float16() ? 8 : 4));
+   if ((t.is_int()) && t.bits() == 8) {
+@@ -331,6 +329,9 @@ void CodeGenCUDA::PrintVecElemLoad(const std::string& vec, DataType t, int i,
+ void CodeGenCUDA::PrintVecElemStore(const std::string& vec, DataType t, int i,
+                                     const std::string& value) {
+   this->PrintIndent();
++  stream << "__ITEM_" << i << "_OF__(" << vec << ") = " << value << ";\n";
++  return;
++
+   static const char access[] = {'x', 'y', 'z', 'w'};
+   ICHECK(i >= 0 && i < (t.is_float16() ? 8 : 4));
+   if (t.bits() == 8 && (t.is_int() || t.is_uint())) {
+@@ -627,7 +628,7 @@ void CodeGenCUDA::VisitStmt_(const EvaluateNode* op) {
+ }
+ 
+ void CodeGenCUDA::VisitExpr_(const RampNode* op, std::ostream& os) {
+-  os << "((make_int" << op->lanes << ")(";
++  os << "(make_int" << op->lanes << "(";
+   for (int i = 0; i < op->lanes; i++) {
+     os << "(" << PrintExpr(op->base) << ")"
+        << "+(" << PrintExpr(op->stride) << "*" << i << ")";
 diff --git a/src/tir/op/op.cc b/src/tir/op/op.cc
 index 71321d2a3..7c2af1c3b 100644
 --- a/src/tir/op/op.cc

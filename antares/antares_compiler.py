@@ -374,6 +374,7 @@ def run_config_entity(target_source, config_str, dir_sid, expected_timecost='inf
     results = evaluate_perf(kernel_path, dev_id, device_source, dir_sid, verbose=False, expected_timeout=expected_timecost)
     assert results is not None and 'TPR' in results, "Invalid target output detected in evaluation stage."
     digest = ','.join(['%.6e' % float(results['K/%d' % i]) for i in range(len(results) - 1)])
+    digest = f'\033[{91 + int(hashlib.sha256(digest.encode()).hexdigest(), 16) % 6}m{digest}\033[0m'
     result = float(results['TPR'])
   except:
     digest = 'null'

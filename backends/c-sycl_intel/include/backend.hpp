@@ -20,7 +20,14 @@ namespace ab {
     } catch (sycl::exception const &e) {
       std::terminate();
     }
-    fprintf(stderr, "   (SYCL_INFO: SYCL Device Name = %s)\n", _sycl_queue.get_device().get_info<sycl::info::device::name>().c_str());
+    size_t max_compute_units = _sycl_queue.get_device().get_info<cl::sycl::info::device::max_compute_units>();
+    size_t max_work_group_size = _sycl_queue.get_device().get_info<cl::sycl::info::device::max_work_group_size>();
+    size_t max_mem_alloc_size = _sycl_queue.get_device().get_info<cl::sycl::info::device::max_mem_alloc_size>();
+    size_t local_mem_size = _sycl_queue.get_device().get_info<cl::sycl::info::device::local_mem_size>();
+    size_t max_clock_frequency = _sycl_queue.get_device().get_info<cl::sycl::info::device::max_clock_frequency>();
+    fprintf(stderr, "   (SYCL_INFO: SYCL Device Name = %s [%zd, %zd, %zd, %zd, %zd])\n", _sycl_queue.get_device().get_info<sycl::info::device::name>().c_str(),
+      max_compute_units, max_work_group_size, max_mem_alloc_size, local_mem_size, max_clock_frequency
+    );
   }
 
   void finalize() {

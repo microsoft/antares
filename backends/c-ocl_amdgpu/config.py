@@ -11,7 +11,6 @@ def do_native_translation_v2(codeset, **kwargs):
   expand_args = ', '.join([f'__global {x[0]}* {x[1]}' for x in in_args + out_args])
 
   body = body.replace('__syncthreads()', 'barrier(CLK_LOCAL_MEM_FENCE)').replace('__shared__', '__local')
-  body = body.replace('(make_int4)', 'make_int4').replace('(make_int2)', 'make_int2')
   parsed_lines, body = [], body.split('\n')
   for line in body:
     parts = line.split(' = ')
@@ -29,12 +28,17 @@ def do_native_translation_v2(codeset, **kwargs):
     body = body.replace(key, 'get_local_id(%d)' % i)
  
   full_body = f'''{kwargs['attrs'].blend}
-#ifndef __MAKE_DATA_ARRAY__
-#define __MAKE_DATA_ARRAY__
+#ifndef __OCL_COMMON_MACRO__
+#define __OCL_COMMON_MACRO__
+
+#define __ITEM_0_OF__(v) (v).x
+#define __ITEM_1_OF__(v) (v).y
+#define __ITEM_2_OF__(v) (v).z
+#define __ITEM_3_OF__(v) (v).w
+
 #define make_int4(x, y, z, w) ((int4)(x, y, z, w))
-#define make_float4(x, y, z, w) ((float4)(x, y, z, w))
 #define make_int2(x, y) ((int2)(x, y))
-#define make_float2(x, y) ((float2)(x, y))
+
 #endif
 
 __kernel void {kernel_name}({expand_args}) {{

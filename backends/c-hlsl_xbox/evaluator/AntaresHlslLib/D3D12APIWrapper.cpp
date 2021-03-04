@@ -284,9 +284,13 @@ void* dxShaderLoad_v2(const char* shader_src)
     if (computeShader != nullptr)
         handle->bytecode = CD3DX12_SHADER_BYTECODE(computeShader->GetBufferPointer(), computeShader->GetBufferSize());
 #else
-    ComPtr<ID3DBlob> computeShader = nullptr;
-    if (D3DCompile(source.data(), source.size(), NULL, NULL, NULL, "CSMain", "cs_5_1", 0, 0, &computeShader, NULL) >= 0 && computeShader != nullptr)
+    ComPtr<ID3DBlob> computeShader = nullptr, errMsg = nullptr;
+    if (D3DCompile(source.data(), source.size(), NULL, NULL, NULL, "CSMain", "cs_5_1", 0, 0, &computeShader, &errMsg) >= 0 && computeShader != nullptr)
         handle->bytecode = CD3DX12_SHADER_BYTECODE(computeShader.Get());
+    else {
+        auto error_message = (char*)errMsg->GetBufferPointer();
+        fprintf(stderr, "[ERROR] D3D12: Shader Compile Failed: %s\n", error_message);
+    }
 #endif
     if (computeShader == nullptr) {
         //delete handle;

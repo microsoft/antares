@@ -22,7 +22,7 @@
 #include <unistd.h>
 #endif
 
-#define CHECK_OK(x)  ((x) ? 1 : (fprintf(stderr, "[Assertion Failed] %s:%d\n", __FILE__, __LINE__), exit(1), 0))
+#define CHECK_OK(x)  ((x) ? 1 : (fprintf(stderr, "[CheckFail] %s:%d\n", __FILE__, __LINE__), exit(1), 0))
 
 namespace ab_utils {
 

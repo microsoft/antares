@@ -25,6 +25,16 @@ def do_native_translation_v2(codeset, **kwargs):
   full_body = f'''
 #include <hip/hip_runtime.h>
 #include <hip/hip_fp16.h>
+
+#ifndef __ROCM_COMMON_MACRO__
+#define __ROCM_COMMON_MACRO__
+
+#define __ITEM_0_OF__(v) (v).x
+#define __ITEM_1_OF__(v) (v).y
+#define __ITEM_2_OF__(v) (v).z
+#define __ITEM_3_OF__(v) (v).w
+
+#endif
 {kwargs['attrs'].blend}
 
 extern "C" __global__ __launch_bounds__({launch_bounds}) void {kernel_name}({expand_args}) {{
