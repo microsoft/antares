@@ -74,7 +74,7 @@ int main(int argc, char** argv)
       printf("\n- K/%d: %.10e\n", i, digest);
     }
 
-    {
+    do {
       auto x = ab::recordTime();
       gm.compute(global_args.data());
       auto y = ab::recordTime();
@@ -82,8 +82,10 @@ int main(int argc, char** argv)
 
       double tpr = ab::convertToElapsedTime(x, y);
       const char *expected_timeout = getenv("EXPECTED_TIMEOUT");
-      if (expected_timeout && *expected_timeout && tpr > std::atof(expected_timeout))
-        throw std::runtime_error(("Time limit exceeded: " + std::to_string(tpr) + " v.s. (expected) " + expected_timeout).c_str());
+      if (expected_timeout && *expected_timeout && tpr > std::atof(expected_timeout)) {
+        printf("\n- TPR: %g\n", tpr);
+        break;
+      }
 
       int num_runs = (int)std::max(1LU, std::min(10000LU, (unsigned long)(1.0 / tpr)));
       tpr = 0.0f;
@@ -93,7 +95,7 @@ int main(int argc, char** argv)
       y = ab::recordTime();
       tpr = ab::convertToElapsedTime(x, y) / num_runs;
       printf("\n- TPR: %g\n", tpr);
-    }
+    } while (0);
 
     ab::finalize();
     return 0;
