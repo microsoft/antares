@@ -82,7 +82,7 @@ int main(int argc, char** argv)
 
       double tpr = ab::convertToElapsedTime(x, y);
       const char *expected_timeout = getenv("EXPECTED_TIMEOUT");
-      if (expected_timeout && *expected_timeout && tpr > std::atof(expected_timeout)) {
+      if ((expected_timeout && *expected_timeout && tpr > std::atof(expected_timeout)) || tpr >= 2) {
         printf("\n- TPR: %g\n", tpr);
         break;
       }

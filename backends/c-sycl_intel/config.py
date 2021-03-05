@@ -59,43 +59,15 @@ def do_native_translation_v2(codeset, **kwargs):
 #define make_int4(x, y, z, w)  (int4{{x, y, z, w}})
 #define make_int2(x, y)  (int2{{x, y}})
 
-#define USING_NATIVE_VECTELEM
-
-#ifdef USING_NATIVE_VECTELEM
+#define __STORE_ITEM_0__(t, out, ido, in, idi) *(t*)(out + ido) = *(t*)(in + idi)
+#define __STORE_ITEM_1__(t, out, ido, in, idi)
+#define __STORE_ITEM_2__(t, out, ido, in, idi)
+#define __STORE_ITEM_3__(t, out, ido, in, idi)
 
 #define __ITEM_0_OF__(v) (v).x()
 #define __ITEM_1_OF__(v) (v).y()
 #define __ITEM_2_OF__(v) (v).z()
 #define __ITEM_3_OF__(v) (v).w()
-
-using namespace cl::sycl;
-
-#else
-
-struct int2 {{ int x, y; }};
-struct int4 {{ int x, y, z, w; }};
-#define __ITEM_0_OF__(v) (v).x
-#define __ITEM_1_OF__(v) (v).y
-#define __ITEM_2_OF__(v) (v).z
-#define __ITEM_3_OF__(v) (v).w
-
-#define MAKE_VEC4_OP(type) \\
-  inline type operator+(const type &l, const type &r) {{ return make_##type(l.x + r.x, l.y + r.y, l.z + r.z, l.w + r.w); }} \\
-  inline type operator-(const type &l, const type &r) {{ return make_##type(l.x - r.x, l.y - r.y, l.z - r.z, l.w - r.w); }} \\
-  inline type operator*(const type &l, const type &r) {{ return make_##type(l.x * r.x, l.y * r.y, l.z * r.z, l.w * r.w); }} \\
-  inline type operator/(const type &l, const type &r) {{ return make_##type(l.x / r.x, l.y / r.y, l.z / r.z, l.w / r.w); }} \\
-  inline type operator%(const type &l, const type &r) {{ return make_##type(l.x % r.x, l.y % r.y, l.z % r.z, l.w % r.w); }}
-#define MAKE_VEC2_OP(type) \\
-  inline type operator+(const type &l, const type &r) {{ return make_##type(l.x + r.x, l.y + r.y); }} \\
-  inline type operator-(const type &l, const type &r) {{ return make_##type(l.x - r.x, l.y - r.y); }} \\
-  inline type operator*(const type &l, const type &r) {{ return make_##type(l.x * r.x, l.y * r.y); }} \\
-  inline type operator/(const type &l, const type &r) {{ return make_##type(l.x / r.x, l.y / r.y); }} \\
-  inline type operator%(const type &l, const type &r) {{ return make_##type(l.x % r.x, l.y % r.y); }}
-
-MAKE_VEC4_OP(int4)
-MAKE_VEC2_OP(int2)
-
-#endif // USING_NATIVE_VECTELEM
 
 #endif
 
@@ -103,6 +75,7 @@ extern "C" void {kernel_name}(sycl::queue* q, void **__args) {{
   {expand_args}
 
   using namespace std;
+  using namespace cl::sycl;
 
   q->submit([&](auto &cgh) {{
     {group_shared}
