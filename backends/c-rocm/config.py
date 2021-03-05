@@ -34,6 +34,11 @@ def do_native_translation_v2(codeset, **kwargs):
 #define __ITEM_2_OF__(v) (v).z
 #define __ITEM_3_OF__(v) (v).w
 
+#define __STORE_ITEM_0__(t, out, ido, in, idi) *(t*)(out + ido) = *(t*)(in + idi)
+#define __STORE_ITEM_1__(t, out, ido, in, idi)
+#define __STORE_ITEM_2__(t, out, ido, in, idi)
+#define __STORE_ITEM_3__(t, out, ido, in, idi)
+
 #endif
 {kwargs['attrs'].blend}
 

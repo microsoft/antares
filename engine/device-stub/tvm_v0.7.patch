@@ -70,7 +70,7 @@ index 471fefb23..9a6d9c033 100644
 +
  #endif  // TVM_RUNTIME_CUDA_CUDA_COMMON_H_
 diff --git a/src/target/source/codegen_c.cc b/src/target/source/codegen_c.cc
-index ca9b80564..802fc8cd9 100644
+index ca9b80564..574628563 100644
 --- a/src/target/source/codegen_c.cc
 +++ b/src/target/source/codegen_c.cc
 @@ -160,7 +160,7 @@ std::string CodeGenC::GetBufferRef(DataType t, const VarNode* buffer, PrimExpr i
@@ -82,7 +82,7 @@ index ca9b80564..802fc8cd9 100644
        os << "((";
        if (is_vol) {
          os << "volatile ";
-@@ -732,7 +732,26 @@ void CodeGenC::VisitStmt_(const StoreNode* op) {
+@@ -732,7 +732,42 @@ void CodeGenC::VisitStmt_(const StoreNode* op) {
  
      if (arith::ramp(base, 1, t.lanes()).Match(op->index)) {
        std::string value = this->PrintExpr(op->value);
@@ -105,12 +105,28 @@ index ca9b80564..802fc8cd9 100644
 +          PrintExpr(base.Eval(), stream);
 +          stream << ") + " << i << "] = " << field << ";\n";
 +        }
-+      } else
-+        this->PrintVecStore(op->buffer_var.get(), t, base.Eval(), value);
++      } else {
++        auto endsWith = [](const std::string &str, const std::string &end) {
++          return str.size() >= end.size() && str.compare(str.size() - end.size(), end.size(), end) == 0;
++        };
++        std::string vid = GetVarID(op->buffer_var.get());
++        std::string ref = GetBufferRef(t, op->buffer_var.get(), base.Eval());
++        int idx = ref.find(vid);
++        if (idx >= 0 && int(value.size()) >= idx && ref.compare(0, idx, value.c_str(), idx) == 0 && endsWith(ref, ")[0]") && endsWith(value, ")[0]")) {
++          int nxt = value.find(" + ", idx);
++          for (int i = 0; i < t.lanes(); ++i) {
++            this->PrintIndent();
++            stream << "__STORE_ITEM_" << i << "__(" << ref.substr(2, idx - 5) << ", " << vid << ", ";
++            PrintExpr(base.Eval(), stream);
++            stream << ", " << value.substr(idx, nxt - idx) << ", " << value.substr(nxt + 3, value.size() - nxt - 7) << ";\n";
++          }
++        } else
++          this->PrintVecStore(op->buffer_var.get(), t, base.Eval(), value);
++      }
      } else {
        // store elements seperately
        std::string index = SSAGetID(PrintExpr(op->index), op->index.dtype());
-@@ -850,6 +869,9 @@ void CodeGenC::VisitStmt_(const AttrStmtNode* op) {
+@@ -850,6 +885,9 @@ void CodeGenC::VisitStmt_(const AttrStmtNode* op) {
      IterVar iv = Downcast<IterVar>(op->node);
      if (iv->thread_tag.length() != 0) {
        if (!var_idmap_.count(iv->var.get())) {
