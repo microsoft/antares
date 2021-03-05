@@ -84,6 +84,11 @@ def do_native_translation_v2(codeset, **kwargs):
 #define __ITEM_2_OF__(v) (v).z
 #define __ITEM_3_OF__(v) (v).w
 
+#define __STORE_ITEM_0__(t, out, ido, in, idi)  out[(ido) + 0] = in[(idi) + 0]
+#define __STORE_ITEM_1__(t, out, ido, in, idi)  out[(ido) + 1] = in[(idi) + 1]
+#define __STORE_ITEM_2__(t, out, ido, in, idi)  out[(ido) + 2] = in[(idi) + 2]
+#define __STORE_ITEM_3__(t, out, ido, in, idi)  out[(ido) + 3] = in[(idi) + 3]
+
 #define make_int2(x, y) ((int2)(x, y))
 #define make_int4(x, y, z, w) ((int4)(x, y, z, w))
 
