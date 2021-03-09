@@ -37,7 +37,7 @@ def do_native_translation_v2(codeset, **kwargs):
     parsed_lines.append(f'{line[0:len(line)-len(simple_line)]}{type}* {name} = __accessor_{name}.get_pointer();');
     group_shared.append(f'sycl::accessor<{type}, 1, sycl::access::mode::read_write, sycl::access::target::local> __accessor_{name}(sycl::range<1>({size_str}), cgh);');
   body = '\n'.join(parsed_lines)
-  group_shared = '    \n'.join(group_shared)
+  group_shared = '\n    '.join(group_shared)
   del parsed_lines
 
   body = body.replace('Idx.', 'Idx_')
