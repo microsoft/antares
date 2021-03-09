@@ -38,16 +38,6 @@ class CustomOp(torch.nn.Module):
     feed_dict = sorted([(k, feed_dict[k]) for k in feed_dict], key=lambda x: x[0])
     self.values = [v for (k, v) in feed_dict]
 
-    expr_hash = hashlib.sha256(self.expr.encode()).hexdigest()
-    __custom_op_dict__ = CustomOp.__custom_op_dict__
-    if expr_hash in __custom_op_dict__:
-      output_names, attributes = __custom_op_dict__[expr_hash]
-    else:
-      output_names, attributes = self.fetch_and_compile_antares_kernel(expr_hash)
-      __custom_op_dict__[expr_hash] = output_names, attributes
-    self.attributes = attributes
-    self.output_names = output_names
-
   def request_server(self, tune_step=0):
     h = http_client.HTTPConnection(__default_server_addr__, timeout=10)
     try:
@@ -115,6 +105,15 @@ class CustomOp(torch.nn.Module):
     return self
 
   def emit(self):
+    expr_hash = hashlib.sha256(self.expr.encode()).hexdigest()
+    __custom_op_dict__ = CustomOp.__custom_op_dict__
+    if expr_hash in __custom_op_dict__:
+      output_names, attributes = __custom_op_dict__[expr_hash]
+    else:
+      output_names, attributes = self.fetch_and_compile_antares_kernel(expr_hash)
+      __custom_op_dict__[expr_hash] = output_names, attributes
+    self.attributes = attributes
+    self.output_names = output_names
     return self
 
   def forward(self):
