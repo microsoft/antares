@@ -496,13 +496,14 @@ int dxMemcpyHtoDAsync(void* dst, void* src, size_t bytes, void *hStream)
     device.MapAndCopyToResource(deviceCPUSrcX.Get(), src, bytes);
 
     // GPU copy
+    auto pStream = (dx_stream_t*)hStream;
+    assert(pStream->state == dx_stream_t::State::INRECORD);
+
     auto deviceIter = map_device_ptr(dst);
     UINT64 offset = static_cast<char*>(dst) - static_cast<char*>(deviceIter->first);
     auto dst_buffer = (dx_buffer_t*)(deviceIter->second);
-    ComPtr<ID3D12CommandAllocator> pCommandAllocator;
-    ComPtr<ID3D12GraphicsCommandList> pCmdList;
-    IFE(device.pDevice->CreateCommandAllocator(device.CommandListType, IID_GRAPHICS_PPV_ARGS(pCommandAllocator.ReleaseAndGetAddressOf())));
-    IFE(device.pDevice->CreateCommandList(0, device.CommandListType, pCommandAllocator.Get(), nullptr, IID_GRAPHICS_PPV_ARGS(pCmdList.ReleaseAndGetAddressOf())));
+    auto& pCmdList = pStream->pCmdList;
+
     dst_buffer->StateTransition(pCmdList.Get(), D3D12_RESOURCE_STATE_COPY_DEST);
     pCmdList->CopyBufferRegion(dst_buffer->handle.Get(), offset, deviceCPUSrcX.Get(), 0, bytes);
     dst_buffer->StateTransition(pCmdList.Get(), D3D12_RESOURCE_STATE_COMMON);
@@ -514,7 +515,8 @@ int dxMemcpyHtoDAsync(void* dst, void* src, size_t bytes, void *hStream)
     ID3D12CommandList* cmdlists[] = { pCmdList.Get() };
     device.pCommandQueue->ExecuteCommandLists(1, cmdlists);
     device.AwaitExecution();
-    return 0;
+
+    return dxStreamSynchronize(hStream);
 }
 
 int dxMemcpyDtoHAsync(void* dst, void* src, size_t bytes, void* hStream)
@@ -534,13 +536,14 @@ int dxMemcpyDtoHAsync(void* dst, void* src, size_t bytes, void* hStream)
     device.CreateReadbackBuffer(bytes, &deviceCPUSrcX);
 
     // GPU copy
+    auto pStream = (dx_stream_t*)hStream;
+    assert(pStream->state == dx_stream_t::State::INRECORD);
+
     auto deviceIter = map_device_ptr(src);
     UINT64 offset = static_cast<char*>(src) - static_cast<char*>(deviceIter->first);
     auto src_buffer = (dx_buffer_t*)(deviceIter->second);
-    ComPtr<ID3D12CommandAllocator> pCommandAllocator;
-    ComPtr<ID3D12GraphicsCommandList> pCmdList;
-    IFE(device.pDevice->CreateCommandAllocator(device.CommandListType, IID_GRAPHICS_PPV_ARGS(pCommandAllocator.ReleaseAndGetAddressOf())));
-    IFE(device.pDevice->CreateCommandList(0, device.CommandListType, pCommandAllocator.Get(), nullptr, IID_GRAPHICS_PPV_ARGS(pCmdList.ReleaseAndGetAddressOf())));
+
+    auto& pCmdList = pStream->pCmdList;
     src_buffer->StateTransition(pCmdList.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
     pCmdList->CopyBufferRegion(deviceCPUSrcX.Get(), 0, src_buffer->handle.Get(), offset, bytes);
     src_buffer->StateTransition(pCmdList.Get(), D3D12_RESOURCE_STATE_COMMON);
@@ -551,7 +554,7 @@ int dxMemcpyDtoHAsync(void* dst, void* src, size_t bytes, void* hStream)
 
     // CPU copy
     device.MapCopyFromResource(deviceCPUSrcX.Get(), dst, bytes);
-    return 0;
+    return dxStreamSynchronize(hStream);
 }
 
 int dxShaderLaunchAsync(void* hShader, void** buffers, void* hStream)
