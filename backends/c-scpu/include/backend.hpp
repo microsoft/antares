@@ -29,7 +29,7 @@ namespace ab {
     ab_utils::TempFile tempfile("cpp", source);
     auto path = tempfile.get_path();
 
-    ab_utils::Process({"g++", path, "-std=c++17", "-ldl", "-lpthread", "-fPIC", "-shared", "-O2", "-o", path + ".out"}, 10);
+    ab_utils::Process({"g++", path, "-std=c++17", "-ldl", "-lpthread", "-fPIC", "-shared", "-O2", "-o", path + ".out", "-ffast-math", "-march=native"}, 10);
 
     path = (path[0] == '/' ? path : "./" + path) + ".out";
     void* hmod = dlopen(path.c_str(), RTLD_NOW | RTLD_GLOBAL);

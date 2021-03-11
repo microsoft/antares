@@ -14,6 +14,7 @@ def do_native_translation_v2(codeset, **kwargs):
   full_body = f'''
 #include <math.h>
 #include <algorithm>
+#define rsqrt(x)  (1.0f / (x))
 {kwargs['attrs'].blend}
 
 extern "C" void {kernel_name}(int __rank__, void** __args) {{
