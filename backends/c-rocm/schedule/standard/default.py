@@ -8,7 +8,7 @@ import sys, time, subprocess
 import json
 import os
 
-def _schedule_single(s, cfg, attrs, output, rank):
+def _schedule_single(s, cfg, attrs, output, rank, have_tail):
   th_vals, rd_vals = [attrs.get_extent(x) for x in output.op.axis], [attrs.get_extent(x) for x in output.op.reduce_axis]
 
   # Normal Schedule Plan
@@ -16,7 +16,7 @@ def _schedule_single(s, cfg, attrs, output, rank):
   threads = [te.thread_axis('threadIdx.x'), te.thread_axis('threadIdx.y'), te.thread_axis('threadIdx.z')]
 
   if rd_vals:
-    if output.op in s.outputs:
+    if not have_tail:
       output_local = s.cache_write(output, "local")
     else:
       s[output].set_scope('local')
@@ -68,8 +68,9 @@ def _schedule_single(s, cfg, attrs, output, rank):
 
 def schedule(attrs):
   cfg, s = attrs.auto_config, attrs.scheduler
-  explicit_ops = [x for x in attrs.explicit_ops]
+  have_tail, explicit_ops = False, [x for x in attrs.explicit_ops]
   if len(explicit_ops) > 1 and not explicit_ops[-1].output(0).op.reduce_axis:
+    have_tail = True
     explicit_ops = explicit_ops[:-1]
   for rank, op in enumerate(explicit_ops):
-    _schedule_single(s, cfg, attrs, op.output(0), rank)
+    _schedule_single(s, cfg, attrs, op.output(0), rank, have_tail and rank + 1 == len(explicit_ops))
