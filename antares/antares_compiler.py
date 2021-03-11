@@ -446,14 +446,9 @@ def main_compute(code_only=False):
     worker_size = batch_size if batch_size < dev_num else dev_num
     thread_pool = ThreadPoolExecutor(max_workers=worker_size)
 
-    tuner_type = os.environ.get('TUNER', '')
+    tuner_type = os.environ.get('TUNER')
     if not tuner_type:
-      explicit_ops = AntaresGlobal.attrs.explicit_ops
-      global_outs = get_global_arg_props()['_out']
-      if ('|plan/' not in ('|' + '|'.join(AntaresGlobal.attrs.options)) and
-          len(explicit_ops) >= 1 and
-          len(explicit_ops[-1].reduce_axis) > 0 and
-          backend.split('_')[0] in ['c-rocm', 'c-cuda', 'c-hlsl', 'c-ocl', 'c-sycl']):
+      if backend.split('_')[0] in ['c-rocm', 'c-cuda', 'c-hlsl', 'c-ocl', 'c-sycl']:
         tuner_type = 'Ansor'
       else:
         tuner_type = 'XGBoost'

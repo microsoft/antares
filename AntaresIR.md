@@ -194,28 +194,3 @@ COMPUTE_V1='- einstein_v2("temp0[K, N] = input0[N, K] + 100; output0[N, M] +=! t
 # ConvBiasRelu Tail Fusion
 COMPUTE_V1='- einstein_v2("conv_out[N, F, HO, WO] +=! input0[N, C, HO + KH, WO + KW] * input1[KH, KW, C, F] where HO in 256, WO in 256; conv_bias[N, F, HO, WO] = conv_out[N, F, HO, WO] + input2[0, 0, 0, F]; output0[N, F, HO, WO] = conv_bias[N, F, HO, WO].when(conv_bias[N, F, HO, WO] > 0.0, 0.0)", input_dict={"input0": {"dtype": "float32", "shape": [1, 16, 256, 256]}, "input1": {"dtype": "float32", "shape": [1, 1, 16, 16]}, "input2": {"dtype": "float32", "shape": [1, 1, 1, 16]}})' make
 
-
-####### Experimental (platform-dependent, unverified in every backend)
-# MatMul (explicit plan)
-COMPUTE_V1='- einstein_v2("output0[N, M] +=! input0[N, K] * input1[K, M]", { "input0": {"dtype": "float32", "shape": [1024, 512]}, "input1": {"dtype": "float32", "shape": [512, 512]}})  ## @: plan/matmul_v1' make
-
-# ReduceSum (backend-related explicit plan combinations)
-COMPUTE_V1='- einstein_v2("output0[N] +=! input0[N, M]", {"input0": {"dtype": "float32", "shape": [1024, 3072]}})  ## @: plan/c-cuda=reduce_sum_v1,c-rocm=reduce_sum_v1,default' make
-
-# [INTRISIC SPEC] ROCm/CUDA's Custom Argmax2D
-BACKEND=c-rocm COMPUTE_V1='- einstein_v2("output0[N] argmax(0, N)=! input0[N, C].call(`index_of`, [N], dtype=`int32`)", input_dict={"input0": {"dtype": "float32", "shape": [32, 128]}})  ## @: plan/c-cuda=blend.my_argmax,c-rocm=blend.my_argmax' make
-
-# [INTRISIC SPEC] HLSL ElementwiseExp of VecFloat
-BACKEND=c-hlsl_win64 COMPUTE_V1='- einstein_v2("output0[N] = input0[N].call(`my_exp`)", input_dict={"input0": {"dtype": "float4@128", "shape": [16]}})  ## @: plan/c-hlsl_win64=blend.my_exp' make
-
-# [INTRISIC SPEC] ROCm MatMul (mixed type for float16 -> float16)
-BACKEND=c-rocm COMPUTE_V1='- einstein_v2("temp0[N, M] +=! input0[N, K].call(`dot2h1`, [input1[K, M]]); output0[N, M] = temp0[N, M].call(`dot2h2`, dtype=`float16`)", { "input0": {"dtype": "half2@32", "shape": [1024, 512]}, "input1": {"dtype": "half2@32", "shape": [512, 512]}})  ## @: plan/c-rocm=blend.hgemm_v1' make
-
-# [INTRISIC SPEC] ROCm MatMul (mixed type for int8x4 -> int32)
-BACKEND=c-rocm COMPUTE_V1='- einstein_v2("output0[N, M] +=! input0[N, K].call(`dot4a`, [input1[K, M]], dtype=`int32`)", { "input0": {"dtype": "int32", "shape": [1024, 512]}, "input1": {"dtype": "int32", "shape": [512, 512]}})  ## @: plan/c-rocm=blend.dot4a_v1' make
-
-# [INTRISIC SPEC] CPU AVX Add (elementwise add using CPU AVX instructions)
-BACKEND=c-mcpu COMPUTE_V1='- einstein_v2("output0[N] = input0[N].call(`fastadd`, [input1[N]])", input_dict={"input0": {"dtype": "avx256@256", "shape": [16]}, "input1": {"dtype": "avx256@256", "shape": [16]}})  ## @: plan/c-mcpu=blend.avx_add' make
-
-# [INTRISIC SPEC] CUDA FP16 Tensorcore
-BACKEND=c-cuda COMPUTE_V1='- einstein_v2("output0[N, M] +=! input0[N, K].cast(`float32`) * input1[K, M].cast(`float32`)", { "input0": {"dtype": "float16", "shape": [1024, 1024]}, "input1": {"dtype": "float16", "shape": [1024, 1024]}})  ## @: plan/c-cuda=blend.matmul_fp16_tensorcore|layout=NN' make

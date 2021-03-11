@@ -8,9 +8,7 @@ import sys, time, subprocess
 import json
 import os
 
-
-def schedule(attrs):
-  cfg, s, output = attrs.auto_config, attrs.scheduler, attrs.outputs[0]
+def _schedule_single(s, cfg, attrs, output, rank):
   th_vals, rd_vals = [attrs.get_extent(x) for x in output.op.axis], [attrs.get_extent(x) for x in output.op.reduce_axis]
 
   # Normal Schedule Plan
@@ -33,7 +31,7 @@ def schedule(attrs):
 
   high_vaxis, low_vaxis = [], []
   for i in range(len(th_idx)):
-    ax_name = 'axis_%d' % th_idx[i]
+    ax_name = f'r{rank}_axis_{th_idx[i]}'
     ax_obj = output.op.axis[th_idx[i]]
     if i < len(blocks):
       cfg.define_split(ax_name, cfg.axis(ax_obj), num_outputs=4)
@@ -48,23 +46,30 @@ def schedule(attrs):
     high_vaxis.append(ax2)
     low_vaxis.append(ax4)
 
-  cfg.define_reorder("reorder", high_vaxis, "all")
+  ord_name = f"r{rank}_ord"
+  cfg.define_reorder(ord_name, high_vaxis, "all")
   plan_order = []
-  for i in cfg["reorder"].perm:
+  for i in cfg[ord_name].perm:
     plan_order.append(low_vaxis[i])
     plan_order.append(high_vaxis[i])
   s[output].reorder(*plan_order)
 
   if rd_vals:
     comp_ax = plan_order[-1]
-    for m in attrs.explicit_ops[:-1]:
-      s[m.output(0)].compute_at(s[output], comp_ax)
     s[output_local].compute_at(s[output], comp_ax)
 
     for i in range(len(rd_vals)):
       if rd_vals[i] > 1:
-        ax_name = 'reduce_%d' % i
+        ax_name = f'r{rank}_reduce_{i}'
         cfg.define_split(ax_name, cfg.axis(output_local.op.reduce_axis[i]), num_outputs=3)
         ko, kt, ki = cfg[ax_name].apply(s, output_local, output_local.op.reduce_axis[i])
         s[output_local].unroll(kt)
 
+
+def schedule(attrs):
+  cfg, s = attrs.auto_config, attrs.scheduler
+  explicit_ops = [x for x in attrs.explicit_ops]
+  if len(explicit_ops) > 1 and not explicit_ops[-1].output(0).op.reduce_axis:
+    explicit_ops = explicit_ops[:-1]
+  for rank, op in enumerate(explicit_ops):
+    _schedule_single(s, cfg, attrs, op.output(0), rank)
