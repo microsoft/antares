@@ -231,8 +231,7 @@ struct ExecutionModule {
     std::unordered_map<std::string, int> tensor_used;
     for (int i = 0; i < global_inputs.size(); ++i)
       ++tensor_used[global_inputs[i].name];
-    int nodeCnt = local_kernels.size();
-    for (auto it = --local_kernels.end(); nodeCnt > 0; --it, --nodeCnt) {
+    for (auto it = local_kernels.begin(); it != local_kernels.end(); ++it) {
       for (int i = 0; i < it->in_args.size(); ++i)
           ++tensor_used[it->in_args[i]];
     }
@@ -242,14 +241,15 @@ struct ExecutionModule {
     for (int i = 0; i < global_outputs.size(); ++i)
       tensor_memory[global_outputs[i].name] = args[i + global_inputs.size()];
 
+    int nodeCnt = 0;
     for (auto it = local_kernels.begin(); ++nodeCnt <= local_kernels.size(); ++it) {
       const std::string &name = it->fname;
       if (nodeCnt != local_kernels.size()) {
         CHECK_OK(it->out_args.size() == 1);
         auto &arg_name = it->out_args[0];
         auto &memptr = tensor_memory[arg_name];
-        CHECK_OK(memptr == nullptr);
-        memptr = allocate_tensor(local_tensors.find(arg_name)->second);
+        if (memptr == nullptr)
+          memptr = allocate_tensor(local_tensors.find(arg_name)->second);
       }
       std::vector<void*> krnl_args;
       for (auto &arg: it->in_args)

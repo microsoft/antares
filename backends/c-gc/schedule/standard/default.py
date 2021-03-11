@@ -6,8 +6,9 @@ from tvm import te
 
 
 def schedule(attrs):
-  cfg, s, output = attrs.auto_config, attrs.scheduler, attrs.outputs[0]
-  th_vals, rd_vals = [attrs.get_extent(x) for x in output.op.axis], [attrs.get_extent(x) for x in output.op.reduce_axis]
+  cfg, s = attrs.auto_config, attrs.scheduler
+  assert len(attrs.explicit_ops) == 1, "Unhandled multiple explicit-op scheduling."
+  output = attrs.explicit_ops[0].output(0)
 
   inputs = attrs.inputs
   program = attrs.ir
@@ -22,7 +23,7 @@ def schedule(attrs):
     return
 
   loop_axes = []
-  for i in range(len(th_vals)):
+  for i in range(len(output.op.axis)):
     lo, li = s[output].split(output.op.axis[i], nparts=1)
     if i == 0:
       s[output].bind(lo, te.thread_axis('blockIdx.x'))

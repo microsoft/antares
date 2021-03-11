@@ -124,10 +124,10 @@ def traverse_inline(s, final_op, callback):
           explicit_ops.append(op)
         elif op not in s.outputs:
           s[op].compute_inline()
-    _traverse(final_op)
+        else:
+          explicit_ops.append(op)
 
-    if not explicit_ops:
-      explicit_ops.append(final_op)
+    _traverse(final_op)
     callback(explicit_ops[-1], explicit_ops)
 
 def do_native_scheduling(attrs):
@@ -138,7 +138,6 @@ def do_native_scheduling(attrs):
     import importlib
     schedule_lib = importlib.import_module('backends.%s.schedule.%s' % (attrs.backend, plan_name), __loader__.name)
     schedule_lib.schedule(attrs)
-    return attrs.scheduler, attrs.inputs + attrs.outputs
 
   plan = 'default'
   for opt in attrs.options:
@@ -209,7 +208,6 @@ def get_template_op(**kwargs):
         attrs = Mock()
         attrs.inputs = inputs
         attrs.explicit_ops = explicit_ops
-        attrs.outputs = [op.output(0)]
         attrs.scheduler = sch
         attrs.auto_config = cfg
         attrs.backend = backend

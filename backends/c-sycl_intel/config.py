@@ -74,7 +74,6 @@ def do_native_translation_v2(codeset, **kwargs):
 extern "C" void {kernel_name}(sycl::queue* q, void **__args) {{
   {expand_args}
 
-  using namespace std;
   using namespace cl::sycl;
 
   q->submit([&](auto &cgh) {{

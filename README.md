@@ -43,7 +43,7 @@ sudo python3 ./frameworks/pytorch/setup.py
 # Reference - Recommended Installation Package Choices for Pytorch (tested in Ubuntu 20.04):
 #   Pytorch for NVIDIA CUDA 10.0: python3 -m pip install torch==1.5.0 torchvision==0.6.0 -f https://download.pytorch.org/whl/torch_stable.html
 #   Pytorch for NVIDIA CUDA 11.0: python3 -m pip install torch===1.7.1+cu110 torchvision===0.8.2+cu110 torchaudio===0.7.2 -f https://download.pytorch.org/whl/torch_stable.html
-#   Pytorch for AMD ROCm 4.0:  python3 -m pip install --pre torch==1.8.0.dev20210106 -f https://download.pytorch.org/whl/nightly/rocm4.0/torch_nightly.html
+#   Pytorch for AMD ROCm 4.0:  python3 -m pip install torch torchvision -f https://download.pytorch.org/whl/rocm4.0.1/torch_stable.html
 ```
 
 # Example with Tensorflow-GPU/Pytorch-GPU:
