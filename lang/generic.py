@@ -21,7 +21,7 @@ def einstein_v2(exprss, input_dict, extra_outputs=[], **kwargs):
      if len(input_dict[k]['shape']) == 0:
        input_dict[k]['shape'] = [1]
     from lang import einstein_v2
-    ir = einstein_v2.emit_tvm_ir(exprss, input_dict, extra_outputs)
+    ir = einstein_v2.ir_graph_parser(exprss, input_dict, extra_outputs)
     assert(len(ir) > 0)
     os.environ['LL_IR'] = ir
     print('\n[LL-IR]\n%s\n' % ir[ir.find('; ') + 2:])
