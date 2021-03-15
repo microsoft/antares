@@ -248,8 +248,8 @@ struct ExecutionModule {
         CHECK_OK(it->out_args.size() == 1);
         auto &arg_name = it->out_args[0];
         auto &memptr = tensor_memory[arg_name];
-        if (memptr == nullptr)
-          memptr = allocate_tensor(local_tensors.find(arg_name)->second);
+        CHECK_OK(memptr == nullptr);
+        memptr = allocate_tensor(local_tensors.find(arg_name)->second);
       }
       std::vector<void*> krnl_args;
       for (auto &arg: it->in_args)

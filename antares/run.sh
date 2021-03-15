@@ -63,9 +63,12 @@ if [ ! -e ${ANTARES_DRIVER_PATH}/device_properties.cfg ]; then
   if [[ "${HARDWARE_CONFIG}" != "" ]]; then
     cat hardware/${HARDWARE_CONFIG}.cfg > ${ANTARES_DRIVER_PATH}/device_properties.cfg
     echo "  >> Using specific hardware device properties."
-  else
+  elif [ -e backends/${BACKEND}/default_props.cfg ]; then
     cat backends/${BACKEND}/default_props.cfg > ${ANTARES_DRIVER_PATH}/device_properties.cfg
     echo "  >> Using ${BACKEND} default device properties."
+  else
+    echo -e "\n  >> Unsupported Backend: No device properties found for backend type: ${BACKEND}.\n"
+    exit 1
   fi
 else
   echo "  >> Using ${BACKEND} runtime device properties."
