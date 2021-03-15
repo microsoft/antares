@@ -10,7 +10,7 @@ import antares_custom_op
 
 __default_server_addr__ = 'localhost:8880'
 
-def generate_antares_expression(antares_ir, feed_dict, extra_outputs):
+def generate_antares_expression(ir, feed_dict, extra_outputs):
   input_dict, kwargs = {}, {}
   for k in feed_dict:
     v = feed_dict[k]
@@ -19,8 +19,11 @@ def generate_antares_expression(antares_ir, feed_dict, extra_outputs):
       'shape': list(v.shape)
     }
     kwargs[k] = v
+
+  ir = ir.replace('"', '`').replace('\n', ' ').strip()
   input_dict = json.dumps(input_dict)
-  return '- einstein_v2("%s", input_dict=%s, extra_outputs=%s)' % (antares_ir.replace('"', '`'), input_dict, extra_outputs)
+  expression = f'- einstein_v2(input_dict={input_dict}, extra_outputs={extra_outputs}, exprss="{ir}")'
+  return expression
 
 def set_default_server_addr(server_addr):
   global __default_server_addr__
