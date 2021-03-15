@@ -74,6 +74,8 @@ namespace ab {
 
   void launchKernel(const std::vector<void*> &hFunction, const std::vector<void*> &krnl_args) {
     ((void(*)(void*, void* const*))hFunction[0])(&_sycl_queue, krnl_args.data());
+    if (__BACKEND__ == "c-sycl_intel")
+      _sycl_queue.wait();
   }
 
   void synchronize() {
