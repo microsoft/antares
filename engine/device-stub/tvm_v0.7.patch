@@ -296,3 +296,16 @@ index 921c7ad79..d96f871de 100644
        if (var.dtype().is_handle()) {
          // Create a new version of v.
          auto it = handle_data_type_.find(var.get());
+diff --git a/src/tir/transforms/storage_rewrite.cc b/src/tir/transforms/storage_rewrite.cc
+index 2817b1334..5d9d0d4c8 100644
+--- a/src/tir/transforms/storage_rewrite.cc
++++ b/src/tir/transforms/storage_rewrite.cc
+@@ -337,6 +337,8 @@ class StoragePlanRewriter : public StmtExprMutator {
+   using AllocEntry = LinearAccessPatternFinder::AllocEntry;
+ 
+   Stmt Rewrite(Stmt stmt, bool detect_inplace) {
++    return stmt;
++
+     detect_inplace_ = detect_inplace;
+     // plan the rewrite
+     LinearAccessPatternFinder finder;
