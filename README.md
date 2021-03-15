@@ -166,18 +166,18 @@ Tuning will take several times to finish. As long as your environment is correct
 
 1) Re-evalutation on the Antares-tuned case by adding `CONFIG` variable, whose content is exactly the JSON-format configuration you get from your last corresponding tuning reports:
 ```sh
-    CONFIG='{"axis_0": [-1, 16, 64, 1], "reorder": [0]}' COMPUTE_V1='- einstein_v2("output0[N] = input0[N] + input1[N]", input_dict={"input0": {"dtype": "float32", "shape": [1024 * 512]}, "input1": {"dtype": "float32", "shape": [1024 * 512]}})' BACKEND=c-cuda make
+    CONFIG='{"..": [..], ..}' COMPUTE_V1='- einstein_v2("output0[N] = input0[N] + input1[N]", input_dict={"input0": {"dtype": "float32", "shape": [1024 * 512]}, "input1": {"dtype": "float32", "shape": [1024 * 512]}})' BACKEND=c-cuda make
 ```
 
 2) If you want to save the kernel code, you need to append `COMMIT=1` for your case, like:
 ```sh
-    COMMIT=1 CONFIG='{"axis_0": [-1, 16, 64, 1], "reorder": [0]}' COMPUTE_V1='- einstein_v2("output0[N] = input0[N] + input1[N]", input_dict={"input0": {"dtype": "float32", "shape": [1024 * 512]}, "input1": {"dtype": "float32", "shape": [1024 * 512]}})' BACKEND=c-cuda make
+    COMMIT=1 CONFIG='{"..": [..], ..}' COMPUTE_V1='- einstein_v2("output0[N] = input0[N] + input1[N]", input_dict={"input0": {"dtype": "float32", "shape": [1024 * 512]}, "input1": {"dtype": "float32", "shape": [1024 * 512]}})' BACKEND=c-cuda make
 ```
 The generated kernel code will be saved in codehub folder as a determistic filename.
 
 Environment variable `COMMIT` works in not only re-evalutation command, but also tuning command, e.g.:
 ```sh
-    COMMIT=1 STEP=1000 BACKEND=c-cuda COMPUTE_V1='- einstein_v2("output0[N, F, HO, WO] +=! input0[N, C, HO * 4 + KH, WO * 4 + KW] * input1[F, C, KH, KW] where HO in 55, WO in 55", input_dict={"input0": {"dtype": "float32", "shape": [64, 3, 227, 227]}, "input1": {"dtype": "float32", "shape": [96, 3, 11, 11]}});' make
+    COMMIT=1 STEP=100 BACKEND=c-cuda COMPUTE_V1='- einstein_v2("output0[N, F, HO, WO] +=! input0[N, C, HO * 4 + KH, WO * 4 + KW] * input1[F, C, KH, KW] where HO in 55, WO in 55", input_dict={"input0": {"dtype": "float32", "shape": [64, 3, 227, 227]}, "input1": {"dtype": "float32", "shape": [96, 3, 11, 11]}});' make
 ```
 If a same case (with same `COMPUTE_V1` value) has been tuned and saved in history already, the setting of `COMMIT=1` will block you from tuning it again to avoid the overwritten of history kernel code in codehub. But You can still set `COMMI=force` to allow such overwritten.
 

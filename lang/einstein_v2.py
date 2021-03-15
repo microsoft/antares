@@ -187,7 +187,7 @@ class OpTensor:
         return OpTensor('when', {"if": conditions, "true": self, "false": other, "merge_op": merge_op}, self._dtype, max(self._flopbase, other._flopbase))
 
 def parse_to_ast(expr, input_dict={}):
-  expr = expr.strip().replace('`', '"')
+  expr = expr.strip().replace('`', '"').replace('\'', '"')
   if re.search('\[ *\]', expr):
     expr = re.sub('\[ *\]', '[0]', expr)
     if expr.rfind('where') == -1:
@@ -204,7 +204,13 @@ def parse_to_ast(expr, input_dict={}):
   # Parse compute axes & init axis nodes
   global explicit_range
   explicit_range = {}
-  for i in range(1, len(expr)):
+  brac_st = False
+  for i in range(len(expr)):
+    if expr[i] == '"':
+      brac_st = not brac_st
+      continue
+    if i < 1 or brac_st:
+      continue
     if expr[i].isupper() and (not expr[i - 1].isalpha()) and (not expr[i - 1].isdigit()) and (expr[i - 1] != '_'):
       for j in range(i, len(expr) + 1):
         if j == len(expr) or (not expr[j].isalpha() and not expr[j].isdigit()):
@@ -277,7 +283,6 @@ def parse_to_ast(expr, input_dict={}):
   output_name = lval[:lval.index('[')].strip()
   props['output_name'] = output_name
   return {'props': props, 'root': _root}
-
 
 def const(other):
   return OpTensor.parse(other)
@@ -390,44 +395,22 @@ def walk_in_ast(node, func, args, parent, attr_id):
 
   _walk(node, parent, attr_id)
 
-def apply_fusion(ast, top_ast):
-
-  def _replace_axis(node, replace_maps):
-    if node._op == 'axis' and node._value['name'] in replace_maps:
-      return replace_maps[node._value['name']]
-    return None
-
-  def _replace_tensor(node):
-    if node._op == 'get_item':
-      tensor_name = node._value['tensor']._value['name']
-      if tensor_name not in top_ast:
-        return None
-      sub_ast = copy.deepcopy(top_ast[tensor_name])
-      replace_maps = {}
-      for i in range(len(node._value['index'])):
-        replace_maps[sub_ast['props']['data_axes'][i]['name']] = node._value['index'][i]
-      walk_in_ast(sub_ast['root'], _replace_axis, [replace_maps], sub_ast, 'root')
-      return sub_ast['root']
-    return None
-  walk_in_ast(ast['root'], _replace_tensor, [], ast, 'root')
-  return ast
-
-def emit_tvm_ir_v2(exprss, input_dict, extra_outputs):
+def ir_graph_parser(exprss, input_dict, extra_outputs):
   statements = [s_.strip() for s_ in exprss.split(';')]
-  inputs = copy.deepcopy(input_dict)
+  tensor_dict = copy.deepcopy(input_dict)
   output_dict = {}
   ast_seq = []
   for s in statements:
     if not s:
       continue
-    ast = parse_to_ast(s, inputs)
+    ast = parse_to_ast(s, tensor_dict)
     k = ast['props']['output_name']
     ast_outputs_dict = {k: {"shape": [x['range'] for x in ast['props']['data_axes']], "dtype": ast['root']._dtype}}
-    inputs[k] = ast_outputs_dict[k]
+    tensor_dict[k] = ast_outputs_dict[k]
     if k in extra_outputs:
       output_dict[k] = ast_outputs_dict[k]
     ast_seq.append(ast)
-  os.environ['MEDIATE_TENSORS'] = json.dumps(inputs)
+  os.environ['MEDIATE_TENSORS'] = json.dumps(tensor_dict)
 
   # Also include the last output
   if k not in extra_outputs:
@@ -500,7 +483,3 @@ def emit_tvm_ir_v2(exprss, input_dict, extra_outputs):
     loops_def, pattern = emit_reduce_body(ast)
     ll_irs.append(loops_def + emit_output_body(ast, pattern))
   return '\n'.join(ll_irs)
-
-
-def emit_tvm_ir(exprss, input_dict, extra_outputs):
-  return emit_tvm_ir_v2(exprss, input_dict, extra_outputs)
