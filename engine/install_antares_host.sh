@@ -3,7 +3,7 @@
 cd $(dirname $0)/..
 ANTARES_ROOT=$(pwd)
 
-VERSION_TAG=v0.2dev3
+VERSION_TAG=v0.2dev4
 
 REQUIRED_PACKAGES="git python3-dev python3-pip g++ llvm-dev make curl libopenmpi-dev openmpi-bin"
 
