@@ -9,62 +9,62 @@ import sys, time, subprocess
 
 def schedule(attrs):
     cfg, s, output = attrs.auto_config, attrs.scheduler, attrs.explicit_ops[-1].output(0)
+    data_list, reduce_list = list(s[output].op.axis), list(s[output].op.reduce_axis)
 
-    y, x = s[output].op.axis
-    [rc] = s[output].op.reduce_axis
-    cfg.define_split("tile_y", y, num_outputs=4)
-    cfg.define_split("tile_x", x, num_outputs=4)
-    cfg.define_split("tile_rc", rc, num_outputs=3)
+    for i, ax in enumerate(data_list):
+      cfg.define_split(f"D{i}", ax, num_outputs=4)
+    for i, ax in enumerate(reduce_list):
+      cfg.define_split(f"R{i}", ax, num_outputs=3)
 
-    shared_list = []
+    input_list = []
     for I in s[output].op.input_tensors:
-      shared_list.append(I)
+      input_list.append(I)
 
-    num_threads = cfg["tile_x"].size[2] * cfg["tile_y"].size[2]
+    num_threads = 1
+    for i in range(len(data_list)):
+      num_threads *= cfg[f"D{i}"].size[2]
     assert num_threads <= 1024, "Invalid schedule plans: num_threads(%d) > 1024" % num_threads
 
     if output.op in s.outputs:
-        output = output
-        OL = s.cache_write(output, 'local')
+      output = output
+      OL = s.cache_write(output, 'local')
     else:
-        output = s.outputs[0].output(0)
-        s[output].set_scope('local')
-        OL = output
+      output = s.outputs[0].output(0)
+      s[output].set_scope('local')
+      OL = output
 
-    # tile and bind spatial axes
-    y, x = s[output].op.axis
+    data_slices, reduce_slices = [], []
+    for i in range(len(data_list)):
+      data_slices.append(list(cfg[f"D{i}"].apply(s, output, data_list[i])))
 
-    by, vy, ty, yi = cfg["tile_y"].apply(s, output, y)
-    bx, vx, tx, xi = cfg["tile_x"].apply(s, output, x)
-    rco, rcm, rci = cfg['tile_rc'].apply(s, OL, rc)
+    for i in range(len(reduce_list)):
+      reduce_slices.append(list(cfg[f"R{i}"].apply(s, OL, reduce_list[i])))
 
-    s[output].reorder(by, bx, vy, vx, ty, tx, yi, xi)
-    s[OL].compute_at(s[output], tx)
+    first, second, third, fourth = [x[0] for x in data_slices], [x[1] for x in data_slices], [x[2] for x in data_slices], [x[3] for x in data_slices]
+    s[output].reorder(*(first + second + third + fourth))
+    s[OL].compute_at(s[output], third[-1])
 
-    b_fused = s[output].fuse(by, bx)
-    v_fused = s[output].fuse(vy, vx)
-    t_fused = s[output].fuse(ty, tx)
+    b_fused = s[output].fuse(*first)
+    v_fused = s[output].fuse(*second)
+    t_fused = s[output].fuse(*third)
 
     s[output].bind(b_fused, te.thread_axis("blockIdx.x"))
     s[output].bind(v_fused, te.thread_axis("vthread"))
     s[output].bind(t_fused, te.thread_axis("threadIdx.y"))
 
-    shared_list = []
-    for I in shared_list:
-      IS = s.cache_read(I, 'shared', [OL])
-      shared_list.append(IS)
+    for i in range(len(input_list)):
+      input_list[i] = s.cache_read(input_list[i], 'shared', [OL])
 
     # tile reduction axes
-    y, x = s[OL].op.axis
-    [rc] = s[OL].op.reduce_axis
-    s[OL].reorder(rco, rcm, rci, y, x)
-    cache_loc = [rco][-1]
+    reduce_order = [x[0] for x in reduce_slices] + [x[1] for x in reduce_slices] + [x[2] for x in reduce_slices]
+    s[OL].reorder(*(reduce_order + list(s[OL].op.axis)))
+    cache_loc = reduce_order[0]
 
-    for IS in shared_list:
+    for IS in input_list:
       s[IS].compute_at(s[OL], cache_loc)
 
     # cooperative fetching
-    for i, load in enumerate(shared_list):
+    for i, load in enumerate(input_list):
       fused_o = s[load].fuse(*s[load].op.axis)
       cfg.define_knob(f"vectorize_{i}", [0, 2, 4])
       if cfg[f"vectorize_{i}"].val:
@@ -74,9 +74,9 @@ def schedule(attrs):
       s[load].bind(fused_i, te.thread_axis("threadIdx.y"))
 
     # unroll
-    cfg.define_knob("auto_unroll_max_step", [(1 << x) for x in range(10)])
+    cfg.define_knob("auto_unroll_max_step", [1, 4, 16, 32, 64, 512, 1024])
     cfg.define_knob("unroll_explicit", [False, True])
-    kernel_scope = rco
+    kernel_scope = cache_loc
     s[OL].pragma(kernel_scope, 'auto_unroll_max_step', cfg['auto_unroll_max_step'].val)
     s[OL].pragma(kernel_scope, 'unroll_explicit', cfg['unroll_explicit'].val)
 
