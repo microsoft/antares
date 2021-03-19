@@ -7,10 +7,6 @@ import logging
 import sys, time, subprocess
 
 
-import json
-import os
-
-
 def schedule(attrs):
     cfg, s, output = attrs.auto_config, attrs.scheduler, attrs.explicit_ops[-1].output(0)
     th_vals, rd_vals = [attrs.get_extent(x) for x in output.op.axis], [attrs.get_extent(x) for x in output.op.reduce_axis]
@@ -64,16 +60,16 @@ def schedule(attrs):
 
     # cooperative fetching
     for i, load in enumerate([AA, WW]):
-        fused = s[load].fuse(*s[load].op.axis)
-        fused_o, fused_i = s[load].split(fused, factor=cfg["tile_x"].size[3] * cfg["tile_y"].size[3])
-        cfg.define_knob(f"vectorize_{i}", [0, 1])
+        fused_o = s[load].fuse(*s[load].op.axis)
+        cfg.define_knob(f"vectorize_{i}", [0, 2, 4])
         if cfg[f"vectorize_{i}"].val:
+          fused_o, fused_i = s[load].split(fused, factor=cfg[f"vectorize_{i}"].val)
           s[load].vectorize(fused_i)
         fused_o, fused_i = s[load].split(fused_o, factor=cfg["tile_x"].size[2] * cfg["tile_y"].size[2])
         s[load].bind(fused_i, te.thread_axis("threadIdx.x"))
 
     # unroll
-    cfg.define_knob("auto_unroll_max_step", [0, 512, 1500])
+    cfg.define_knob("auto_unroll_max_step", [0, 64, 128, 512])
     cfg.define_knob("unroll_explicit", [False, True])
     kernel_scope = rco
     s[OL].pragma(kernel_scope, 'auto_unroll_max_step', cfg['auto_unroll_max_step'].val)
