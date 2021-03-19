@@ -445,10 +445,7 @@ def main_compute(code_only=False):
 
     tuner_type = os.environ.get('TUNER')
     if not tuner_type:
-      if backend.split('_')[0] in ['c-rocm', 'c-cuda', 'c-hlsl', 'c-ocl', 'c-sycl']:
-        tuner_type = 'Ansor'
-      else:
-        tuner_type = 'XGBoost'
+      tuner_type = 'XGBoost'
     print('  >> MAKE_PARA = %d/%d, EXEC_PARA = %d, TUNER = %s' % (worker_size, batch_size, dev_num, tuner_type))
 
     auto_commit = os.environ.get('COMMIT', '')
