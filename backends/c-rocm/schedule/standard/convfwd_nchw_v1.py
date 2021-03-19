@@ -14,7 +14,7 @@ import os
 
 
 def schedule(attrs):
-    cfg, s, output = attrs.auto_config, attrs.scheduler, attrs.outputs[0]
+    cfg, s, output = attrs.auto_config, attrs.scheduler, attrs.explicit_ops[-1].output(0)
     th_vals, rd_vals = [attrs.get_extent(x) for x in output.op.axis], [attrs.get_extent(x) for x in output.op.reduce_axis]
 
     conv = output

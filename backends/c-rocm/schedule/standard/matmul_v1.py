@@ -12,79 +12,70 @@ import os
 
 
 def schedule(attrs):
-    cfg, s, output = attrs.auto_config, attrs.scheduler, attrs.outputs[0]
+    cfg, s, output = attrs.auto_config, attrs.scheduler, attrs.explicit_ops[-1].output(0)
     th_vals, rd_vals = [attrs.get_extent(x) for x in output.op.axis], [attrs.get_extent(x) for x in output.op.reduce_axis]
 
-    C = output
-    A, B = C.op.input_tensors
+    y, x = s[output].op.axis
+    [rc] = s[output].op.reduce_axis
+    cfg.define_split("tile_y", y, num_outputs=4)
+    cfg.define_split("tile_x", x, num_outputs=4)
+    cfg.define_split("tile_rc", rc, num_outputs=3)
 
-    AA = s.cache_read(A, "shared", [C])
-    AL = s.cache_read(AA, "local", [C])
-    BB = s.cache_read(B, "shared", [C])
-    BL = s.cache_read(BB, "local", [C])
-    if C.op in s.outputs:
-      CC = s.cache_write(C, "local")
+    data_deform, kernel = s[output].op.input_tensors
+
+    if output.op in s.outputs:
+        output = output
+        OL = s.cache_write(output, 'local')
     else:
-      s[C].set_scope('local')
-      CC, C = C, s.outputs[0].output(0)
+        output = s.outputs[0].output(0)
+        s[output].set_scope('local')
+        OL = output
 
-    y, x = C.op.axis
-    k = CC.op.reduce_axis[0]
+    # tile and bind spatial axes
+    y, x = s[output].op.axis
 
-    cfg.flop = float(np.product(th_vals) * rd_vals[0] * 2.0)
+    by, vy, ty, yi = cfg["tile_y"].apply(s, output, y)
+    bx, vx, tx, xi = cfg["tile_x"].apply(s, output, x)
+    rco, rcm, rci = cfg['tile_rc'].apply(s, OL, rc)
 
-    cfg.define_split('tile_k', cfg.axis(k), num_outputs=3)
-    ko, kt, ki = cfg['tile_k'].apply(s, CC, k)
+    s[output].reorder(by, bx, vy, vx, ty, tx, yi, xi)
+    s[OL].compute_at(s[output], tx)
 
-    block_x = te.thread_axis('blockIdx.x')
-    block_y = te.thread_axis('blockIdx.y')
-    thread_x = te.thread_axis('threadIdx.x')
-    thread_y = te.thread_axis('threadIdx.y')
+    b_fused = s[output].fuse(by, bx)
+    v_fused = s[output].fuse(vy, vx)
+    t_fused = s[output].fuse(ty, tx)
 
-    cfg.define_split('tile_y', cfg.axis(y), num_outputs=4)
-    cfg.define_split('tile_x', cfg.axis(x), num_outputs=4)
+    s[output].bind(b_fused, te.thread_axis("blockIdx.x"))
+    s[output].bind(v_fused, te.thread_axis("vthread"))
+    s[output].bind(t_fused, te.thread_axis("threadIdx.x"))
 
-    by, tyz, ty, yi = cfg['tile_y'].apply(s, C, y)
-    bx, txz, tx, xi = cfg['tile_x'].apply(s, C, x)
+    # create cache stage
+    AA = s.cache_read(data_deform, 'shared', [OL])
+    WW = s.cache_read(kernel, 'shared', [OL])
 
-    s[C].bind(by, block_y)
-    s[C].bind(bx, block_x)
-    s[C].bind(tyz, te.thread_axis('vthread'))
-    s[C].bind(txz, te.thread_axis('vthread'))
-    s[C].bind(ty, thread_y)
-    s[C].bind(tx, thread_x)
-    s[C].reorder(by, bx, tyz, txz, ty, tx, yi, xi)
+    # tile reduction axes
+    y, x = s[OL].op.axis
+    [rc] = s[OL].op.reduce_axis
+    s[OL].reorder(rco, rcm, rci, y, x)
 
-    s[CC].compute_at(s[C], tx)
+    cache_loc = [rco][-1]
+    s[AA].compute_at(s[OL], cache_loc)
+    s[WW].compute_at(s[OL], cache_loc)
 
-    yo, xo = CC.op.axis
-    s[CC].reorder(ko, kt, yo, xo, ki)
-    s[CC].unroll(kt)
+    # cooperative fetching
+    for i, load in enumerate([AA, WW]):
+        fused = s[load].fuse(*s[load].op.axis)
+        fused_o, fused_i = s[load].split(fused, factor=cfg["tile_x"].size[3] * cfg["tile_y"].size[3])
+        cfg.define_knob(f"vectorize_{i}", [0, 1])
+        if cfg[f"vectorize_{i}"].val:
+          s[load].vectorize(fused_i)
+        fused_o, fused_i = s[load].split(fused_o, factor=cfg["tile_x"].size[2] * cfg["tile_y"].size[2])
+        s[load].bind(fused_i, te.thread_axis("threadIdx.x"))
 
-    for stage in [AL, BL]:
-        s[stage].compute_at(s[CC], kt)
-        # _, xi = s[stage].split(stage.op.axis[1], factor=4)
-        # s[stage].vectorize(xi)
-        s[stage].double_buffer()
-
-    cfg.define_knob('vectorize', [False, True] if attrs.backend != 'c-hlsl_win64' else [False])
-    # cfg.define_knob('storage_align', [16, 48])
-    for stage in [AA, BB]:
-        # s[stage].storage_align(s[stage].op.axis[0],
-        #                        cfg['storage_align'].val, 0)
-        s[stage].compute_at(s[CC], ko)
-
-        fused = s[stage].fuse(*s[stage].op.axis)
-        ty, tx = s[stage].split(fused, nparts=cfg['tile_y'].size[2])
-        tx, xi = s[stage].split(tx, nparts=cfg['tile_x'].size[2])
-        _, xi = s[stage].split(xi, factor=4)
-
-        s[stage].bind(ty, thread_y)
-        s[stage].bind(tx, thread_x)
-        if cfg['vectorize'].val:
-            s[stage].vectorize(xi)
-        s[stage].double_buffer()
-
-    s[C].pragma(by, 'auto_unroll_max_step', 125)
-    s[C].pragma(by, 'unroll_explicit', False)
+    # unroll
+    cfg.define_knob("auto_unroll_max_step", [0, 512, 1500])
+    cfg.define_knob("unroll_explicit", [False, True])
+    kernel_scope = rco
+    s[OL].pragma(kernel_scope, 'auto_unroll_max_step', cfg['auto_unroll_max_step'].val)
+    s[OL].pragma(kernel_scope, 'unroll_explicit', cfg['unroll_explicit'].val)
 

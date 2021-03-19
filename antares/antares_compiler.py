@@ -206,7 +206,7 @@ def get_target_source(best_config, dir_sid=None):
     with open(origin_cfg_file, 'w') as fp:
       fp.write(json.dumps(origin_cfg))
     origin_cfg = tvm.auto_scheduler.measure_record.load_records(origin_cfg_file)
- 
+
     from tuner.Ansor.main import create_auto_task
     target = tvm.target.Target(tvm_target)
     auto_task = create_auto_task(target)
@@ -214,6 +214,8 @@ def get_target_source(best_config, dir_sid=None):
     for inp, res in origin_cfg:
       s, arg_bufs = auto_task.compute_dag.apply_steps_from_state(inp.state)
       break
+    with open(local_get_dir_file('my_kernel.sched', dir_sid=dir_sid), 'w') as fp:
+      fp.write(auto_task.compute_dag.print_python_code_from_state(inp.state))
   else:
     # Standard config
     json_to_config = AntaresGlobal.default_task.antares_helper.json_to_config
@@ -244,11 +246,6 @@ def get_target_source(best_config, dir_sid=None):
           thread_name = ll.split('attr [IterVar(')[-1].split(':')[0]
           thread_val = int(ll.split(' "thread_extent" = ')[-1].split(';')[0].strip().split(' ')[0])
           thread_extents.append((thread_name, thread_val))
-        elif ll.strip().startswith('allocate(') and ll.find('.shared, ') >= 0 and ll.endswith(");"):
-          parts = ll[:-2].split(', ')[1:]
-          allocate_type = parts[0]
-          allocate_val = int(np.product(eval(parts[1])))
-          allocate_shared.append((allocate_type, allocate_val))
 
       reserved_axes = dict()
       for thread_name, thread_val in thread_extents:
