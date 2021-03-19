@@ -66,10 +66,9 @@ def schedule(attrs):
     # cooperative fetching
     for i, load in enumerate(input_list):
       fused_o = s[load].fuse(*s[load].op.axis)
-      cfg.define_knob(f"vectorize_{i}", [0, 2, 4])
-      if cfg[f"vectorize_{i}"].val:
-        fused_o, fused_i = s[load].split(fused_o, factor=cfg[f"vectorize_{i}"].val)
-        s[load].vectorize(fused_i)
+      cfg.define_knob(f"V{i}", [1, 2, 4])
+      fused_o, fused_i = s[load].split(fused_o, factor=cfg[f"V{i}"].val)
+      s[load].vectorize(fused_i)
       fused_o, fused_i = s[load].split(fused_o, factor=num_threads)
       s[load].bind(fused_i, te.thread_axis("threadIdx.y"))
 
