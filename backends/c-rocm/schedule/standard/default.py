@@ -20,6 +20,7 @@ def _schedule_single(attrs, output, rank, have_tail):
       OL = output
     return output, OL
   s.cache_local = cache_local
+  s.have_tail = have_tail
 
   num_inputs = len(s[output].op.input_tensors)
 

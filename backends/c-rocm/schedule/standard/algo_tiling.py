@@ -67,7 +67,7 @@ def schedule_branch(attrs, output, prefix):
       s[load].bind(fused_i, te.thread_axis("threadIdx.y"))
 
     # unroll
-    cfg.define_knob(f"{prefix}S", [1, 4, 16, 32, 64, 512, 1024])
+    cfg.define_knob(f"{prefix}S", [1, 4, 16, 64, 512])
     cfg.define_knob(f"{prefix}R", [False, True])
     kernel_scope = cache_loc
     s[OL].pragma(kernel_scope, 'auto_unroll_max_step', cfg[f"{prefix}S"].val)
