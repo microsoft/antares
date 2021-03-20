@@ -1,17 +1,16 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-import numpy as np
 from tvm import te
-import logging
-import sys, time, subprocess
-
+import os
 
 def schedule_branch(attrs, output, prefix):
     cfg, s = attrs.auto_config, attrs.scheduler
     data_list, reduce_list = list(s[output].op.axis), list(s[output].op.reduce_axis)
 
+    num_elements = 1
     for i, ax in enumerate(data_list):
+      num_elements *= attrs.get_extent(ax)
       cfg.define_split(f"{prefix}D{i}", ax, num_outputs=4)
     for i, ax in enumerate(reduce_list):
       cfg.define_split(f"{prefix}R{i}", ax, num_outputs=3)
@@ -20,9 +19,17 @@ def schedule_branch(attrs, output, prefix):
     for I in s[output].op.input_tensors:
       input_list.append(I)
 
-    num_threads = 1
+    num_threads, num_vthreads = 1, 1
     for i in range(len(data_list)):
       num_threads *= cfg[f"{prefix}D{i}"].size[2]
+      num_vthreads *= cfg[f"{prefix}D{i}"].size[1] * cfg[f"{prefix}D{i}"].size[3]
+
+    config = os.environ.get('CONFIG', '').strip()
+    step = int(os.environ.get('STEP', '0'))
+    if not config and step > 0:
+      assert num_vthreads <= 512, "Unrecommended large vthread counts: %d" % num_vthreads
+      assert num_vthreads >= min(num_elements, 64), "Unrecommended small vthread counts: %d" % num_vthreads
+
     assert num_threads <= attrs.device_props.max_threads_per_block, "Invalid schedule plans: num_threads(%d) > %d" % (num_threads, attrs.device_props.max_threads_per_block)
 
     output, OL = s.cache_local(output)
