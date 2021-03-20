@@ -36,7 +36,7 @@ def _schedule_single(attrs, output, rank, have_tail):
 
 def schedule(attrs):
   tail_op, explicit_ops = None, [x for x in attrs.explicit_ops]
-  if len(explicit_ops) > 1 and not explicit_ops[-1].output(0).op.reduce_axis:
+  if len(explicit_ops) > 1 and not explicit_ops[-1].output(0).op.reduce_axis and len(explicit_ops[-2].output(0).op.input_tensors) > 2:
     tail_op, explicit_ops = explicit_ops[-1], explicit_ops[:-1]
   for rank, op in enumerate(reversed(explicit_ops)):
     _schedule_single(attrs, op.output(0), rank, tail_op is not None and rank == 0)
