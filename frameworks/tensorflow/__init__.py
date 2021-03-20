@@ -74,7 +74,8 @@ def make_op(ir, feed_dict, extra_outputs=[]):
 
   ir = ir.replace('"', '`').replace('\n', ' ').strip()
   input_dict = json.dumps(input_dict)
-  expression = f'- einstein_v2(input_dict={input_dict}, extra_outputs={extra_outputs}, exprss="{ir}")'
+  extra_outputs = ', '.join(['"%s"' % x for x in extra_outputs])
+  expression = f'- einstein_v2(input_dict={input_dict}, extra_outputs=[{extra_outputs}], exprss="{ir}")'
   print('+ [Antares Op]', expression)
 
   def request_server(tune_step=0):

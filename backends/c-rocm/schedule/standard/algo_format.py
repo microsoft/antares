@@ -1,28 +1,15 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-import numpy as np
-from tvm import te as tvm
-import logging
-import sys, time, subprocess
-import json
-import os
+from tvm import te
 
-
-def schedule(attrs):
-  cfg, s, output = attrs.auto_config, attrs.scheduler, attrs.outputs[0]
-  th_vals, rd_vals = [attrs.get_extent(x) for x in output.op.axis], [attrs.get_extent(x) for x in output.op.reduce_axis]
+def schedule_branch(attrs, output, prefix):
+  cfg, s = attrs.auto_config, attrs.scheduler
+  th_vals = [attrs.get_extent(x) for x in output.op.axis]
 
   # Normal Schedule Plan
   blocks = [te.thread_axis('blockIdx.x'), te.thread_axis('blockIdx.y'), te.thread_axis('blockIdx.z')]
   threads = [te.thread_axis('threadIdx.x'), te.thread_axis('threadIdx.y'), te.thread_axis('threadIdx.z')]
-
-  if rd_vals:
-    if output.op in s.outputs:
-      output_local = s.cache_write(output, "local")
-    else:
-      s[output].set_scope('local')
-      output_local, output = output, s.outputs[0].output(0)
 
   th_idx = []
   for i in range(len(th_vals)):
@@ -33,7 +20,7 @@ def schedule(attrs):
 
   high_vaxis, low_vaxis = [], []
   for i in range(len(th_idx)):
-    ax_name = 'axis_%d' % th_idx[i]
+    ax_name = f'{prefix}D{th_idx[i]}'
     ax_obj = output.op.axis[th_idx[i]]
     if i < len(blocks):
       cfg.define_split(ax_name, cfg.axis(ax_obj), num_outputs=4)
@@ -48,18 +35,10 @@ def schedule(attrs):
     high_vaxis.append(ax2)
     low_vaxis.append(ax4)
 
-  cfg.define_reorder("reorder", high_vaxis, "all")
+  ord_name = f"{prefix}O"
+  cfg.define_reorder(ord_name, high_vaxis, "all")
   plan_order = []
-  for i in cfg["reorder"].perm:
+  for i in cfg[ord_name].perm:
     plan_order.append(low_vaxis[i])
     plan_order.append(high_vaxis[i])
   s[output].reorder(*plan_order)
-
-  if rd_vals:
-    s[output_local].compute_at(s[output], ax2)
-    for i in range(len(rd_vals)):
-      if rd_vals[i] > 1:
-        ax_name = 'reduce_%d' % i
-        cfg.define_split(ax_name, cfg.axis(output_local.op.reduce_axis[i]), num_outputs=3)
-        ko, kt, ki = cfg[ax_name].apply(s, output_local, output_local.op.reduce_axis[i])
-        s[output_local].unroll(kt)
