@@ -15,9 +15,8 @@ def _schedule_single(attrs, output, rank, have_tail):
     if not have_tail:
       OL = s.cache_write(output, 'local')
     else:
-      output = s.outputs[0].output(0)
       s[output].set_scope('local')
-      OL = output
+      OL, output = output, s.outputs[0].output(0)
     return output, OL
   s.cache_local = cache_local
 
@@ -36,9 +35,8 @@ def _schedule_single(attrs, output, rank, have_tail):
   return schedule_branch(attrs, output, f"F{rank}:")
 
 def schedule(attrs):
-  have_tail, explicit_ops = False, [x for x in attrs.explicit_ops]
+  tail_op, explicit_ops = None, [x for x in attrs.explicit_ops]
   if len(explicit_ops) > 1 and not explicit_ops[-1].output(0).op.reduce_axis:
-    have_tail = True
-    explicit_ops = explicit_ops[:-1]
-  for rank, op in enumerate(explicit_ops):
-    _schedule_single(attrs, op.output(0), rank, have_tail and rank + 1 == len(explicit_ops))
+    tail_op, explicit_ops = explicit_ops[-1], explicit_ops[:-1]
+  for rank, op in enumerate(reversed(explicit_ops)):
+    _schedule_single(attrs, op.output(0), rank, tail_op is not None and rank == 0)

@@ -6,21 +6,16 @@ import os
 
 def schedule_branch(attrs, output, prefix):
     cfg, s = attrs.auto_config, attrs.scheduler
-    data_list, reduce_list = list(s[output].op.axis), list(s[output].op.reduce_axis)
 
     num_elements = 1
-    for i, ax in enumerate(data_list):
+    for i, ax in enumerate(s[output].op.axis):
       num_elements *= attrs.get_extent(ax)
       cfg.define_split(f"{prefix}D{i}", ax, num_outputs=4)
-    for i, ax in enumerate(reduce_list):
+    for i, ax in enumerate(s[output].op.reduce_axis):
       cfg.define_split(f"{prefix}R{i}", ax, num_outputs=3)
 
-    input_list = []
-    for I in s[output].op.input_tensors:
-      input_list.append(I)
-
     num_threads, num_vthreads = 1, 1
-    for i in range(len(data_list)):
+    for i in range(len(s[output].op.axis)):
       num_threads *= cfg[f"{prefix}D{i}"].size[2]
       num_vthreads *= cfg[f"{prefix}D{i}"].size[1] * cfg[f"{prefix}D{i}"].size[3]
 
@@ -32,7 +27,13 @@ def schedule_branch(attrs, output, prefix):
 
     assert num_threads <= attrs.device_props.max_threads_per_block, "Invalid schedule plans: num_threads(%d) > %d" % (num_threads, attrs.device_props.max_threads_per_block)
 
+    input_list = []
+    for I in s[output].op.input_tensors:
+      input_list.append(I)
+
     output, OL = s.cache_local(output)
+
+    data_list, reduce_list = list(s[output].op.axis), list(s[OL].op.reduce_axis)
 
     data_slices, reduce_slices = [], []
     for i in range(len(data_list)):

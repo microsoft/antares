@@ -435,7 +435,8 @@ def main_compute(code_only=False):
 
     tuner_type = os.environ.get('TUNER')
     if not tuner_type:
-      tuner_type = 'XGBoost'
+      explicit_ops = AntaresGlobal.attrs.explicit_ops
+      tuner_type = 'OpEvo' if len(explicit_ops) == 1 else 'Ansor'
     print('  >> MAKE_PARA = %d/%d, EXEC_PARA = %d, TUNER = %s' % (worker_size, batch_size, dev_num, tuner_type))
 
     auto_commit = os.environ.get('COMMIT', '')
