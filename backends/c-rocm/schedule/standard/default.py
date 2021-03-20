@@ -20,7 +20,6 @@ def _schedule_single(attrs, output, rank, have_tail):
       OL = output
     return output, OL
   s.cache_local = cache_local
-  s.have_tail = have_tail
 
   num_inputs = len(s[output].op.input_tensors)
 
@@ -28,6 +27,10 @@ def _schedule_single(attrs, output, rank, have_tail):
   if num_inputs > 1 and len(output.op.reduce_axis) > 0:
     from .algo_tiling import schedule_branch
     return schedule_branch(attrs, output, f"T{rank}:")
+
+  if not have_tail and len(output.op.reduce_axis) > 0:
+    from .algo_reduce import schedule_branch
+    return schedule_branch(attrs, output, f"R{rank}:")
 
   from .algo_format import schedule_branch
   return schedule_branch(attrs, output, f"F{rank}:")

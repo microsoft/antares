@@ -28,7 +28,7 @@ def schedule_branch(attrs, output, prefix):
     step = int(os.environ.get('STEP', '0'))
     if not config and step > 0:
       assert num_vthreads <= 512, "Unrecommended large vthread counts: %d" % num_vthreads
-      assert num_vthreads >= min(num_elements, 64), "Unrecommended small vthread counts: %d" % num_vthreads
+      # assert num_vthreads >= min(num_elements, 64), "Unrecommended small vthread counts: %d" % num_vthreads
 
     assert num_threads <= attrs.device_props.max_threads_per_block, "Invalid schedule plans: num_threads(%d) > %d" % (num_threads, attrs.device_props.max_threads_per_block)
 
