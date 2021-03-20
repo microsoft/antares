@@ -204,20 +204,36 @@ def get_template_op(**kwargs):
       outputs = te.compute(outputs[0].shape, lambda *X: [v[X] for v in outputs], name=intermediate_output)
     sch = te.create_schedule([outputs[i].op for i in range(len(outputs))])
 
-    def _callback(op, explicit_ops):
-        attrs = Mock()
-        attrs.inputs = inputs
-        attrs.explicit_ops = explicit_ops
-        attrs.scheduler = sch
-        attrs.auto_config = cfg
-        attrs.backend = backend
-        attrs.ir = program
-        attrs.options = options
-        attrs.blend = ''
-        attrs.get_extent = lambda axis: int(axis.dom.extent)
+    def get_device_props():
+      props = tvm.runtime.ndarray.gpu(0)
+      with open('%s/device_properties.cfg' % os.environ['ANTARES_DRIVER_PATH'], 'r') as fp:
+        mem_bandwith = []
+        while True:
+          line = fp.readline()
+          if not line:
+            break
+          key, val = line.split(': ')
+          if key in ('GlobalMemoryBusWidth', 'MemoryClockRate'):
+            mem_bandwith.append(float(val))
+        mem_bandwith = 'inf' if not mem_bandwith else np.product(mem_bandwith) * 2.5e-7
+        props.mem_bandwith = float(mem_bandwith)
+      return props
 
-        AntaresGlobal.attrs = attrs
-        do_native_scheduling(attrs)
+    def _callback(op, explicit_ops):
+      attrs = Mock()
+      attrs.device_props = get_device_props()
+      attrs.inputs = inputs
+      attrs.explicit_ops = explicit_ops
+      attrs.scheduler = sch
+      attrs.auto_config = cfg
+      attrs.backend = backend
+      attrs.ir = program
+      attrs.options = options
+      attrs.blend = ''
+      attrs.get_extent = lambda axis: int(axis.dom.extent)
+
+      AntaresGlobal.attrs = attrs
+      do_native_scheduling(attrs)
 
     traverse_inline(sch, outputs[0].op, _callback)
     return sch, list(inputs) + list(outputs)
