@@ -135,23 +135,7 @@ def translate_code(code, config):
   return '%s\n%s%s' % (get_kernel_metadata(), defs, code)
 
 def device_properties():
-  if hasattr(AntaresGlobal, 'device_props'):
-    return AntaresGlobal.device_props
-
-  props = tvm.runtime.ndarray.gpu(0)
-  with open('%s/device_properties.cfg' % os.environ['ANTARES_DRIVER_PATH'], 'r') as fp:
-    mem_bandwith = []
-    while True:
-      line = fp.readline()
-      if not line:
-        break
-      key, val = line.split(': ')
-      if key in ('GlobalMemoryBusWidth', 'MemoryClockRate'):
-        mem_bandwith.append(float(val))
-    mem_bandwith = 'inf' if not mem_bandwith else np.product(mem_bandwith) * 2.5e-7
-    props.mem_bandwith = float(mem_bandwith)
-
-  AntaresGlobal.device_props = props
+  props = AntaresGlobal.attrs.device_props
   return props
 
 def compute_gflops(flop, t):
@@ -246,6 +230,12 @@ def get_target_source(best_config, dir_sid=None):
           thread_name = ll.split('attr [IterVar(')[-1].split(':')[0]
           thread_val = int(ll.split(' "thread_extent" = ')[-1].split(';')[0].strip().split(' ')[0])
           thread_extents.append((thread_name, thread_val))
+        elif ll.strip().startswith('allocate(') and ll.find('.shared, ') >= 0:
+          last_arg_id = ll.rindex(', [')
+          allocate_val = [int(x) for x in ll[last_arg_id+3:ll.rindex(']')].split(', ')]
+          allocate_val = int(np.product(allocate_val))
+          allocate_type = ll[ll.index(', ') + 2:last_arg_id]
+          allocate_shared.append((allocate_type, allocate_val))
 
       reserved_axes = dict()
       for thread_name, thread_val in thread_extents:

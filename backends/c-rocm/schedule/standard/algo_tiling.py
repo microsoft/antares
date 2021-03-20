@@ -23,7 +23,7 @@ def schedule_branch(attrs, output, prefix):
     num_threads = 1
     for i in range(len(data_list)):
       num_threads *= cfg[f"{prefix}D{i}"].size[2]
-    assert num_threads <= 1024, "Invalid schedule plans: num_threads(%d) > 1024" % num_threads
+    assert num_threads <= attrs.device_props.max_threads_per_block, "Invalid schedule plans: num_threads(%d) > %d" % (num_threads, attrs.device_props.max_threads_per_block)
 
     output, OL = s.cache_local(output)
 
