@@ -416,7 +416,7 @@ def main_compute(code_only=False):
         target_sources, config_strs = [], []
         for i in range(len(inputs)):
           dir_sid = AntaresGlobal.current_step + i + 1
-          config_str = inputs[i].config if isinstance(inputs[i].config.__class__, str) else 'null'
+          config_str = inputs[i].config if type(inputs[i].config).__name__ == 'str' else 'null'
           config_strs.append(config_str)
           try:
             target_source = get_target_source(config_strs[i], dir_sid)
