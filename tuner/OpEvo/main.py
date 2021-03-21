@@ -463,7 +463,6 @@ class MainTuner(Tuner):
 
         Parameters
         ----------
-        search_space: dict
         batch_size: int
         optimize_mode: str, 'maximize' or 'minimize'
         parents_size: int
@@ -503,7 +502,7 @@ class MainTuner(Tuner):
         self.serve_list = []
         self.wait_dict = {}
 
-        self.search_space = self.task.antares_helper.to_json_search_space(self.task.config_space)
+        self.search_space = self.task.search_space_v2
         self.logger.info('Search space =', self.search_space)
         self._update_search_space(self.search_space)
 
@@ -546,7 +545,7 @@ class MainTuner(Tuner):
             cand_json = json.dumps(cand_final)
             self.wait_dict[cand_json] = candidate
 
-            res.append(self.task.antares_helper.json_to_config(cand_final, code_hash=cand_json))
+            res.append(cand_json)
 
         self.serve_list = self.serve_list[self.batch_size:]
         try:
@@ -559,7 +558,7 @@ class MainTuner(Tuner):
     def update(self, inputs, results):
         self.logger.info('Tuner.update(...)')
         for conf, perf in zip(inputs, results):
-            conf, perf = conf.config.code_hash, float(np.mean(perf.costs))
+            conf, perf = conf.config, float(np.mean(perf.costs))
             try:
                 self.population.append(self.wait_dict[conf], self.task.flop / perf)
             except:
