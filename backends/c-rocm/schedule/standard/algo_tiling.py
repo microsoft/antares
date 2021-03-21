@@ -53,7 +53,7 @@ def schedule_branch(attrs, output, prefix):
 
     s[output].bind(b_fused, te.thread_axis("blockIdx.x"))
     s[output].bind(v_fused, te.thread_axis("vthread"))
-    s[output].bind(t_fused, te.thread_axis("threadIdx.y"))
+    s[output].bind(t_fused, te.thread_axis("threadIdx.x"))
 
     for i in range(len(input_list)):
       input_list[i] = s.cache_read(input_list[i], 'shared', [OL])
@@ -73,7 +73,7 @@ def schedule_branch(attrs, output, prefix):
       fused_o, fused_i = s[load].split(fused_o, factor=val)
       s[load].vectorize(fused_i)
       fused_o, fused_i = s[load].split(fused_o, factor=num_threads)
-      s[load].bind(fused_i, te.thread_axis("threadIdx.y"))
+      s[load].bind(fused_i, te.thread_axis("threadIdx.x"))
 
     # unroll
     unroll_step = cfg.define_knob(f"{prefix}S", [1, 4, 16, 64, 512])

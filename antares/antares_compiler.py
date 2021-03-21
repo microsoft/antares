@@ -34,8 +34,6 @@ def cleanup_on_exit(signum, frame):
 signal.signal(signal.SIGINT, cleanup_on_exit)
 
 tvm_target = 'cuda'
-eval_program_timeout = 30
-krnl_compile_timeout = 20
 verbose = int(os.environ.get('VERBOSE', '1'))
 
 try:
@@ -153,6 +151,8 @@ def codehub_db(compute_key, source_code=None, erase=False):
 def get_target_source(best_config, dir_sid=None):
   # Note: Not thread-safe due to multiple ordered updates for config spaces
 
+  with open(local_get_dir_file('my_kernel.time', dir_sid=dir_sid), 'w') as fp:
+    fp.write('%s' % time.time())
   default_tune_op = AntaresGlobal.default_tune_op
   assert isinstance(best_config, str), "Config value must be string type, got: %s" % best_config.__class__
   if best_config.startswith('['):

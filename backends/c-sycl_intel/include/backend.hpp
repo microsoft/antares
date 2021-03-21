@@ -45,7 +45,7 @@ namespace ab {
 
     // FIXME: Only handle dtype = float32 in this version (SYCL buffer is bind to datatype at compile time?)
     CHECK_OK(dtype == "float32" && byteSize % sizeof(float) == 0);
-    return new cl::sycl::buffer<float>((float*)malloc(byteSize), cl::sycl::range<1>(byteSize / sizeof(float)));
+    return new cl::sycl::buffer<float>((float*)malloc(byteSize), cl::sycl::range<1>(byteSize / sizeof(float)), cl::sycl::property::buffer::context_bound(_sycl_queue.get_context()));
   }
 
   void release(void *dptr, size_t byteSize) {
