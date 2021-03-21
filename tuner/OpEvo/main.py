@@ -504,6 +504,9 @@ class MainTuner(Tuner):
 
         self.search_space = self.task.search_space_v2
         self.logger.info('Search space =', self.search_space)
+        if not self.search_space:
+          self.serve_list = ['{}']
+          return
         self._update_search_space(self.search_space)
 
     def _update_search_space(self, search_space):
@@ -535,6 +538,9 @@ class MainTuner(Tuner):
     def next_batch(self, batch_size):
         self.logger.info('Tuner.next_batch()')
         self.batch_size = batch_size
+        if not self.search_space:
+            res, self.serve_list = self.serve_list, []
+            return res
         res = []
         for candidate in self.serve_list[:self.batch_size]:
             cand_final = pickle.loads(pickle.dumps(candidate.pick_out(), -1))
@@ -557,6 +563,8 @@ class MainTuner(Tuner):
 
     def update(self, inputs, results):
         self.logger.info('Tuner.update(...)')
+        if not self.search_space:
+            return
         for conf, perf in zip(inputs, results):
             conf, perf = conf.config, float(np.mean(perf.costs))
             try:
