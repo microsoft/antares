@@ -17,9 +17,10 @@ def schedule(attrs):
   if not os.environ.get('CONFIG', '') and int(os.environ.get('STEP', '0')) > 0:
     for i in range(len(output.op.axis)):
       ax_name = 'axis_%d' % i
-      cfg.define_split(ax_name, cfg.axis(output.op.axis[i]), num_outputs=2)
-    # num_cores, align_width = 1216, 64
-    # cfg.define_knob('start_core', [x * align_width for x in range(num_cores // align_width)])
+      cfg.define_split(ax_name, attrs.get_extent(output.op.axis[i]), num_outputs=2)
+
+    num_cores, align_width = 1216, 64
+    cfg.define_knob('start_core', [x * align_width for x in range(num_cores // align_width)])
     return
 
   loop_axes = []
