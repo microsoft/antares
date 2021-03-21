@@ -50,9 +50,11 @@ with tf.Session(config=config) as sess:
   print(sess.run([out]))
 
 ###### Result on AMD Radeon-7:
-#   TF-native Average Time per Run (sec):               0.0006433625221252442
-#   Antares-tune(step=200) Average Time per Run (sec):  0.0004593014717102051
+#   TF-native Average Time per Run:                    0.000643362 (sec)
+#   TVM-Ansor (step=200) Average Time per Run:         0.000459301 (sec)
+#   Antares-OpEvo (step=200) Average Time per Run:     0.000218356 (sec)
 
 ###### Result on NVIDIA Volta-100:
-#   TF-native Average Time per Run (sec):               0.00041493487358093263
-#   Antares-tune(step=200) Average Time per Run (sec):  0.00032140994071960447
+#   TF-native Average Time per Run:                    0.000414934 (sec)
+#   TVM-Ansor (step=200) Average Time per Run:         0.000128158 (sec)
+#   Antares-OpEvo (step=200) Average Time per Run:     0.000080845 (sec)

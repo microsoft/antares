@@ -416,7 +416,8 @@ def main_compute(code_only=False):
         target_sources, config_strs = [], []
         for i in range(len(inputs)):
           dir_sid = AntaresGlobal.current_step + i + 1
-          config_strs.append(inputs[i].config)
+          config_str = inputs[i].config if isinstance(inputs[i].config.__class__, str) else 'null'
+          config_strs.append(config_str)
           try:
             target_source = get_target_source(config_strs[i], dir_sid)
           except:
@@ -441,11 +442,10 @@ def main_compute(code_only=False):
           results.append(autotvm.measure.MeasureResult(costs=(t,), error_no=0, all_cost=i, timestamp=time.time()))
         AntaresGlobal.current_step += len(results)
 
-        print('\nSTEP[%d / %d] Current Best Config = %s, Perf = %g Gflops, MemRatio = %g %%, Occur Step = %d;\n' % (
-          AntaresGlobal.current_step,
-          num_trials,
+        print('\nSTEP[%d / %d] Current Best Config = %s, Perf = %g sec / op (%g Gflops), MemRatio = %g %%, Occur Step = %d;\n' % (
+          AntaresGlobal.current_step, num_trials,
           tuner.task.best.config,
-          compute_gflops(tuner.task.flop, tuner.task.best.timecost),
+          tuner.task.best.timecost, compute_gflops(tuner.task.flop, tuner.task.best.timecost),
           compute_mem_ratio(tuner.task.best.timecost),
           tuner.task.best.occur))
 
