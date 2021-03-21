@@ -219,7 +219,7 @@ def get_template_op(**kwargs):
 
     if not hasattr(AntaresGlobal, 'auto_config'):
       AntaresGlobal.auto_config = AutoConfig()
-      AntaresGlobal.auto_config.flop = output_saver["flops"]
+      autotvm.get_config().flop = AntaresGlobal.auto_config.flop = output_saver["flops"]
 
     def _callback(explicit_ops):
       attrs = Mock()

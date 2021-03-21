@@ -63,10 +63,10 @@ class AutoConfig(object):
 
   def define_split(self, key, target_size, num_outputs):
     assert isinstance(target_size, int), "Split target must be integer type."
-    self._config[key] = {'_type': 'factor', '_value': [target_size, num_outputs]}
+    self._config[key] = {'_type': 'factor', '_value': [target_size, num_outputs], '_init': [[target_size] + [1] * (num_outputs - 1), ]}
     if self._candidate:
       return self._candidate[key]
-    return [-1] + [1] * (num_outputs - 1)
+    return [-1] + [x for x in self._config[key]['_init'][0][1:]]
   def define_reorder(self, key, count, policy='all'):
     assert isinstance(count, int), "Reorder value must be integer type."
     assert policy == 'all', "Unhandled reorder policy: %s" % policy

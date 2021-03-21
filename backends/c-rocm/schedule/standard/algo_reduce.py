@@ -30,6 +30,7 @@ def schedule_branch(attrs, output, prefix):
   s[output].bind(fused_b, te.thread_axis("blockIdx.x"))
   s[output].bind(fused_t, te.thread_axis("threadIdx.y"))
 
+  rax = min(rax, len(s[output].op.reduce_axis) - 1)
   reduce_ax = s[output].op.reduce_axis[rax]
   tx = te.thread_axis("threadIdx.x")
   s[output].bind(reduce_ax, tx)
