@@ -6,24 +6,20 @@ from tvm import te
 def schedule_branch(attrs, output, prefix):
   cfg, s = attrs.auto_config, attrs.scheduler
 
-  cfg.define_knob(f"{prefix}S", [x for x in range(len(s[output].op.reduce_axis))])
-  rax = cfg[f"{prefix}S"].val
+  rax = cfg.define_knob(f"{prefix}S", [x for x in range(len(s[output].op.reduce_axis))])
   for i, ax in enumerate(s[output].op.reduce_axis):
-    cfg.define_split(f"{prefix}R{i}", ax, num_outputs=2)
+    sizes = cfg.define_split(f"{prefix}R{i}", attrs.get_extent(ax), num_outputs=2)
     if rax == i:
-      r_range = max(2, cfg[f"{prefix}R{i}"].size[1])
+      r_range = max(2, sizes[1])
       if not attrs.backend.startswith('c-cuda'):
         r_range = r_range if r_range != 32 else 16
       ko, ki = s[output].split(ax, factor=r_range)
       BF = s.rfactor(output, ki)
 
-  data_list, reduce_list = list(s[output].op.axis), list(s[output].op.reduce_axis)
-  for i, ax in enumerate(data_list):
-    cfg.define_split(f"{prefix}D{i}", ax, num_outputs=2)
-
   data_slices = []
-  for i, ax in enumerate(data_list):
-    data_slices.append(list(cfg[f"{prefix}D{i}"].apply(s, output, ax)))
+  for i, ax in enumerate(s[output].op.axis):
+    sizes = cfg.define_split(f"{prefix}D{i}", attrs.get_extent(ax), num_outputs=2)
+    data_slices.append(list(cfg.apply_split(s, output, ax, sizes)))
 
   first, second = [x[0] for x in data_slices], [x[1] for x in data_slices]
   s[output].reorder(*(first + second))
@@ -34,7 +30,8 @@ def schedule_branch(attrs, output, prefix):
   s[output].bind(fused_b, te.thread_axis("blockIdx.x"))
   s[output].bind(fused_t, te.thread_axis("threadIdx.y"))
 
+  reduce_ax = s[output].op.reduce_axis[rax]
   tx = te.thread_axis("threadIdx.x")
-  s[output].bind(reduce_list[rax], tx)
-  s[BF].compute_at(s[output], reduce_list[rax])
+  s[output].bind(reduce_ax, tx)
+  s[BF].compute_at(s[output], reduce_ax)
   s[output].set_store_predicate(tx.var.equal(0))

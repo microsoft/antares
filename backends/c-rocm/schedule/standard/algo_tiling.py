@@ -7,17 +7,18 @@ import os
 def schedule_branch(attrs, output, prefix):
     cfg, s = attrs.auto_config, attrs.scheduler
 
+    data_sizes, reduce_sizes = [], []
     num_elements = 1
     for i, ax in enumerate(s[output].op.axis):
       num_elements *= attrs.get_extent(ax)
-      cfg.define_split(f"{prefix}D{i}", ax, num_outputs=4)
+      data_sizes.append(cfg.define_split(f"{prefix}D{i}", attrs.get_extent(ax), num_outputs=4))
     for i, ax in enumerate(s[output].op.reduce_axis):
-      cfg.define_split(f"{prefix}R{i}", ax, num_outputs=3)
+      reduce_sizes.append(cfg.define_split(f"{prefix}R{i}", attrs.get_extent(ax), num_outputs=3))
 
     num_threads, num_vthreads = 1, 1
     for i in range(len(s[output].op.axis)):
-      num_threads *= cfg[f"{prefix}D{i}"].size[2]
-      num_vthreads *= cfg[f"{prefix}D{i}"].size[1] * cfg[f"{prefix}D{i}"].size[3]
+      num_threads *= data_sizes[i][2]
+      num_vthreads *= data_sizes[i][1] * data_sizes[i][3]
 
     config = os.environ.get('CONFIG', '').strip()
     step = int(os.environ.get('STEP', '0'))
@@ -37,10 +38,10 @@ def schedule_branch(attrs, output, prefix):
 
     data_slices, reduce_slices = [], []
     for i in range(len(data_list)):
-      data_slices.append(list(cfg[f"{prefix}D{i}"].apply(s, output, data_list[i])))
+      data_slices.append(list(cfg.apply_split(s, output, data_list[i], data_sizes[i])))
 
     for i in range(len(reduce_list)):
-      reduce_slices.append(list(cfg[f"{prefix}R{i}"].apply(s, OL, reduce_list[i])))
+      reduce_slices.append(list(cfg.apply_split(s, OL, reduce_list[i], reduce_sizes[i])))
 
     first, second, third, fourth = [x[0] for x in data_slices], [x[1] for x in data_slices], [x[2] for x in data_slices], [x[3] for x in data_slices]
     s[output].reorder(*(first + second + third + fourth))
@@ -68,16 +69,16 @@ def schedule_branch(attrs, output, prefix):
     # cooperative fetching
     for i, load in enumerate(input_list):
       fused_o = s[load].fuse(*s[load].op.axis)
-      cfg.define_knob(f"{prefix}V{i}", [1, 2, 4])
-      fused_o, fused_i = s[load].split(fused_o, factor=cfg[f"{prefix}V{i}"].val)
+      val = cfg.define_knob(f"{prefix}V{i}", [1, 2, 4])
+      fused_o, fused_i = s[load].split(fused_o, factor=val)
       s[load].vectorize(fused_i)
       fused_o, fused_i = s[load].split(fused_o, factor=num_threads)
       s[load].bind(fused_i, te.thread_axis("threadIdx.y"))
 
     # unroll
-    cfg.define_knob(f"{prefix}S", [1, 4, 16, 64, 512])
-    cfg.define_knob(f"{prefix}R", [False, True])
+    unroll_step = cfg.define_knob(f"{prefix}S", [1, 4, 16, 64, 512])
+    unroll_explicit = cfg.define_knob(f"{prefix}R", [False, True])
     kernel_scope = cache_loc
-    s[OL].pragma(kernel_scope, 'auto_unroll_max_step', cfg[f"{prefix}S"].val)
-    s[OL].pragma(kernel_scope, 'unroll_explicit', cfg[f"{prefix}R"].val)
+    s[OL].pragma(kernel_scope, 'auto_unroll_max_step', unroll_step)
+    s[OL].pragma(kernel_scope, 'unroll_explicit', unroll_explicit)
 

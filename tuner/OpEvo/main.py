@@ -545,7 +545,7 @@ class MainTuner(Tuner):
             cand_json = json.dumps(cand_final)
             self.wait_dict[cand_json] = candidate
 
-            res.append(self.task.antares_helper.json_to_config(cand_final, code_hash=cand_json))
+            res.append(cand_json)
 
         self.serve_list = self.serve_list[self.batch_size:]
         try:
@@ -558,7 +558,7 @@ class MainTuner(Tuner):
     def update(self, inputs, results):
         self.logger.info('Tuner.update(...)')
         for conf, perf in zip(inputs, results):
-            conf, perf = conf.config.code_hash, float(np.mean(perf.costs))
+            conf, perf = conf.config, float(np.mean(perf.costs))
             try:
                 self.population.append(self.wait_dict[conf], self.task.flop / perf)
             except:

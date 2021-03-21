@@ -362,32 +362,6 @@ def main_compute(code_only=False):
   logging.getLogger('autotvm').addHandler(logging.StreamHandler(sys.stdout))
   task = autotvm.task.create("template_op", args=(), target=tvm_target)
 
-  def json_to_config(json_dict, index=-1, code_hash=None):
-    if not isinstance(json_dict, list):
-      json_list = []
-      for key in json_dict:
-        json_list.append([key, 'ot' if type(json_dict[key]) is not list else ('sp' if json_dict[key][0:1] == [-1] else 're'), json_dict[key]])
-      json_dict = json_list
-    from tvm.autotvm.task import ConfigEntity
-    config = ConfigEntity.from_json_dict({"index": index, "time": "", "code_hash": code_hash, "entity": json_dict})
-    return config
-
-  def config_to_json(config):
-    if config is None:
-      return {}
-    if isinstance(config, str):
-      return json.loads(config)
-    jobj = config.to_json_dict()['entity']
-    json_dict = dict()
-    for i in range(len(jobj)):
-      assert(jobj[i][1] in ['sp', 'ot', 're'])
-      json_dict[jobj[i][0]] = jobj[i][2]
-    return json_dict
-
-  task.antares_helper = Mock()
-  task.antares_helper.json_to_config = json_to_config
-  task.antares_helper.config_to_json = config_to_json
-
   AntaresGlobal.default_tune_op = default_tune_op
   AntaresGlobal.default_task = task
 
@@ -442,7 +416,7 @@ def main_compute(code_only=False):
         target_sources, config_strs = [], []
         for i in range(len(inputs)):
           dir_sid = AntaresGlobal.current_step + i + 1
-          config_strs.append(json.dumps(config_to_json(inputs[i].config)))
+          config_strs.append(inputs[i].config)
           try:
             target_source = get_target_source(config_strs[i], dir_sid)
           except:
@@ -470,7 +444,7 @@ def main_compute(code_only=False):
         print('\nSTEP[%d / %d] Current Best Config = %s, Perf = %g Gflops, MemRatio = %g %%, Occur Step = %d;\n' % (
           AntaresGlobal.current_step,
           num_trials,
-          json.dumps(config_to_json(tuner.task.best.config)),
+          tuner.task.best.config,
           compute_gflops(tuner.task.flop, tuner.task.best.timecost),
           compute_mem_ratio(tuner.task.best.timecost),
           tuner.task.best.occur))
@@ -507,7 +481,7 @@ def main_compute(code_only=False):
         print(f'[Error] No valid config found in the whole tuning. (Try other tuner types other than `TUNER={tuner_type}`?)')
         cleanup_on_exit(0, None)
 
-      best_config = json.dumps(config_to_json(tuner.task.best.config))
+      best_config = tuner.task.best.config
 
       if auto_commit:
           device_source = codehub_db(os.environ['COMPUTE_V1'])
