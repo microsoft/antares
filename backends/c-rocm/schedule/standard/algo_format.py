@@ -23,22 +23,29 @@ def schedule_branch(attrs, output, prefix):
     ax_name = f'{prefix}D{th_idx[i]}'
     ax_obj = output.op.axis[th_idx[i]]
     if i < len(blocks):
-      cfg.define_split(ax_name, cfg.axis(ax_obj), num_outputs=4)
-      ax1, ax2, ax3, ax4 = cfg[ax_name].apply(s, output, ax_obj)
+      sizes = cfg.define_split(ax_name, attrs.get_extent(ax_obj), num_outputs=4)
+      ax1, ax2, ax3, ax4 = cfg.apply_split(s, output, ax_obj, sizes)
       s[output].bind(ax1, blocks[i])
       s[output].bind(ax3, threads[i])
     else:
-      cfg.define_split(ax_name, cfg.axis(ax_obj), num_outputs=2)
-      ax2, ax4 = cfg[ax_name].apply(s, output, ax_obj)
+      sizes = cfg.define_split(ax_name, attrs.get_extent(ax_obj), num_outputs=2)
+      ax2, ax4 = cfg.apply_split(s, output, ax_obj, sizes)
     s[output].bind(ax2, te.thread_axis('vthread'))
     s[output].bind(ax4, te.thread_axis('vthread'))
     high_vaxis.append(ax2)
     low_vaxis.append(ax4)
 
   ord_name = f"{prefix}O"
-  cfg.define_reorder(ord_name, high_vaxis, "all")
+  permut = cfg.define_reorder(ord_name, len(high_vaxis), "all")
   plan_order = []
-  for i in cfg[ord_name].perm:
+  for i in permut:
     plan_order.append(low_vaxis[i])
     plan_order.append(high_vaxis[i])
   s[output].reorder(*plan_order)
+
+  # unroll
+  unroll_step = cfg.define_knob(f"{prefix}S", [1, 4, 16, 64, 512])
+  unroll_explicit = cfg.define_knob(f"{prefix}R", [False, True])
+  kernel_scope = plan_order[0]
+  s[output].pragma(kernel_scope, 'auto_unroll_max_step', unroll_step)
+  s[output].pragma(kernel_scope, 'unroll_explicit', unroll_explicit)

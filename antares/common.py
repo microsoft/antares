@@ -8,6 +8,8 @@ import subprocess
 class Mock(object):
   pass
 
+backend = os.environ['BACKEND'] if 'BACKEND' in os.environ else 'c-rocm'
+AntaresGlobal = Mock()
 
 def wait_for(func, timeout=None, args=[]):
   if not timeout:
@@ -41,15 +43,6 @@ def run_process_with_timeout(args, timeout=None, envs=None):
     proc.kill()
     return False
 
-def type_to_c(dtype):
-  idx = dtype.find('@')
-  if idx >= 0:
-    return dtype[:idx]
-  native_types = {'float32': 'float', 'int32': 'int', 'int16': 'short', 'float16': 'half', 'int8': 'char', 'int64': 'long', 'float64': 'double'}
-  if dtype in native_types:
-    return native_types[dtype]
-  raise Exception("Unhandled ctype mapping case: %s" % dtype)
-
 def get_type_size(dtype):
   for i in reversed(range(len(dtype))):
     if not dtype[i].isdigit():
@@ -58,6 +51,39 @@ def get_type_size(dtype):
       return bits // 8
   raise Exception("Unrecognized data size for data type: %s" % dtype)
 
-backend = os.environ['BACKEND'] if 'BACKEND' in os.environ else 'c-rocm'
-AntaresGlobal = Mock()
+class AutoConfig(object):
 
+  def __init__(self):
+    self._config = dict()
+    self._candidate = None
+  def get_config_space(self):
+    return self._config
+  def set_candidate(self, candidate):
+    self._candidate = candidate
+
+  def define_split(self, key, target_size, num_outputs):
+    assert isinstance(target_size, int), "Split target must be integer type."
+    self._config[key] = {'_type': 'factor', '_value': [target_size, num_outputs]}
+    if self._candidate:
+      return self._candidate[key]
+    return [-1] + [1] * (num_outputs - 1)
+  def define_reorder(self, key, count, policy='all'):
+    assert isinstance(count, int), "Reorder value must be integer type."
+    assert policy == 'all', "Unhandled reorder policy: %s" % policy
+    self._config[key] = {'_type': 'perm', '_value': count}
+    if self._candidate:
+      return self._candidate[key]
+    return [x for x in range(count)]
+  def define_knob(self, key, choices):
+    self._config[key] = {'_type': 'choice', '_value': [x for x in range(len(choices))]}
+    if self._candidate:
+      return choices[self._candidate[key]]
+    return choices[0]
+
+  def apply_split(self, s, output, ax, sizes):
+    slices = []
+    for sz in reversed(sizes[1:]):
+      ax, ai = s[output].split(ax, factor=sz)
+      slices.append(ai)
+    slices.append(ax)
+    return reversed(slices)

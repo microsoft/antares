@@ -12,7 +12,7 @@ import importlib
 import traceback
 import re
 
-from antares.common import Mock, AntaresGlobal, backend
+from antares.common import Mock, AntaresGlobal, backend, AutoConfig
 
 def einstein_v2(exprss, input_dict, extra_outputs=[], **kwargs):
   ir = os.environ.get('LL_IR', '')
@@ -128,7 +128,7 @@ def traverse_inline(s, final_op, callback):
           explicit_ops.append(op)
 
     _traverse(final_op)
-    callback(explicit_ops[-1], explicit_ops)
+    callback(explicit_ops)
 
 def do_native_scheduling(attrs):
 
@@ -189,8 +189,6 @@ def get_template_op(**kwargs):
 
     inputs = sorted(list(placeholders.values()), key=lambda x: x.name)
     outputs = sorted(output_saver["outputs"], key=lambda x: x.op.name)
-    cfg = autotvm.get_config()
-    cfg.flop = output_saver["flops"]
 
     anno, options = program.find('## @'), []
     if anno >= 0:
@@ -219,13 +217,17 @@ def get_template_op(**kwargs):
         props.mem_bandwith = float(mem_bandwith)
       return props
 
-    def _callback(op, explicit_ops):
+    if not hasattr(AntaresGlobal, 'auto_config'):
+      AntaresGlobal.auto_config = AutoConfig()
+      AntaresGlobal.auto_config.flop = output_saver["flops"]
+
+    def _callback(explicit_ops):
       attrs = Mock()
       attrs.device_props = get_device_props()
       attrs.inputs = inputs
       attrs.explicit_ops = explicit_ops
       attrs.scheduler = sch
-      attrs.auto_config = cfg
+      attrs.auto_config = AntaresGlobal.auto_config
       attrs.backend = backend
       attrs.ir = program
       attrs.options = options

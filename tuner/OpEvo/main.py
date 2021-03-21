@@ -463,7 +463,6 @@ class MainTuner(Tuner):
 
         Parameters
         ----------
-        search_space: dict
         batch_size: int
         optimize_mode: str, 'maximize' or 'minimize'
         parents_size: int
@@ -503,7 +502,7 @@ class MainTuner(Tuner):
         self.serve_list = []
         self.wait_dict = {}
 
-        self.search_space = self.task.antares_helper.to_json_search_space(self.task.config_space)
+        self.search_space = self.task.search_space_v2
         self.logger.info('Search space =', self.search_space)
         self._update_search_space(self.search_space)
 

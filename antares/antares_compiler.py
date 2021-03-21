@@ -6,7 +6,6 @@ import random
 import hashlib
 import traceback
 import numpy as np
-import logging
 import math
 import re
 import json
@@ -15,9 +14,6 @@ import signal
 import collections
 
 import tvm
-from tvm import autotvm
-from tvm.autotvm.task.dispatcher import ApplyConfig
-from tvm.autotvm.task import ConfigEntity
 
 from antares.common import *
 from lang.generic import custom_dtypes, refactor_multiple_names
@@ -50,20 +46,6 @@ except ModuleNotFoundError:
 except:
   traceback.print_exc()
   exit(1)
-
-def get_search_space(config_space):
-  search_space = {}
-  for _, name in enumerate(config_space.space_map):
-    curr = config_space.space_map[name]
-    if (curr.__class__ == tvm.autotvm.task.space.SplitSpace):
-      search_space[name] = {"_type": "factor", "_value": [curr.product, curr.num_output]}
-    elif (curr.__class__ == tvm.autotvm.task.space.OtherOptionSpace):
-      search_space[name] = {"_type": "choice", "_value": [x.val for x in curr.entities]}
-    elif (curr.__class__ == tvm.autotvm.task.space.ReorderSpace):
-      search_space[name] = {"_type": "perm", "_value": curr.num_output}
-    else:
-      raise Exception("Cannot recognize search space type: %s" % (config_space.space_map[name].__class__))
-  return search_space
 
 def get_global_arg_props():
   global_arg_props = os.environ.get('GLOBAL_ARG_PROPS', '')
@@ -169,13 +151,11 @@ def codehub_db(compute_key, source_code=None, erase=False):
     return code_path
 
 def get_target_source(best_config, dir_sid=None):
+  # Note: Not thread-safe due to multiple ordered updates for config spaces
+
   default_tune_op = AntaresGlobal.default_tune_op
-  if not isinstance(best_config, str):
-    # Default config
-    with ApplyConfig(best_config):
-      with tvm.target.Target(tvm_target):
-        s, arg_bufs = default_tune_op.get_template_op()
-  elif best_config.startswith('['):
+  assert isinstance(best_config, str), "Config value must be string type, got: %s" % best_config.__class__
+  if best_config.startswith('['):
     # Ansor config
     from tvm import auto_scheduler
     origin_cfg = json.loads(best_config)
@@ -201,12 +181,9 @@ def get_target_source(best_config, dir_sid=None):
     with open(local_get_dir_file('my_kernel.sched', dir_sid=dir_sid), 'w') as fp:
       fp.write(auto_task.compute_dag.print_python_code_from_state(inp.state))
   else:
-    # Standard config
-    json_to_config = AntaresGlobal.default_task.antares_helper.json_to_config
-    config = json_to_config(json.loads(best_config))
-    with ApplyConfig(config):
-      with tvm.target.Target(tvm_target):
-        s, arg_bufs = default_tune_op.get_template_op()
+    AntaresGlobal.attrs.auto_config.set_candidate(json.loads(best_config))
+    with tvm.target.Target(tvm_target):
+      s, arg_bufs = default_tune_op.get_template_op()
 
   if s is not None:
       lower_source = str(tvm.lower(s, arg_bufs, simple_mode=True))
@@ -375,10 +352,14 @@ def main_compute(code_only=False):
   def compile_callback(code):
    return bytearray()
   tvm.register_func('tvm_callback_cuda_compile', compile_callback, override=True)
-  logging.getLogger('autotvm').setLevel(logging.DEBUG)
-  logging.getLogger('autotvm').addHandler(logging.StreamHandler(sys.stdout))
 
   default_tune_op = importlib.import_module('lang.generic')
+
+  import logging
+  from tvm import autotvm
+
+  logging.getLogger('autotvm').setLevel(logging.ERROR)
+  logging.getLogger('autotvm').addHandler(logging.StreamHandler(sys.stdout))
   task = autotvm.task.create("template_op", args=(), target=tvm_target)
 
   def json_to_config(json_dict, index=-1, code_hash=None):
@@ -387,6 +368,7 @@ def main_compute(code_only=False):
       for key in json_dict:
         json_list.append([key, 'ot' if type(json_dict[key]) is not list else ('sp' if json_dict[key][0:1] == [-1] else 're'), json_dict[key]])
       json_dict = json_list
+    from tvm.autotvm.task import ConfigEntity
     config = ConfigEntity.from_json_dict({"index": index, "time": "", "code_hash": code_hash, "entity": json_dict})
     return config
 
@@ -405,7 +387,6 @@ def main_compute(code_only=False):
   task.antares_helper = Mock()
   task.antares_helper.json_to_config = json_to_config
   task.antares_helper.config_to_json = config_to_json
-  task.antares_helper.to_json_search_space = get_search_space
 
   AntaresGlobal.default_tune_op = default_tune_op
   AntaresGlobal.default_task = task
@@ -418,11 +399,6 @@ def main_compute(code_only=False):
   config = os.environ.get('CONFIG', '').strip()
   if config != '':
     best_config = config
-  elif os.environ.get('NNI_TRIAL_JOB_ID', '') == '@':
-    search_space = get_search_space(task.config_space)
-    json_space = json.dumps(search_space)
-    print("\n>> Search Space: %s" % (json_space))
-    exit(0)
   elif num_trials > 0:
     dev_num = backend_config.get_execution_parallism()
     if dev_num <= 0:
@@ -437,7 +413,7 @@ def main_compute(code_only=False):
     if not tuner_type:
       explicit_ops = AntaresGlobal.attrs.explicit_ops
       tuner_type = 'OpEvo' if len(explicit_ops) == 1 else 'Ansor'
-    print('  >> MAKE_PARA = %d/%d, EXEC_PARA = %d, TUNER = %s' % (worker_size, batch_size, dev_num, tuner_type))
+    print('  >> MAKE_PARA = %d/%d, EXEC_PARA = %d, TUNER = %s\n' % (worker_size, batch_size, dev_num, tuner_type))
 
     auto_commit = os.environ.get('COMMIT', '')
     if auto_commit:
@@ -447,6 +423,7 @@ def main_compute(code_only=False):
       os.environ.pop('COMMIT')
 
     try:
+      task.search_space_v2 = AntaresGlobal.attrs.auto_config.get_config_space()
       task.n_parallel = batch_size
       tuner = importlib.import_module('tuner.%s.main' % tuner_type)
       tuner = tuner.MainTuner(task)
@@ -490,7 +467,7 @@ def main_compute(code_only=False):
           results.append(autotvm.measure.MeasureResult(costs=(t,), error_no=0, all_cost=i, timestamp=time.time()))
         AntaresGlobal.current_step += len(results)
 
-        print('\nSTEP[%d / %d] Current Best Config = %s, Perf = %g Gflops, MemRatio = %g %%, Occur Step = %d;' % (
+        print('\nSTEP[%d / %d] Current Best Config = %s, Perf = %g Gflops, MemRatio = %g %%, Occur Step = %d;\n' % (
           AntaresGlobal.current_step,
           num_trials,
           json.dumps(config_to_json(tuner.task.best.config)),
@@ -559,7 +536,7 @@ def main_compute(code_only=False):
 
   assert isinstance(best_config, str)
 
-  best_config = best_config if best_config else task.config_space
+  best_config = best_config if best_config else 'null'
   device_source, kernel_path = get_target_source(best_config)
 
   if code_only:
