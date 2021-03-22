@@ -1,13 +1,14 @@
-# What is Antares:
-- Antares is an automatic engine for multi-platform kernel generation and optimization (targeting to CUDA/ROCm/CPU/DirectX12/Graphcore/OneAPI).
-- Antares simplifies most TVM's low-level features, making it easier for DNN developers to translate computation to Microsoft related platforms.
-- Antares follows "_One Language Syntax for All Platforms_" principle to reduce the description complexity on different platforms.
+## What is Antares:
 
-# Antares Functionality:
+**Antares** is an automatic engine to generate multi-platform kernels with optimization for ***DNN developers*** (targeting to backends like CUDA/ROCm/CPU/DirectX12/Graphcore/OneAPI/..). It is also a framework for ***Hardware developers*** to extend new backends/hareware quickly and easily. Antares provides IR that follows "_One Language Syntax for All Platforms_", and general-purpose device access APIs that hide the differences of not only DNN description but also device mapping.
+
+![](images/antares-backends.svg)
+
+## Antares Functionality:
 - Antares can convert computing operators from your DNN models into low-level source codes of the target device (e.g. kernels, shaders, ..).
 - Antares can also automatically tune and optimize these DNN operators on end-to-end device using efficient mechanisms and algorithms.
 
-# Helpful Use Cases:
+## Helpful Use Cases:
 - You want to modify fine-grain DNN workloads, but Tensorflow/Pytorch's built-in implementation are limited.
 - You notice some operators are inefficent, and you want to replace it with a better one easily.
 - You can port your full DNN models into Window executable and get acceleration with DirectX12 + Intel/AMD/NVIDIA graphic cards.
@@ -16,7 +17,7 @@
 - Antares provides a large domain for researchers to develop on kernel optimizations, e.g. custom tuners, custom schedule policies, custom platforms, etc.
 
 
-# Install Antares:
+## Install Antares:
 
 ```sh
 sudo apt install docker.io
@@ -46,19 +47,19 @@ sudo python3 ./frameworks/pytorch/setup.py
 #   Pytorch for AMD ROCm 4.0:  python3 -m pip install torch torchvision -f https://download.pytorch.org/whl/rocm4.0.1/torch_stable.html
 ```
 
-# Example with Tensorflow-GPU/Pytorch-GPU:
+## Example with Tensorflow-GPU/Pytorch-GPU:
 
 This example shows you an easy way to quickly add custom operators in Tensorflow/Pytorch, but the operator itself is not an optimized version (not tuned).
 
 ```sh
-# First, launch the antares REST server (a CUDA example)
+## First, launch the antares REST server (a CUDA example)
 
 BACKEND=c-cuda make rest-server
 ```
 
 - Tensorflow Frontend Only (>= 1.15.x / >= 2.4.x):
 ```py
-# For Tensorflow CUDA frontend, execute the following python script:
+## For Tensorflow CUDA frontend, execute the following python script:
 
 import tensorflow as tf
 from tensorflow.contrib import antares
@@ -80,7 +81,7 @@ with tf.Session() as sess:
 
 - Pytorch Frontend Only:
 ```py
-# For Pytorch frontend, execute the following python script:
+## For Pytorch frontend, execute the following python script:
 import torch
 from torch.contrib.antares.custom_op import CustomOp
 
@@ -100,7 +101,7 @@ result = custom_op()
 print('The result of tensor `%s` is:\n%s' % (result.id, result))
 ```
 
-# Codegen for More Backends:
+## Codegen for More Backends:
 
 Generally, you can generate SYCL source kernels that work for most Intel CPUs, e.g:
 ```sh
@@ -118,7 +119,7 @@ For multi-core CPU (c-mcpu) or single-core CPU (c-scpu):
     BACKEND=c-mcpu COMPUTE_V1='- einstein_v2("output0[N, C, H, W] = input0[N, H, W, C]", input_dict={"input0": {"dtype": "float32", "shape": [32, 229, 229, 3]}})' make
 ```
 
-# Documentation for Advanced Examples:
+## Documentation for Advanced Examples:
 
 For more syntax usage or examples, please follow documentation here: [Antares IR & Examples](AntaresIR.md)
 
@@ -132,7 +133,7 @@ Antares can support multi-line statements as long as they are fuse-able, for exa
     output0[N, F, HO, WO] = conv_bias[N, F, HO, WO].when(conv_bias[N, F, HO, WO] > 0.0, 0.0);
 ```
 
-# Current Feature Table:
+## Current Feature Table:
 
 |       | HIP-C(c-rocm/c-rocm_win64) | CUDA(c-cuda/c-cuda_win64) | CPU(c-mcpu/c-scpu) | DirectX12(c-hlsl_win64) | Graphcore(c-gc) | Intel OneAPI(c-sycl_intel) | (..coming soon..) |
 |---|---|---|---|---|---|---|---|
@@ -149,9 +150,9 @@ Antares can support multi-line statements as long as they are fuse-able, for exa
 
 -----------
 
-# For non Tensorflow/Pytorch users:
+## For non Tensorflow/Pytorch users:
 
-## How to Tune Expressions Manually and Get Tuned Source Code:
+#### How to Tune Expressions Manually and Get Tuned Source Code:
 
 Firstly, you need to describe what kind of computing logic according to standard Antares IR, and set the IR string to environmental variable `COMPUTE_V1`.
 Plus environmental variable `BACKEND` to select the target backend type, these 2 environment settings can help you quickly generate a reference kernel code, regardless of the execution performance.
