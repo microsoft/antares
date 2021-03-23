@@ -2,185 +2,251 @@
 
 **Antares** is an automatic engine to generate multi-platform kernels with optimization for ***DNN developers*** (targeting to backends like CUDA/ROCm/CPU/DirectX12/Graphcore/OneAPI/..). It is also a framework for ***Hardware developers*** to extend new backends/hareware quickly and easily. Antares provides IR that follows "_One Language Syntax for All Platforms_", and general-purpose device access APIs that hide the differences of not only DNN description but also device mapping.
 
+1. [Features](#top-features)
+    - Backend Extension
+    - Effective Auto Tuning
+    - Einsum-based Antares IR
+    - Framework JIT Extension (Op Maker Plugin for Pytorch/Tensorflow/Tensorflow2)
+
+2. [How to Use Antares](#how-to-use-antares)
+    - Senario-1: Quick Start for Developers that Use Antares to Tune Operator/Sub-graph in Foreground Terminal
+    - Senario-2: Quick Start for Developers that Use Antares to Extend Operator/Sub-graph in Pytorch/Tensorflow
+
+3. [Antares Pre-dependencies for Different Backends](#antares-predependencies--for-different-backends)
+    - Linux-based: cuda, rocm, mcpu, scpu, gc, sycl_intel, sycl_cuda, ocl_amdgpu, ocl_nvidia, ..
+    - Windows-based: cuda_win64, rocm_win64, hlsl_win64, ..
+
+4. [About Microsft Open Source](#about-microsft-open-source)
+
+## Top Features:
+
+#### a. Backend Extension
+
+The current version of Antares supports code generation for the following backends (in orange blocks) and devices (in black blocks):
+
 ![](images/antares-backends.svg)
 
-## Antares Functionality:
-- Antares can convert computing operators from your DNN models into low-level source codes of the target device (e.g. kernels, shaders, ..).
-- Antares can also automatically tune and optimize these DNN operators on end-to-end device using efficient mechanisms and algorithms.
+#### b. Effective Auto Tuning
 
-## Helpful Use Cases:
-- You want to modify fine-grain DNN workloads, but Tensorflow/Pytorch's built-in implementation are limited.
-- You notice some operators are inefficent, and you want to replace it with a better one easily.
-- You can port your full DNN models into Window executable and get acceleration with DirectX12 + Intel/AMD/NVIDIA graphic cards.
-- You want to split fine-grain operator workloads into the local tile node of Graphcore, which benifits the on-ship memory usage and reduces BSP communication overhead.
-- Evaluate the compiler or potential runtime efficiency within Antares supported accelerators, e.g. A100.
-- Antares provides a large domain for researchers to develop on kernel optimizations, e.g. custom tuners, custom schedule policies, custom platforms, etc.
+Auto tuning by Antares contributes to not only 1/3 time cost in tuning, but also equivalent or better performance for Intra-op/Inter-op execution against TVM Ansor.
 
+![](images/tuning-perf.svg)
 
-## Install Antares:
+#### c. Einsum-based Antares IR
 
+- Antares IR is the frontend of both kernel generation and automatic optimization.
+- The syntax of Antares IR is slim to describe most MLP/CNN/DNN/LSTM/Transformer based models like MNIST/ResNet/BERT/GPT/..
+
+  **E.g. The following computation logic describes a layer of standard BERT transformer:**
+
+``` sh
+  merged_layer_local[R, B, S1, N1, H1] +=! input_tensor[B, S1, N, H] * qkv_weight[R, N, H, N1, H1];
+  merged_layer_trans[R, B, N1, S1, H1] = merged_layer_local[R, B, S1, N1, H1] + qkv_bias[R, N1, H1];
+  attention_scores[B, N1, S1, S2] +=! merged_layer_trans[0, B, N1, S1, H1] * merged_layer_trans[1, B, N1, S2, H1] / const({H}).cast(`float32`);
+    softmax_1_temp0[B, N1] >=! attention_scores[B, N1, S1, S2];
+    softmax_1_temp1[B, N1] +=! (attention_scores[B, N1, S1, S2] - softmax_1_temp0[B, N1]).call(`exp`);
+  attention_probs[B, N1, S1, S2] = (attention_scores[B, N1, S1, S2] - softmax_1_temp0[B, N1]).call(`exp`) / softmax_1_temp1[B, N1];
+  ... ...
+  layer_norm_2_src[B, S1, N2, H2] = layer_output[B, S1, N2, H2] + attention_output_norm[B, S1, N2, H2];
+    layer_norm_2_temp0[B, S1] += layer_norm_2_src[B, S1, N2, H2];
+    layer_norm_2_temp1[B, S1] += layer_norm_2_src[B, S1, N2, H2] * layer_norm_2_src[B, S1, N2, H2];
+  layer_output_norm[B, S1, N2, H2] = (layer_norm_2_src[B, S1, N2, H2] * {N * H} - layer_norm_2_temp0[B, S1]) * (layer_norm_2_temp0[B, S1] * {N * H} - layer_norm_2_temp1[B, S1] * layer_norm_2_temp1[B, S1]).call(`max`, [1e-8]).call(`rsqrt`);
+```
+For more IR usage or examples, please follow documentation here: [Antares IR & Examples](AntaresIR.md)
+
+#### d. Pytorch/Tensorflow/Tensorflow2 Op Maker (JIT Plugin)
+  Antares provides JIT plugin for Pytorch/Tensorflow/Tensorflow2 to help frameworks to easily extend new operators, e.g.:
+
+```py
+# Tensorflow/Tensorflow2 Example:
+op = antares.make_op(ir='dot_0[N, M] +=! data[N, K] * weight[K, M]', feed_dict={'data': x, 'weight': y}).emit()
+result_1 = sess.run(op)
+print('The custom result_1 is:\n%s' % result_1)
+result_2 = sess.run(tf.add(op, op))
+print('The custom result_2 is:\n%s' % result_2)  
+
+# Pytorch Example:
+custom_op = CustomOp(ir='dot_0[N, M] +=! data[N, K] * weight[K, M]', feed_dict={'data': x, 'weight': y}).to(device, dtype).emit()
+result = custom_op()
+print('The custom result is:', result)
+```
+For complete programs, please follow examples here: [Antares Examples for Pytorch](frameworks/pytorch/examples) and [Antares Examples for TF/TF2](frameworks/tensorflow/examples)
+
+## How to Use Antares?
+
+### Senario-1: Quick Start for Developers that Use Antares to Tune Operator/Sub-graph in Foreground Terminal:
+
+- Step-1: Prepare Environment
 ```sh
 sudo apt install docker.io
-
-git clone https://github.com/microsoft/antares
-
+git clone https://github.com/microsoft/antares --branch v0.2.x
 cd antares/
-sudo BACKEND=c-cuda make  # If you have NVIDIA GPU with CUDA driver installed
-sudo BACKEND=c-rocm make  # If you have AMD GPU with ROCm driver installed
 
-# If you need Antares to extend/boost Tensorflow-GPU operators, please also run:
-sudo python3 ./frameworks/tensorflow/setup.py
+# To set the backend type to environment variable `BACKEND` to build the corresponding environment:
+echo 'c-cuda' > backend.default
 
-# Reference - Recommended Installation Package Choices for Tensorflow 1.x & 2.x (tested in Ubuntu 20.04):
-#   Tensorflow-1 for NVIDIA CUDA 10.0: python3 -m pip install --upgrade pip && python3 -m pip install tensorflow-gpu==1.15.4
-#   Tensorflow-1 for NVIDIA CUDA 11.0: python3 -m pip install --upgrade pip && python3 -m pip install https://github.com/ghostplant/tensorflow-wheel-collections/releases/download/cuda-11/tensorflow_gpu-1.15.4_cuda11+nv-cp38-cp38-linux_x86_64.whl
-#   Tensorflow-2 for NVIDIA CUDA 11.0: python3 -m pip install --upgrade pip && python3 -m pip install tensorflow-gpu==2.4.0
-#   Tensorflow-1 for AMD ROCm 4.0:  python3 -m pip install tensorflow-rocm==1.15.9
-#   Tensorflow-2 for AMD ROCm 4.0:  python3 -m pip install tensorflow-rocm==2.4.0
-
-# If you need Antares to extend/boost Pytorch-GPU operators, please also run:
-sudo python3 ./frameworks/pytorch/setup.py
-
-# Reference - Recommended Installation Package Choices for Pytorch (tested in Ubuntu 20.04):
-#   Pytorch for NVIDIA CUDA 10.0: python3 -m pip install torch==1.5.0 torchvision==0.6.0 -f https://download.pytorch.org/whl/torch_stable.html
-#   Pytorch for NVIDIA CUDA 11.0: python3 -m pip install torch===1.7.1+cu110 torchvision===0.8.2+cu110 torchaudio===0.7.2 -f https://download.pytorch.org/whl/torch_stable.html
-#   Pytorch for AMD ROCm 4.0:  python3 -m pip install torch torchvision -f https://download.pytorch.org/whl/rocm4.0.1/torch_stable.html
+# Build the environment for this backend: (if this step failed, please go to "Pre-dependencies" section to check which "backend-related dependencies" are missing)
+make
 ```
+  All valid backends are listed in directory [antares/backends](backends)
 
-## Example with Tensorflow-GPU/Pytorch-GPU:
-
-This example shows you an easy way to quickly add custom operators in Tensorflow/Pytorch, but the operator itself is not an optimized version (not tuned).
+- Step-2: Tune a Specific Workload in Foreground (e.g. tuning an MNIST-inference using 1000 trials)
 
 ```sh
-## First, launch the antares REST server (a CUDA example)
-
-BACKEND=c-cuda make rest-server
-```
-
-- Tensorflow Frontend Only (>= 1.15.x / >= 2.4.x):
-```py
-## For Tensorflow CUDA frontend, execute the following python script:
-
-import tensorflow as tf
-from tensorflow.contrib import antares
-
-if tf.version.VERSION.startswith('2.'):
-  tf = tf.compat.v1
-  tf.disable_eager_execution()
-
-x = tf.get_variable('x', [128, 1024], tf.float32, initializer=tf.initializers.ones(tf.float32), trainable=False)
-y = tf.get_variable('y', [1024, 1024], tf.float32, initializer=tf.initializers.ones(tf.float32), trainable=False)
-
-op = antares.make_op(ir='dot_0[N, M] +=! data[N, K] * weight[K, M]', feed_dict={'data': x, 'weight': y}).tune(step=100, use_cache=True, timeout=600).emit()
-
-with tf.Session() as sess:
-  sess.run(tf.global_variables_initializer())
-  print('The result of tensor `%s` is:\n%s' % (op, sess.run(op)))
+# Run the following command in bash:
+COMMIT=force STEP=1000 COMPUTE_V1='- einstein_v2(input_dict={"data": {"dtype": "float32", "shape": [64, 784]}, "weight_0": {"dtype": "float32", "shape": [784, 512]}, "weight_1": {"dtype": "float32", "shape": [512, 512]}, "weight_2": {"dtype": "float32", "shape": [512, 10]}, "bias_0": {"dtype": "float32", "shape": [512]}, "bias_1": {"dtype": "float32", "shape": [512]}, "bias_2": {"dtype": "float32", "shape": [10]}}, extra_outputs=[], exprss="data_0[N, M] +=!  data[N, K] * weight_0[K, M];   data_1[N, K] =   (data_0[N, K] + bias_0[K]).call(`max`, [0.0]);   data_2[N, M] +=!  data_1[N, K] * weight_1[K, M];   data_3[N, K] =   (data_2[N, K] + bias_1[K]).call(`max`, [0.0]);   data_4[N, M] +=!  data_3[N, K] * weight_2[K, M];   data_5[N, K] =   (data_4[N, K] + bias_2[K]);")' make
 
 ```
+  Apart from detailed reporting logs during the tuning procedure, the best kernel record will be saved to directory [antares/codehub](codehub). If you don't want to create/overwrite existing kernel record in codehub, environment variable `COMMIT=force` in the tuning command can be removed.
 
-- Pytorch Frontend Only:
-```py
-## For Pytorch frontend, execute the following python script:
-import torch
-from torch.contrib.antares.custom_op import CustomOp
+### Senario-2: Quick Start for Developers that Use Antares to Extend Operator/Sub-graph in Pytorch/Tensorflow (only for CUDA & ROCm backend currently):
 
-device = torch.device("cuda")
-dtype = torch.float32
+- Step-1: Prepare Environment
 
-kwargs = {'dtype': dtype,
-          'device': device,
-          'requires_grad': False}
+  You need to follow `Step-1` from Senario-1 to finish environment preparation beforehand. This prevents many environmental issues when walking to the next step.
 
-x = torch.ones(128, 1024, **kwargs)
-y = torch.ones(1024, 1024, **kwargs)
+- Step-2: Set up Background Codegen Service
 
-custom_op = CustomOp(ir='dot_0[N, M] +=! data[N, K] * weight[K, M]', feed_dict={'data': x, 'weight': y}).to(device, dtype).tune(step=100, use_cache=True, timeout=600).emit()
+  ```sh
+  make rest-server
+  ```
+  By default, it listens on TCP port = 8880, and the purpose of this service is to avoid bringing heavy backend-related dependencies in Pytorch/Tensorflow, which helps JIT plugin to be light-weighted.
 
-result = custom_op()
-print('The result of tensor `%s` is:\n%s' % (result.id, result))
-```
+- Step-3: Set up a corresponding TF/TF2/Pytorch version that matches your CUDA/ROCm driver version. (**If you have installed TF/TF2/Pytorch, please just ignore this step**)
 
-## Codegen for More Backends:
+  Here we provide several prebuilt package sources that match different environment requirements:
 
-Generally, you can generate SYCL source kernels that work for most Intel CPUs, e.g:
-```sh
-    BACKEND=c-sycl_intel COMPUTE_V1='- einstein_v2("output0[N, F, HO, WO] +=! input0[N, C, HO * 4 + KH, WO * 4 + KW] * input1[F, C, KH, KW] where HO in 55, WO in 55", input_dict={"input0": {"dtype": "float32", "shape": [64, 3, 227, 227]}, "input1": {"dtype": "float32", "shape": [96, 3, 11, 11]}});' make
-```
+        - Tensorflow 1.x & 2.x: Recommended Installation Package Choices (tested in Ubuntu 20.04):
+        #   Tensorflow-1 for NVIDIA CUDA 10.0:
+        python3 -m pip install --upgrade pip && python3 -m pip install tensorflow-gpu==1.15.4
+        #   Tensorflow-1 for NVIDIA CUDA 11.0:
+        python3 -m pip install --upgrade pip && python3 -m pip install https://github.com/ghostplant/tensorflow-wheel-collections/releases/download/cuda-11/tensorflow_gpu-1.15.4_cuda11+nv-cp38-cp38-linux_x86_64.whl
+        #   Tensorflow-1 for AMD ROCm 4.0:
+        python3 -m pip install tensorflow-rocm==1.15.9
 
-To generate codes for Windows 10 with DX12 enabled, you can setup WSL1.0 and make the following setup in WSL1.0:
-```sh
-    sudo make install_host
-    BACKEND=c-hlsl_win64 COMPUTE_V1='- einstein_v2("output0[N, F, HO, WO] = input0[N] where F in 32, HO in 2, WO in 2", input_dict={"input0": {"dtype": "float32", "shape": [16]}})' make
-```
+        #   Tensorflow-2 for NVIDIA CUDA 11.0:
+        python3 -m pip install --upgrade pip && python3 -m pip install tensorflow-gpu==2.4.0
+        #   Tensorflow-2 for AMD ROCm 4.0:
+        python3 -m pip install tensorflow-rocm==2.4.0
 
-For multi-core CPU (c-mcpu) or single-core CPU (c-scpu):
-```sh
-    BACKEND=c-mcpu COMPUTE_V1='- einstein_v2("output0[N, C, H, W] = input0[N, H, W, C]", input_dict={"input0": {"dtype": "float32", "shape": [32, 229, 229, 3]}})' make
-```
+        - Pytorch 1.x: Recommended Installation Package Choices (tested in Ubuntu 20.04):
+        #   Pytorch for NVIDIA CUDA 10.0:
+        python3 -m pip install torch==1.5.0 torchvision==0.6.0 -f https://download.pytorch.org/whl/torch_stable.html
+        #   Pytorch for NVIDIA CUDA 11.0:
+        python3 -m pip install torch===1.7.1+cu110 torchvision===0.8.2+cu110 torchaudio===0.7.2 -f https://download.pytorch.org/whl/torch_stable.html
+        #   Pytorch for AMD ROCm 4.0:
+        python3 -m pip install torch torchvision -f https://download.pytorch.org/whl/rocm4.0.1/torch_stable.html
 
-## Documentation for Advanced Examples:
+- Step-4: Install JIT Plugin Client and Run Examples
 
-For more syntax usage or examples, please follow documentation here: [Antares IR & Examples](AntaresIR.md)
+    ```sh
+    # If you need Antares to extend/boost Pytorch-GPU operators, please also run:
+    sudo python3 ./frameworks/pytorch/setup.py
 
-Antares can support multi-line statements as long as they are fuse-able, for example of ConvReluBias:
+    # If you need Antares to extend/boost Tensorflow-GPU operators, please also run:
+    sudo python3 ./frameworks/tensorflow/setup.py
 
-```
-    conv_out[N, F, HO, WO] +=! input_data[N, C, HO + KH, WO + KW] * kernel[KH, KW, C, F] where HO in 256, WO in 256;
+    # Test Examples for Pytorch:
+    cd ./frameworks/pytorch/examples
+    ./1_hello_world.py
 
-    conv_bias[N, F, HO, WO] = conv_out[N, F, HO, WO] + bias[0, F, 0, 0];
+    # Test Examples for Tensorflow:
+    cd ./frameworks/tensorflow/examples
+    ./1_hello_world.py
+    ```
+  More examples here: [Antares Examples for Pytorch](frameworks/pytorch/examples) and [Antares Examples for TF/TF2](frameworks/tensorflow/examples)
 
-    output0[N, F, HO, WO] = conv_bias[N, F, HO, WO].when(conv_bias[N, F, HO, WO] > 0.0, 0.0);
-```
+## Antares Predependencies  for Different Backends:
 
-## Current Feature Table:
+Before running `make` command in antares root directory, you need to ensure the corresponding backend driver is installed correctly.
 
-|       | HIP-C(c-rocm/c-rocm_win64) | CUDA(c-cuda/c-cuda_win64) | CPU(c-mcpu/c-scpu) | DirectX12(c-hlsl_win64) | Graphcore(c-gc) | Intel OneAPI(c-sycl_intel) | (..coming soon..) |
+- Predependencies for backend `c-cuda`, `c-sycl_cuda`:
+
+    `Requirement: Ubuntu >= 18.04`
+
+    `Requirement: Install NVIDIA CUDA toolkit (>= 10.0) on Host OS`
+
+    `Requirement: docker`
+
+- Predependencies for backend `c-ocl_nvidia`:
+
+    `Requirement: Ubuntu >= 18.04`
+
+    `Requirement: Install NVIDIA CUDA toolkit (>= 10.0) to Host OS`
+
+    `Requirement: run bash command "make install_host" in antares root directory beforehand`
+
+- Predependencies for backend `c-rocm`, `c-ocl_amdgpu`:
+
+    `Requirement: Ubuntu >= 18.04`
+
+    `Requirement: Install AMD ROCm (>= 4.0) package "rock-dkms" & "rock-dkms-firmware" from repo http://repo.radeon.com/rocm/apt/debian to Host OS`
+
+    `Requirement: docker`
+
+- Predependencies for backend `c-gc`:
+
+    `Requirement: Ubuntu >= 18.04`
+
+    `Requirement: Install Poplar SDK to Host OS, ensure "popc" command exists in system PATH`
+
+    `Requirement: run bash command "make install_host" in antares root directory beforehand`
+
+- Predependencies for backend `c-scpu`, `c-mcpu`, `c-sycl_intel`:
+
+    `Requirement: Ubuntu >= 18.04`
+
+    `Requirement: docker`
+
+- Predependencies for backend `c-hlsl_win64`, `c-hlsl_xbox`:
+
+    `Requirement: Windows 10 64 bit (>= 2004), run "dxdiag.exe" to ensure Direct3D 12.0 Accleration is enabled`
+
+    `Requirement: Windows Subsystem Linux 1.0` [How to Install WSL 1.0](https://docs.microsoft.com/en-us/windows/wsl/install-win10)
+
+    `Requirement: GIT clones antares repo inside WSL environment, and the path of antares directory should be **visible to Windows**, (e.g. "/../c/Users/me/Desktop/antares" would be OK, but "/home/me/antares" won't).`
+
+    `Requirement: run bash command "make install_host" in antares root directory beforehand`
+
+- Predependencies for backend `c-rocm_win64`:
+
+    `Requirement: Windows 10 64 bit (>= 2004)`
+
+    `Requirement: Windows Subsystem Linux 1.0` [How to Install WSL 1.0](https://docs.microsoft.com/en-us/windows/wsl/install-win10)
+
+    `Requirement: Install Official AMD GPU driver (release version >= 2020.11).` Ensure `C:\Windows\System32\amdhip64.dll` exists after installation.
+
+    `Requirement: GIT clones antares repo inside WSL environment, and the path of antares directory should be **visible to Windows**, (e.g. "/../c/Users/me/Desktop/antares" would be OK, but "/home/me/antares" won't).`
+
+    `Requirement: run bash command "make install_host" in antares root directory beforehand`
+
+- Predependencies for backend `c-cuda_win64`:
+
+    `Requirement: Windows 10 64 bit (>= 2004)`
+
+    `Requirement: Windows Subsystem Linux 1.0` [How to Install WSL 1.0](https://docs.microsoft.com/en-us/windows/wsl/install-win10)
+
+    `Requirement: Install Official NVIDIA CUDA driver (>= 10.0).` Ensure `C:\Windows\System32\nvcuda.dll` exists after installation.
+
+    `Requirement: GIT clones antares repo inside WSL environment, and the path of antares directory should be **visible to Windows**, (e.g. "/../c/Users/me/Desktop/antares" would be OK, but "/home/me/antares" won't).`
+
+    `Requirement: run bash command "make install_host" in antares root directory beforehand`
+
+## Current Support Table:
+
+|       | HIP-C(c-rocm/c-rocm_win64) | CUDA(c-cuda/c-cuda_win64) | CPU(c-mcpu/c-scpu) | DirectX12(c-hlsl_win64) | Graphcore(c-gc) | Intel OneAPI(c-sycl_intel) | Codeplay DPCPP (c-sycl_cuda) |
 |---|---|---|---|---|---|---|---|
 | Deploy Environment | Linux/WSL1 | Linux | Linux | WSL1 | Linux | Linux |   |
-| Target Device | AMDGPU | NVGPU | Generic CPU | Generic Graphic Card | IPU Device | Intel CPU/HD Graphic/FPGA |   |
-| Global schedules  | Y | Y | Y | Y | Y | Y |   |
-| Local schedules   | Y | Y | Y | Y |   | Y |   |
-| Head fusion       | Y | Y | Y | Y | Y | Y |   |
-| Tail fusion       | Y | Y |   | Y |   |   |   |
-| Evaluator         | Y | Y | Y | Y | Y | Y |   |
+| Target Device | AMDGPU | NVGPU | Generic CPU | Generic Graphic Card | IPU Device | Intel CPU/HD Graphic/FPGA |  NVGPU |
+| Global schedules  | Y | Y | Y | Y | Y | Y | Y |
+| Local schedules   | Y | Y | Y | Y |   | Y | Y |
+| Head fusion       | Y | Y | Y | Y | Y | Y | Y |
+| Tail fusion       | Y | Y |   | Y |   |   | Y |
+| Evaluator         | Y | Y | Y | Y | Y | Y | Y |
 | Tensorflow Plugin | Y | Y |   |   |   |   |   |
 | Pytorch Plugin    | Y | Y |   |   |   |   |   |
-| Multi Kernel Eval | Y | Y |   |   |   |   |   |
+| Multi Kernel Eval | Y | Y | Y | Y |   | Y | Y |
 
------------
-
-## For non Tensorflow/Pytorch users:
-
-#### How to Tune Expressions Manually and Get Tuned Source Code:
-
-Firstly, you need to describe what kind of computing logic according to standard Antares IR, and set the IR string to environmental variable `COMPUTE_V1`.
-Plus environmental variable `BACKEND` to select the target backend type, these 2 environment settings can help you quickly generate a reference kernel code, regardless of the execution performance.
-If you want to further optimize the operator automatically, you just need to add one more variable in your first-run examples: `STEP=1000`,
-which means Antares will take 1000 chances to try and search a potenially faster kernel version. For example,
-
-```sh
-    STEP=100 BACKEND=c-cuda COMPUTE_V1='- einstein_v2("output0[N, F, HO, WO] +=! input0[N, C, HO * 4 + KH, WO * 4 + KW] * input1[F, C, KH, KW] where HO in 55, WO in 55", input_dict={"input0": {"dtype": "float32", "shape": [64, 3, 227, 227]}, "input1": {"dtype": "float32", "shape": [96, 3, 11, 11]}});' make
-```
-
-Tuning will take several times to finish. As long as your environment is correctly configured, you will finally get a JSON-format configuration which represents the best kernel version Antares found, then you can do 2 things:
-
-1) Re-evalutation on the Antares-tuned case by adding `CONFIG` variable, whose content is exactly the JSON-format configuration you get from your last corresponding tuning reports:
-```sh
-    CONFIG='{"..": [..], ..}' COMPUTE_V1='- einstein_v2("output0[N] = input0[N] + input1[N]", input_dict={"input0": {"dtype": "float32", "shape": [1024 * 512]}, "input1": {"dtype": "float32", "shape": [1024 * 512]}})' BACKEND=c-cuda make
-```
-
-2) If you want to save the kernel code, you need to append `COMMIT=1` for your case, like:
-```sh
-    COMMIT=1 CONFIG='{"..": [..], ..}' COMPUTE_V1='- einstein_v2("output0[N] = input0[N] + input1[N]", input_dict={"input0": {"dtype": "float32", "shape": [1024 * 512]}, "input1": {"dtype": "float32", "shape": [1024 * 512]}})' BACKEND=c-cuda make
-```
-The generated kernel code will be saved in codehub folder as a determistic filename.
-
-Environment variable `COMMIT` works in not only re-evalutation command, but also tuning command, e.g.:
-```sh
-    COMMIT=1 STEP=100 BACKEND=c-cuda COMPUTE_V1='- einstein_v2("output0[N, F, HO, WO] +=! input0[N, C, HO * 4 + KH, WO * 4 + KW] * input1[F, C, KH, KW] where HO in 55, WO in 55", input_dict={"input0": {"dtype": "float32", "shape": [64, 3, 227, 227]}, "input1": {"dtype": "float32", "shape": [96, 3, 11, 11]}});' make
-```
-If a same case (with same `COMPUTE_V1` value) has been tuned and saved in history already, the setting of `COMMIT=1` will block you from tuning it again to avoid the overwritten of history kernel code in codehub. But You can still set `COMMI=force` to allow such overwritten.
-
-# About Microsft Open Source
+## About Microsft Open Source
 For more information about Microsoft Open Source Policy, please see [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct)
+
