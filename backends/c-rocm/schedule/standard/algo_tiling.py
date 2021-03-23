@@ -69,7 +69,7 @@ def schedule_branch(attrs, output, prefix):
     # cooperative fetching
     for i, load in enumerate(input_list):
       fused_o = s[load].fuse(*s[load].op.axis)
-      val = cfg.define_knob(f"{prefix}V{i}", [1, 2, 4])
+      val = cfg.define_knob(f"{prefix}V{i}", [1, 2, 4] if not attrs.backend.startswith('c-hlsl_') else [1])
       fused_o, fused_i = s[load].split(fused_o, factor=val)
       s[load].vectorize(fused_i)
       fused_o, fused_i = s[load].split(fused_o, factor=num_threads)
