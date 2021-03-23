@@ -2,23 +2,23 @@
 
 **Antares** is an automatic engine to generate multi-platform kernels with optimization for ***DNN developers*** (targeting to backends like CUDA/ROCm/CPU/DirectX12/Graphcore/OneAPI/..). It is also a framework for ***Hardware developers*** to extend new backends/hareware quickly and easily. Antares provides IR that follows "_One Language Syntax for All Platforms_", and general-purpose device access APIs that hide the differences of not only DNN description but also device mapping.
 
-1. [Features](#top-features)
+1. [Features](#about-antares-features)
     - Backend Extension
     - Effective Auto Tuning
     - Einsum-based Antares IR
     - Framework JIT Extension (Op Maker Plugin for Pytorch/Tensorflow/Tensorflow2)
 
 2. [How to Use Antares](#how-to-use-antares)
-    - Senario-1: Quick Start for Developers that Use Antares to Tune Operator/Sub-graph in Foreground Terminal
-    - Senario-2: Quick Start for Developers that Use Antares to Extend Operator/Sub-graph in Pytorch/Tensorflow
+    - **Senario-1:** Quick Start for Developers that Use Antares to Tune Operator/Sub-graph in Foreground Terminal
+    - **Senario-2:** Quick Start for Developers that Use Antares to Extend Operator/Sub-graph in Pytorch/Tensorflow
 
 3. [Antares Pre-dependencies for Different Backends](#antares-predependencies--for-different-backends)
-    - Linux-based: cuda, rocm, mcpu, scpu, gc, sycl_intel, sycl_cuda, ocl_amdgpu, ocl_nvidia, ..
-    - Windows-based: cuda_win64, rocm_win64, hlsl_win64, ..
+    - **Linux-based:** cuda, rocm, mcpu, scpu, gc, sycl_intel, sycl_cuda, ocl_amdgpu, ocl_nvidia, ..
+    - **Windows-based:** cuda_win64, rocm_win64, hlsl_win64, ..
 
 4. [About Microsft Open Source](#about-microsft-open-source)
 
-## Top Features:
+## About Antares Features:
 
 #### a. Backend Extension
 
@@ -28,7 +28,7 @@ The current version of Antares supports code generation for the following backen
 
 #### b. Effective Auto Tuning
 
-Auto tuning by Antares contributes to not only 1/3 time cost in tuning, but also equivalent or better performance for Intra-op/Inter-op execution against TVM Ansor.
+Auto tuning by Antares contributes to not only much less tuning time, but also equivalent or better performance for Intra-op/Inter-op execution (against TVM Ansor).
 
 ![](images/tuning-perf.svg)
 
@@ -116,7 +116,7 @@ COMMIT=force STEP=1000 COMPUTE_V1='- einstein_v2(input_dict={"data": {"dtype": "
 
   Here we provide several prebuilt package sources that match different environment requirements:
 
-        - Tensorflow 1.x & 2.x: Recommended Installation Package Choices (tested in Ubuntu 20.04):
+        For Tensorflow 1.x & 2.x: Recommended Packages (tested in Ubuntu 20.04):
         #   Tensorflow-1 for NVIDIA CUDA 10.0:
         python3 -m pip install --upgrade pip && python3 -m pip install tensorflow-gpu==1.15.4
         #   Tensorflow-1 for NVIDIA CUDA 11.0:
@@ -129,7 +129,7 @@ COMMIT=force STEP=1000 COMPUTE_V1='- einstein_v2(input_dict={"data": {"dtype": "
         #   Tensorflow-2 for AMD ROCm 4.0:
         python3 -m pip install tensorflow-rocm==2.4.0
 
-        - Pytorch 1.x: Recommended Installation Package Choices (tested in Ubuntu 20.04):
+        For Pytorch 1.x: Recommended Packages (tested in Ubuntu 20.04):
         #   Pytorch for NVIDIA CUDA 10.0:
         python3 -m pip install torch==1.5.0 torchvision==0.6.0 -f https://download.pytorch.org/whl/torch_stable.html
         #   Pytorch for NVIDIA CUDA 11.0:
@@ -140,10 +140,10 @@ COMMIT=force STEP=1000 COMPUTE_V1='- einstein_v2(input_dict={"data": {"dtype": "
 - Step-4: Install JIT Plugin Client and Run Examples
 
     ```sh
-    # If you need Antares to extend/boost Pytorch-GPU operators, please also run:
+    # Set up JIT Plugin for Pytorch:
     sudo python3 ./frameworks/pytorch/setup.py
 
-    # If you need Antares to extend/boost Tensorflow-GPU operators, please also run:
+    # Set up JIT Plugin for Tensorflow/Tensorflow2:
     sudo python3 ./frameworks/tensorflow/setup.py
 
     # Test Examples for Pytorch:
