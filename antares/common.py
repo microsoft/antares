@@ -8,7 +8,7 @@ import subprocess
 class Mock(object):
   pass
 
-backend = os.environ['BACKEND'] if 'BACKEND' in os.environ else 'c-rocm'
+backend = os.environ['BACKEND']
 AntaresGlobal = Mock()
 
 def wait_for(func, timeout=None, args=[]):

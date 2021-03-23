@@ -1,7 +1,9 @@
 #!/bin/bash -e
 
 if [[ "$BACKEND" == "" ]]; then
-  if [ -e /dev/nvidia-modeset ]; then
+  if [ -e $(dirname $0)/../backend.default ]; then
+    BACKEND=$(cat $(dirname $0)/../backend.default)
+  elif [ -e /dev/nvidia-modeset ]; then
     BACKEND=c-cuda
   elif [ -e /dev/kfd ]; then
     BACKEND=c-rocm
