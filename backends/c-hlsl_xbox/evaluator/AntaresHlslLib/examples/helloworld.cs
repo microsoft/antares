@@ -42,6 +42,9 @@ namespace AntaresHelloWorldExample
         public static extern int dxMemcpyHtoDAsync(IntPtr dptr, IntPtr hptr, long bytes, IntPtr hStream);
 
         [DllImport(HlslDllName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int dxMemcpyDtoDAsync(IntPtr dptr, IntPtr hptr, long bytes, IntPtr hStream);
+
+        [DllImport(HlslDllName, CallingConvention = CallingConvention.Cdecl)]
         public static extern int dxMemcpyDtoHAsync(IntPtr hptr, IntPtr dptr, long bytes, IntPtr hStream);
 
         [DllImport("kernel32.dll", SetLastError = true)]
@@ -85,6 +88,7 @@ void CSMain(uint3 threadIdx: SV_GroupThreadID, uint3 blockIdx: SV_GroupID, uint3
             var d_input0 = dxMemAlloc(524288 * sizeof(float) * 3);
             var d_input1 = IntPtr.Add(d_input0, 524288 * sizeof(float));
             var d_output0 = IntPtr.Add(d_input1, 524288 * sizeof(float));
+            var d_output1 = dxMemAlloc(524288 * sizeof(float));
 
             var h_input0 = new float[524288];
             var h_input1 = new float[524288];
@@ -103,8 +107,11 @@ void CSMain(uint3 threadIdx: SV_GroupThreadID, uint3 blockIdx: SV_GroupID, uint3
             // Execute the shader with device memory arguments
             dxShaderLaunchAsync(hShader, new IntPtr[]{d_input0, d_input1, d_output0}, IntPtr.Zero);
 
+            // Test device to device memory copy
+            dxMemcpyDtoDAsync(d_output1, d_output0, 524288 * sizeof(float), IntPtr.Zero);
+
             // Copy result from device memory to host memory
-            dxMemcpyDtoHAsync(Marshal.UnsafeAddrOfPinnedArrayElement(h_output0, 0), d_output0, 524288 * sizeof(float), IntPtr.Zero);
+            dxMemcpyDtoHAsync(Marshal.UnsafeAddrOfPinnedArrayElement(h_output0, 0), d_output1, 524288 * sizeof(float), IntPtr.Zero);
             // Wait for all to complete
             dxStreamSynchronize(IntPtr.Zero);
 

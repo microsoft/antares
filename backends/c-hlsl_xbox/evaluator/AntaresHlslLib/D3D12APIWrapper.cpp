@@ -148,10 +148,6 @@ namespace {
     static antares::D3DDevice device(false, false);
 #endif
 
-    // Use unique_ptr to ensure the D3D resources are released when app exits.
-    // TODO: Release buffers in somewhere to avoid running out GPU memory.
-    static std::vector<std::unique_ptr<dx_buffer_t>> buffers;
-
     // Allocate individual queries from heaps for higher efficiency.
     // Since they consume little memory, we can release heaps when app exits.
     static std::vector<dx_query_heap_t> globalQueryHeaps;
@@ -160,34 +156,22 @@ namespace {
     // Use unique_ptr to grantee it will be released when app exits.
     static std::vector<std::unique_ptr<dx_query_t>> globalFreeQueries;
 
-    static std::string get_between(const std::string& source, const std::string& begin, const std::string& end, const char* def = "")
-    {
-        std::string ret;
-        int idx = (int)source.find(begin);
-        if (idx < 0)
-            return def;
-        idx += (int)begin.size();
-        int tail = (int)source.find(end, idx);
-        if (idx < 0)
-            return def;
-        return source.substr(idx, tail - idx);
-    }
-
     static void* defaultStream = nullptr;
 
     static std::map<void*, void*> memBlocks;
 
     static std::map<void*, void*>::const_iterator map_device_ptr(void* vPtr)
     {
-        assert(memBlocks.empty() == false);
-        auto nextIter = memBlocks.upper_bound(vPtr);
-        assert(nextIter != memBlocks.begin());
-        auto iter = std::prev(nextIter);
-        assert(static_cast<char*>(vPtr) - static_cast<char*>(iter->first) >= 0);
+        assert(!memBlocks.empty());
+        auto iter = memBlocks.lower_bound(vPtr);
+        if (iter == memBlocks.end() || size_t(iter->first) > size_t(vPtr))
+            --iter;
         return iter;
     }
 
     static std::vector<std::string> ssplit(const std::string& source, const std::string& delim) {
+        if (!source.size())
+            return {};
         std::vector<std::string> ret;
         int it = 0, next;
         while (next = (int)source.find(delim, it), next >= 0) {
@@ -200,15 +184,17 @@ namespace {
         return std::move(ret);
     }
 
-    static dx_tensor_t parse_tensor(const std::string& param) {
-        dx_tensor_t ret;
-        auto parts = ssplit(param, ":");
-        ret.name = parts[0];
-        parts = ssplit(parts[1], "[");
-        ret.dtype = parts[0];
-        for (auto it : ssplit(parts[1], ", "))
-            ret.shape.push_back(std::atoi(it.c_str()));
-        return ret;
+    static std::string get_between(const std::string& source, const std::string& begin, const std::string& end, const char* def = "")
+    {
+        std::string ret;
+        int idx = (int)source.find(begin);
+        if (idx < 0)
+            return def;
+        idx += (int)begin.size();
+        int tail = (int)source.find(end, idx);
+        if (idx < 0)
+            return def;
+        return source.substr(idx, tail - idx);
     }
 }
 
@@ -237,19 +223,16 @@ void* dxMemAlloc(size_t bytes)
     if (dxInit(0) != 0)
         return nullptr;
 
-    std::unique_ptr<dx_buffer_t> buff = std::make_unique<dx_buffer_t>();
+    auto buff = new dx_buffer_t();
     buff->size = bytes;
     device.CreateGPUOnlyResource(bytes, &buff->handle);
     assert(buff->handle.Get() != nullptr);
     buff->state = D3D12_RESOURCE_STATE_COMMON;
 
-    buffers.push_back(std::move(buff));
-    void* devicePtr = buffers.back().get();
-
     void* virtualPtr = VirtualAlloc(nullptr, bytes, MEM_RESERVE, PAGE_NOACCESS);
     assert(virtualPtr != nullptr);
 
-    memBlocks[virtualPtr] = devicePtr;
+    memBlocks[virtualPtr] = buff;
     return virtualPtr;
 }
 
@@ -297,10 +280,44 @@ void* dxShaderLoad_v2(const char* shader_src)
         return nullptr;
     }
 
-    auto str_params = get_between(source, " -- ", "\n");
-    auto arr_params = ssplit(str_params, " -> ");
-    assert(arr_params.size() == 2);
-    auto in_params = ssplit(arr_params[0] + ", ", "], "), out_params = ssplit(arr_params[1] + ", ", "], ");
+    std::string str_params;
+    std::vector<std::string> arr_params, in_params, out_params;
+    bool legacy_format = (source.size() >= 3 && source.substr(0, 3) == "///");
+
+    if (legacy_format) {
+        str_params = get_between(source, "///", "\n");
+        arr_params = ssplit(str_params, ":");
+        assert(arr_params.size() == 2);
+        in_params = ssplit(arr_params[0], ",");
+        out_params = ssplit(arr_params[1], ",");
+    }
+    else {
+        str_params = get_between(source, " -- ", "\n");
+        arr_params = ssplit(str_params, " -> ");
+        assert(arr_params.size() == 2);
+        in_params = ssplit(arr_params[0] + ", ", "], ");
+        out_params = ssplit(arr_params[1] + ", ", "], ");
+    }
+
+    auto parse_tensor = [&](const std::string & param) -> dx_tensor_t {
+        dx_tensor_t ret;
+        if (legacy_format) {
+            auto parts = ssplit(param, "/");
+            assert(parts.size() == 3);
+            ret.dtype = parts[1];
+            ret.name = parts[2];
+            for (auto it : ssplit(parts[0], "-"))
+                ret.shape.push_back(std::atoi(it.c_str()));
+            return ret;
+        }
+        auto parts = ssplit(param, ":");
+        ret.name = parts[0];
+        parts = ssplit(parts[1], "[");
+        ret.dtype = parts[0];
+        for (auto it : ssplit(parts[1], ", "))
+            ret.shape.push_back(std::atoi(it.c_str()));
+        return ret;
+    };
 
     for (int i = 0; i < in_params.size(); ++i)
         handle->inputs.push_back(parse_tensor(in_params[i]));
@@ -363,16 +380,40 @@ void* dxShaderLoad_v2(const char* shader_src)
     return handle;
 }
 
+void dxShaderUnload(void* hShader)
+{
+    free(hShader);
+}
+
 void* dxModuleLoad(const char* module_src)
 {
-    std::unordered_map<std::string, void*> *hShaderDict = new std::unordered_map<std::string, void*>;
+    std::string source;
+    const char proto[] = "file://";
+    if (strncmp(module_src, proto, sizeof(proto) - 1) == 0) {
+        std::ifstream t(module_src + sizeof(proto) - 1, ios_base::binary);
+        if (t.fail())
+            return nullptr;
+        std::string _((std::istreambuf_iterator<char>(t)), std::istreambuf_iterator<char>());
+        source = std::move(_);
+        module_src = source.c_str();
+    }
+
+    auto& hShaderDict = *(new std::unordered_map<std::string, void*>);
 
     auto kernel_slices = ssplit(module_src, "-------\n");
     for (int i = 1; i < kernel_slices.size(); ++i) {
         auto name = get_between(kernel_slices[i], "// LOCAL: ", " -- ");
-        (*hShaderDict)[name] = dxShaderLoad_v2(kernel_slices[i].c_str());
+        hShaderDict[name] = dxShaderLoad_v2(kernel_slices[i].c_str());
     }
-    return hShaderDict;
+    return &hShaderDict;
+}
+
+void dxModuleUnload(void* hModule)
+{
+    auto& hShaderDict = *(std::unordered_map<std::string, void*>*)hModule;
+    for (auto& it : hShaderDict)
+        dxShaderUnload(it.second);
+    delete& hShaderDict;
 }
 
 void* dxModuleGetShader(void* hModule, const char* fname)
@@ -463,6 +504,37 @@ int dxStreamSynchronize(void* hStream)
     // Reset stream to record state
     pStream->Reset();
     return 0;
+}
+
+int dxMemcpyDtoDAsync(void* dst, void* src, size_t bytes, void* hStream)
+{
+    if (!hStream)
+        hStream = defaultStream;
+
+    // GPU copy
+    auto pStream = (dx_stream_t*)hStream;
+    assert(pStream->state == dx_stream_t::State::INRECORD);
+
+    auto deviceIter = map_device_ptr(dst), sourceIter = map_device_ptr(src);
+    UINT64 offset = static_cast<char*>(dst) - static_cast<char*>(deviceIter->first);
+    UINT64 offsetSrc = static_cast<char*>(src) - static_cast<char*>(sourceIter->first);
+    auto dst_buffer = (dx_buffer_t*)(deviceIter->second), src_buffer = (dx_buffer_t*)(sourceIter->second);
+    auto& pCmdList = pStream->pCmdList;
+
+    dst_buffer->StateTransition(pCmdList.Get(), D3D12_RESOURCE_STATE_COPY_DEST);
+    pCmdList->CopyBufferRegion(dst_buffer->handle.Get(), offset, src_buffer->handle.Get(), offsetSrc, bytes);
+    dst_buffer->StateTransition(pCmdList.Get(), D3D12_RESOURCE_STATE_COMMON);
+    IFE(pCmdList->Close());
+    return 0;
+
+    // Conservatively ensure all things have been done, though currently not necessary.
+    device.AwaitExecution();
+
+    ID3D12CommandList* cmdlists[] = { pCmdList.Get() };
+    device.pCommandQueue->ExecuteCommandLists(1, cmdlists);
+    device.AwaitExecution();
+
+    return dxStreamSynchronize(hStream);
 }
 
 
