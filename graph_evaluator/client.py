@@ -36,14 +36,14 @@ def init(**kwargs):
             break
           line = line.strip()
           if line.startswith(eval_flags_pref):
-            eval_flags = line[len(eval_flags_pref):].strip()
+            eval_flags = line[len(eval_flags_pref):].strip() + ' -lpthread'
             if eval_flags.startswith('['):
               idx = eval_flags.index(']')
               eval_flags, compiler = eval_flags[idx+1:].strip(), eval_flags[1:idx].strip()
             break
 
       error_info = f"SDK for `{backend}` is not configured correctly, please look into the error messages and reconfigure the corresponding environment."
-      compile_cmd = f'{compiler} {source_root}/run_graph.cpp -D__BACKEND__=\\"{backend}\\" -I{backend_root}/include -std=c++17 -Wno-string-compare -Wno-unused-result -Wno-unused-value -lpthread -o {evaluator_path}.tmp {eval_flags}'
+      compile_cmd = f'{compiler} {source_root}/run_graph.cpp -D__BACKEND__=\\"{backend}\\" -I{backend_root}/include -std=c++17 -Wno-string-compare -Wno-unused-result -Wno-unused-value -o {evaluator_path}.tmp {eval_flags}'
       print(f'\n[EvalAgent] Compiling Evaluator: {compile_cmd}')
       assert 0 == os.system(f'timeout 30s {compile_cmd}'), error_info
       os.system(f"cp {backend_root}/include/backend.hpp {os.environ['ANTARES_DRIVER_PATH']}/backend.hpp-{backend}")
@@ -52,7 +52,8 @@ def init(**kwargs):
 
 def eval(kernel_path, **kwargs):
     dev_id = kwargs['dev_id']
-    backend = os.path.basename(kwargs['backend_root'])
+    backend_root = kwargs['backend_root']
+    backend = os.path.basename(backend_root)
 
     evaluator_path = '%s/evaluator.%s' % (os.environ['ANTARES_DRIVER_PATH'], backend)
     if not os.path.exists(evaluator_path):
@@ -64,7 +65,10 @@ def eval(kernel_path, **kwargs):
       print(f"Antares should run under WSL1.0 for this backend({backend}), otherwise, evaluation would be skipped.")
       exit(1)
 
-    exec_cmd = 'sh -c "cd %s && DEV_ID=%d EXPECTED_TIMEOUT=%s %s" || true' % (os.path.dirname(kernel_path), dev_id, kwargs['expected_timeout'], evaluator_path)
+    launcher = f'{backend_root}/launcher.sh'
+    if not os.path.exists(launcher):
+      launcher = ''
+    exec_cmd = 'sh -c "cd %s && DEV_ID=%d EXPECTED_TIMEOUT=%s %s %s my_kernel.cc" || true' % (os.path.dirname(kernel_path), dev_id, kwargs['expected_timeout'], launcher, evaluator_path)
     try:
       output = subprocess.check_output(exec_cmd, shell=True).decode()
     except:
