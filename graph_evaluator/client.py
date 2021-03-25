@@ -36,10 +36,12 @@ def init(**kwargs):
             break
           line = line.strip()
           if line.startswith(eval_flags_pref):
-            eval_flags = line[len(eval_flags_pref):].strip() + ' -lpthread'
+            eval_flags = line[len(eval_flags_pref):].strip()
             if eval_flags.startswith('['):
               idx = eval_flags.index(']')
               eval_flags, compiler = eval_flags[idx+1:].strip(), eval_flags[1:idx].strip()
+            else:
+              eval_flags += ' -lpthread'
             break
 
       error_info = f"SDK for `{backend}` is not configured correctly, please look into the error messages and reconfigure the corresponding environment."
