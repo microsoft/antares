@@ -4,10 +4,12 @@
 import os, subprocess
 import re
 
-dll_name = 'antares_hlsl_v0.2dev3_x64.dll'
-local_dll_path = f'{os.environ["ANTARES_DRIVER_PATH"]}/antares_hlsl_v0.2_x64.dll'
-if not os.path.exists(local_dll_path):
-    os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.1.0/{dll_name} -o {local_dll_path}')
+local_dll_path = os.environ["ANTARES_DRIVER_PATH"]
+
+if not os.path.exists('{local_dll_path}/dxcompiler.dll'):
+    os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.1.0/antares_hlsl_v0.2dev3_x64.dll -o {local_dll_path}/antares_hlsl_v0.2_x64.dll')
+    os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.1.0/dxil.dll -o {local_dll_path}/dxil.dll')
+    os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.1.0/dxcompiler.dll -o {local_dll_path}/dxcompiler.dll')
 
 def get_execution_parallism():
     return 1
