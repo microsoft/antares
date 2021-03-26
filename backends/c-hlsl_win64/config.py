@@ -4,7 +4,7 @@
 import os, subprocess
 import re
 
-dll_name = 'antares_hlsl_v0.2dev2_x64.dll'
+dll_name = 'antares_hlsl_v0.2dev3_x64.dll'
 local_dll_path = f'{os.environ["ANTARES_DRIVER_PATH"]}/antares_hlsl_v0.2_x64.dll'
 if not os.path.exists(local_dll_path):
     os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.1.0/{dll_name} -o {local_dll_path}')
