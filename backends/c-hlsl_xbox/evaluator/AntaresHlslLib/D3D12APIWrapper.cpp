@@ -10,7 +10,7 @@
 #include <map>
 
 #define _USE_GPU_TIMER_
-// #define _USE_DXC_
+#define _USE_DXC_
 
 #include "D3D12Util.h"
 #include "D3D12APIWrapper.h"
