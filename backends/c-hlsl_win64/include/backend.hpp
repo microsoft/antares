@@ -24,8 +24,12 @@ namespace ab {
   }
 
   void finalize() {
-    if (ab::hLibDll != nullptr)
+    if (ab::hLibDll != nullptr) {
+      LOAD_ONCE(dxFinalize, int (*)());
+
+      CHECK(0 == dxFinalize(), "Failed to finalize DirectX12 device.");
       FreeLibrary(ab::hLibDll), ab::hLibDll = nullptr;
+    }
   }
 
   void* alloc(size_t byteSize, const std::vector<size_t> &shape, const std::string &dtype, const std::string &name) {
