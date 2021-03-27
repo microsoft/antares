@@ -61,9 +61,11 @@ class AutoConfig(object):
   def set_candidate(self, candidate):
     self._candidate = candidate
 
-  def define_split(self, key, target_size, num_outputs):
+  def define_split(self, key, target_size, num_outputs, init_vals=[]):
     assert isinstance(target_size, int), "Split target must be integer type."
-    self._config[key] = {'_type': 'factor', '_value': [target_size, num_outputs], '_init': [[target_size] + [1] * (num_outputs - 1), ]}
+    if not init_vals:
+      init_vals = [[target_size] + [1] * (num_outputs - 1), ]
+    self._config[key] = {'_type': 'factor', '_value': [target_size, num_outputs], '_init': init_vals}
     if self._candidate:
       return self._candidate[key]
     return [-1] + [x for x in self._config[key]['_init'][0][1:]]

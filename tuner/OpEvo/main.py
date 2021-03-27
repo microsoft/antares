@@ -448,13 +448,11 @@ class Population(object):
 
 
 from tvm.autotvm.tuner import Tuner
-from tvm.autotvm.tuner.model_based_tuner import knob2point, point2knob
 
 class MainTuner(Tuner):
 
     def __init__(self,
                  task,
-                 batch_size=16,
                  optimize_mode="maximize",
                  parents_size=16,
                  offspring_size=16,
@@ -463,7 +461,6 @@ class MainTuner(Tuner):
 
         Parameters
         ----------
-        batch_size: int
         optimize_mode: str, 'maximize' or 'minimize'
         parents_size: int
             the amount of parents could transfer their character to offspring
@@ -493,7 +490,7 @@ class MainTuner(Tuner):
         self.logger.setLevel('DEBUG')
         self.logger.info('Tuner.__init__(...)')
 
-        self.batch_size = batch_size
+        self.batch_size = task.n_parallel
         self.optimize_mode = optimize_mode
         self.parents_size = parents_size
         self.offspring_size = offspring_size

@@ -36,8 +36,17 @@ def _schedule_single(attrs, output, rank, have_tail):
   return schedule_branch(attrs, output, f"F{rank}:")
 
 def schedule(attrs):
+  config = os.environ.get('CONFIG', '').strip()
+  step = int(os.environ.get('STEP', '0'))
+  attrs.is_tuning = not config and step > 0
   tail_op, explicit_ops = None, [x for x in attrs.explicit_ops]
-  if len(explicit_ops) > 1 and not explicit_ops[-1].output(0).op.reduce_axis and len(explicit_ops[-2].output(0).op.input_tensors) > 1:
-    tail_op, explicit_ops = explicit_ops[-1], explicit_ops[:-1]
+
+  if (len(explicit_ops) > 1 and
+      not explicit_ops[-1].output(0).op.reduce_axis and
+      len(explicit_ops[-1].output(0).op.input_tensors) <= 1):
+    fuse_tail = attrs.auto_config.define_knob(f"FU", [False, True])
+    if fuse_tail:
+      tail_op, explicit_ops = explicit_ops[-1], explicit_ops[:-1]
+
   for rank, op in enumerate(reversed(explicit_ops)):
     _schedule_single(attrs, op.output(0), rank, tail_op is not None and rank == 0)

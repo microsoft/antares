@@ -377,7 +377,8 @@ def main_compute(code_only=False):
     dev_num = backend_config.get_execution_parallism()
     if dev_num <= 0:
         raise Exception("No valid device found for backend: %s." % backend)
-    batch_size = int(os.environ.get('BATCH', '16'))
+    batch_size = os.environ.get('BATCH', '')
+    batch_size = 16 if not batch_size else int(batch_size)
 
     from concurrent.futures import ThreadPoolExecutor
     worker_size = batch_size if batch_size < dev_num else dev_num
