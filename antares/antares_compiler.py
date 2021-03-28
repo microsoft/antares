@@ -285,7 +285,7 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
     try:
       if expected_timeout is None:
         expected_timeout = os.environ.get('EXPECTED_TIMEOUT', 'inf')
-      if expected_timeout in ('', 'inf'):
+      if expected_timeout in ('', 'inf', float('inf')):
         expected_timeout = ''
       else:
         expected_timeout = float(expected_timeout)
@@ -377,7 +377,8 @@ def main_compute(code_only=False):
     dev_num = backend_config.get_execution_parallism()
     if dev_num <= 0:
         raise Exception("No valid device found for backend: %s." % backend)
-    batch_size = int(os.environ.get('BATCH', '16'))
+    batch_size = os.environ.get('BATCH', '')
+    batch_size = 16 if not batch_size else int(batch_size)
 
     from concurrent.futures import ThreadPoolExecutor
     worker_size = batch_size if batch_size < dev_num else dev_num
@@ -459,7 +460,7 @@ def main_compute(code_only=False):
         return results
 
       tuner.task.best = Mock()
-      tuner.task.best.timecost = float(os.environ.get('EXPECTED_TIMEOUT', 'inf'))
+      tuner.task.best.timecost = float(os.environ.get('EXPECTED_TIMEOUT', '30'))
       tuner.task.best.config = None
       tuner.task.best.occur = -1
 

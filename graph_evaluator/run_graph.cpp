@@ -5,14 +5,20 @@
 
 int main(int argc, char** argv)
 {
+    float expected_timeout = getenv("EXPECTED_TIMEOUT") ? std::atof(getenv("EXPECTED_TIMEOUT")) : -1;
+
 #if !defined(_WIN64) || defined(__MINGW64__)
     pthread_t p_timeout_monitor;
     pthread_create(&p_timeout_monitor, NULL, [](void *arg) -> void* {
-      sleep(30);
-      fprintf(stderr, "[FATAL] Time limit exceeded for this evaluation.\n");
+      float &expected_timeout = *(float*)arg;
+      if (expected_timeout < 0)
+        return nullptr;
+      int timeout_sec = (expected_timeout > 0) ? (5 + expected_timeout) : 30;
+      sleep(timeout_sec);
+      fprintf(stderr, "[FATAL] Time limit exceeded (>= %d sec) for this evaluation.\n", timeout_sec);
       exit(1);
       return nullptr;
-    }, NULL);
+    }, &expected_timeout);
     pthread_detach(p_timeout_monitor);
 #endif
     int dev = getenv("DEV_ID") ? std::atoi(getenv("DEV_ID")) : 0;
@@ -81,8 +87,7 @@ int main(int argc, char** argv)
       ab::synchronize();
 
       double tpr = ab::convertToElapsedTime(x, y);
-      const char *expected_timeout = getenv("EXPECTED_TIMEOUT");
-      if ((expected_timeout && *expected_timeout && tpr > std::atof(expected_timeout)) || tpr >= 2) {
+      if ((expected_timeout > 0 && tpr > expected_timeout) || tpr > 2) {
         printf("\n- TPR: %g\n", tpr);
         break;
       }

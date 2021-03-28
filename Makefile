@@ -9,6 +9,7 @@ HARDWARE_CONFIG ?=
 DEVICE_NAME ?=
 HOST_MODE ?= 0
 EXPECTED_TIMEOUT ?= inf
+BATCH ?=
 
 CPU_THREADS ?=
 INNER_CMD = ./antares/run.sh
@@ -17,7 +18,7 @@ BACKEND = $(shell ./antares/get_backend.sh)
 PARAMS ?=  docker run -v $(shell pwd):/antares -w /antares --privileged -v /:/host \
 	--shm-size=1g --ulimit memlock=-1 --ulimit stack=67108864 \
 	-v $(shell dirname `find /usr/lib/ -name libnvidia-ptxjitcompiler.so` 2>/dev/null | tail -n 1):/usr/local/nvidia/lib64 \
-	-v $(shell pwd)/public/roc_prof:/usr/local/bin/rp -e CPU_THREADS=$(CPU_THREADS) -e RECORD=$(RECORD) \
+	-v $(shell pwd)/public/roc_prof:/usr/local/bin/rp -e CPU_THREADS=$(CPU_THREADS) -e RECORD=$(RECORD) -e BATCH=$(BATCH) \
 	-e STEP=$(STEP) -e AGENT_URL=$(value AGENT_URL) -e TUNER=$(TUNER) -e CONFIG='$(value CONFIG)' -e BACKEND=$(BACKEND) -e COMPUTE_V1='$(value COMPUTE_V1)' \
 	-e COMMIT=$(COMMIT) -e HARDWARE_CONFIG=$(HARDWARE_CONFIG) -e DEVICE_NAME='$(value DEVICE_NAME)' -e EXPECTED_TIMEOUT=$(EXPECTED_TIMEOUT)
 
