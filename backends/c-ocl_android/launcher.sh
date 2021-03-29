@@ -6,9 +6,6 @@ kernel="$2"
 [[ "$executor" == "" ]] && exit 1
 [[ "$kernel" == "" ]] && exit 1
 
-exec_name=$(basename "$executor")
-kernel_name=$(basename "$kernel")
-
-adb push $1 /sdcard/$exec_name
-adb push $kernel /sdcard/$kernel
-adb shell "su -c 'mount -o rw,remount /system && cd /system && cp /sdcard/$exec_name . && chmod a+x $exec_name && ./$exec_name /sdcard/$kernel'"
+adb push $1 /sdcard/evaluator
+adb push $kernel /sdcard/kernel.cc
+adb shell "su -c 'pkill evaluator -9; mount -o rw,remount /system && cd /system && cp /sdcard/evaluator . && chmod a+x evaluator && ./evaluator /sdcard/kernel.cc'"
