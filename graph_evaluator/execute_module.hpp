@@ -92,15 +92,15 @@ std::string get_between(const std::string &str, const std::string &begin, const 
     return str.substr(at, next - at);
 }
 
-std::vector<std::string> ssplit(const std::string &str, const std::string &sub) {
+std::vector<std::string> ssplit(const std::string &str, const std::string &sub, bool allow_empty = false) {
     std::vector<std::string> ret;
     int it = 0, next;
     while (next = str.find(sub, it), next >= 0) {
-        if (next > it)
+        if (next > it || allow_empty)
             ret.push_back(str.substr(it, next - it));
         it = next + sub.size();
     }
-    if (it < str.size())
+    if (it < str.size() || allow_empty)
         ret.push_back(str.substr(it));
     return std::move(ret);
 }
@@ -186,7 +186,7 @@ struct ExecutionModule {
     }
 
     auto encoded_params = get_between(source, "// GLOBALS: ", "\n");
-    auto params = ssplit(encoded_params, " -> ");
+    auto params = ssplit(encoded_params, " -> ", true);
     global_inputs = parse_properties(params[0]), global_outputs = parse_properties(params[1]);
 
     backend = get_between(source, "// BACKEND: ", " (");
@@ -200,7 +200,7 @@ struct ExecutionModule {
       local_kernels.push_back(kernel_property{});
       auto &kp = local_kernels[local_kernels.size() - 1];
       kp.fname = name;
-      auto inputs_outputs = ssplit(get_between(kernel_slices[i], " -- ", "\n"), " -> ");
+      auto inputs_outputs = ssplit(get_between(kernel_slices[i], " -- ", "\n"), " -> ", true);
       auto local_inputs = parse_properties(inputs_outputs[0]);
       auto local_outputs = parse_properties(inputs_outputs[1]);
 
