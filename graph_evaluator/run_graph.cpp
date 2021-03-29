@@ -11,9 +11,9 @@ int main(int argc, char** argv)
     pthread_t p_timeout_monitor;
     pthread_create(&p_timeout_monitor, NULL, [](void *arg) -> void* {
       float &expected_timeout = *(float*)arg;
-      if (expected_timeout < 0)
+      if (expected_timeout <= 0)
         return nullptr;
-      int timeout_sec = (expected_timeout > 0) ? (5 + expected_timeout) : 30;
+      int timeout_sec = 12 + expected_timeout;
       sleep(timeout_sec);
       fprintf(stderr, "[FATAL] Time limit exceeded (>= %d sec) for this evaluation.\n", timeout_sec);
       exit(1);
