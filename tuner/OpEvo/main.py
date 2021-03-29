@@ -9,7 +9,7 @@ import pickle
 import time
 import numpy as np
 from itertools import combinations, permutations
-
+import copy
 
 class Parameter(object):
     """Base class for all types of parameters
@@ -499,7 +499,14 @@ class MainTuner(Tuner):
         self.serve_list = []
         self.wait_dict = {}
 
-        self.search_space = self.task.search_space_v2
+        self.search_space = copy.deepcopy(self.task.search_space_v2)
+
+        # Auto fill leading factor element instead of -1 before feeding to OpEvo
+        for k in self.search_space:
+          if self.search_space[k]['_type'] == 'factor' and '_init' in self.search_space[k]:
+            for item in self.search_space[k]['_init']:
+              item[0] = self.search_space[k]['_value'][0] // int(np.product(item[1:]))
+
         self.logger.info('Search space =', self.search_space)
         if not self.search_space:
           self.serve_list = ['{}']
