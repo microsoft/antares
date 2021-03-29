@@ -10,16 +10,17 @@ def plan_threads(attrs, axes):
     while num_threads > 1:
       unchanged = True
       for i, x in enumerate(shape):
-        if x % th == 0:
+        if x % th == 0 and num_threads % th == 0:
           num_threads //= th
           shape[i] //= th
           init_threads[i] *= th
           unchanged = False
       if unchanged:
         break
-  init_vthreads = [1] * len(axes)
+  num_vthreads, init_vthreads = 256, [1] * len(axes)
   for i, x in enumerate(shape):
-    if x % 2 == 0:
+    if x % 2 == 0 and num_vthreads % 2 == 0:
+      num_vthreads //= 2
       shape[i] //= 2
       init_vthreads[i] *= 2
   return init_threads, init_vthreads
