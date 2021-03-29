@@ -162,8 +162,11 @@ class Factor(Parameter):
         self.partition = [1] * self.num
         self.partition[idx] = self.product
         for _ in range(100):
-            action = random.choice(self._get_actions())
-            self._step(action)
+            try:
+                action = random.choice(self._get_actions())
+                self._step(action)
+            except:
+                break
 
     def get_cardinality(self):
         if not hasattr(self, 'all_partitions'):
@@ -174,8 +177,11 @@ class Factor(Parameter):
     def mutate(self):
         child = pickle.loads(pickle.dumps(self, -1))
         while random.uniform(0, 1) < self.mutate_rate:
-            action = random.choice(child._get_actions())
-            child._step(action)
+            try:
+                action = random.choice(child._get_actions())
+                child._step(action)
+            except:
+                break
 
         return child
 
@@ -500,6 +506,8 @@ class MainTuner(Tuner):
         self.wait_dict = {}
 
         self.search_space = copy.deepcopy(self.task.search_space_v2)
+        if not self.search_space:
+          self.search_space = {'_': {'_type': 'choice', '_value': [None]}}
 
         # Auto fill leading factor element instead of -1 before feeding to OpEvo
         for k in self.search_space:
@@ -508,9 +516,6 @@ class MainTuner(Tuner):
               item[0] = self.search_space[k]['_value'][0] // int(np.product(item[1:]))
 
         self.logger.info('Search space =', self.search_space)
-        if not self.search_space:
-          self.serve_list = ['{}']
-          return
         self._update_search_space(self.search_space)
 
     def _update_search_space(self, search_space):
@@ -542,9 +547,6 @@ class MainTuner(Tuner):
     def next_batch(self, batch_size):
         self.logger.info('Tuner.next_batch()')
         self.batch_size = batch_size
-        if not self.search_space:
-            res, self.serve_list = self.serve_list, []
-            return res
         res = []
         for candidate in self.serve_list[:self.batch_size]:
             cand_final = pickle.loads(pickle.dumps(candidate.pick_out(), -1))
@@ -567,8 +569,6 @@ class MainTuner(Tuner):
 
     def update(self, inputs, results):
         self.logger.info('Tuner.update(...)')
-        if not self.search_space:
-            return
         for conf, perf in zip(inputs, results):
             conf, perf = conf.config, float(np.mean(perf.costs))
             try:
