@@ -23,11 +23,11 @@ def _schedule_single(attrs, output, rank, have_tail):
   num_inputs = len(s[output].op.input_tensors)
 
   # Rough classification of computing features
-  if attrs.is_tuning and num_inputs > 1 and len(output.op.reduce_axis) > 0:
+  if num_inputs > 1 and len(output.op.reduce_axis) > 0:
     from .algo_tiling import schedule_branch
     return schedule_branch(attrs, output, f"T{rank}:")
 
-  if attrs.is_tuning and not have_tail and len(output.op.reduce_axis) > 0:
+  if not have_tail and len(output.op.reduce_axis) > 0:
     from .algo_reduce import schedule_branch
     return schedule_branch(attrs, output, f"R{rank}:")
 
@@ -37,7 +37,7 @@ def _schedule_single(attrs, output, rank, have_tail):
 def schedule(attrs):
   config = os.environ.get('CONFIG', '').strip()
   step = int(os.environ.get('STEP', '0'))
-  attrs.is_tuning = not config and step > 0
+  attrs.advanced_sched = config or step > 0
   tail_op, explicit_ops = None, [x for x in attrs.explicit_ops]
 
   if (len(explicit_ops) > 1 and

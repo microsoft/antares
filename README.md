@@ -13,7 +13,7 @@
     - **Senario-2:** Quick Start for Developers that Use Antares to Extend Operator/Sub-graph in Pytorch/Tensorflow
 
 3. [Antares Pre-dependencies for Different Backends](#antares-predependencies--for-different-backends)
-    - **Linux-based:** cuda, rocm, mcpu, scpu, gc, sycl_intel, sycl_cuda, ocl_amdgpu, ocl_nvidia, ..
+    - **Linux-based:** cuda, rocm, mcpu, scpu, gc, sycl_intel, sycl_cuda, ocl_amdgpu, ocl_nvidia, ocl_android, ..
     - **Windows-based:** cuda_win64, rocm_win64, hlsl_win64, ..
 
 4. [About Microsft Open Source](#about-microsft-open-source)

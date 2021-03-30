@@ -44,9 +44,8 @@ def schedule_branch(attrs, output, prefix):
     num_threads *= data_sizes[i][2]
     num_vthreads *= data_sizes[i][1] * data_sizes[i][3]
 
-  if attrs.is_tuning:
-    assert num_vthreads <= 512, "Unrecommended large vthread counts: %d" % num_vthreads
-    # assert num_threads >= min(num_elements, 64), "Unrecommended small thread counts: %d" % num_threads
+  assert num_vthreads <= 512, "Unrecommended large vthread counts: %d" % num_vthreads
+  # assert num_threads >= min(num_elements, 64), "Unrecommended small thread counts: %d" % num_threads
 
   assert num_threads <= attrs.device_props.max_threads_per_block, "Invalid schedule plans: num_threads(%d) > %d" % (num_threads, attrs.device_props.max_threads_per_block)
 
