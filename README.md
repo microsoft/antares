@@ -35,7 +35,7 @@ Auto tuning by Antares contributes to not only much less tuning time, but also e
 #### c. Einsum-based Antares IR
 
 - Antares IR is the frontend of both kernel generation and automatic optimization.
-- The syntax of Antares IR is slim to describe most MLP/CNN/DNN/LSTM/Transformer based models like MNIST/ResNet/BERT/GPT/..
+- The syntax of Antares IR is slim to describe most MLP/CNN/RNN/LSTM/Transformer based models like MNIST/ResNet/BERT/GPT/..
 
   **E.g. The following computation logic describes a layer of standard BERT transformer:**
 
@@ -90,11 +90,14 @@ make
 ```
   All valid backends are listed in directory [antares/backends](backends)
 
-- Step-2: Tune a Specific Workload in Foreground (e.g. tuning an MNIST-inference using 1000 trials)
+- Step-2: Tune a Specific Workload in Foreground
 
 ```sh
-# Run the following command in bash:
-COMMIT=force STEP=1000 COMPUTE_V1='- einstein_v2(input_dict={"data": {"dtype": "float32", "shape": [64, 784]}, "weight_0": {"dtype": "float32", "shape": [784, 512]}, "weight_1": {"dtype": "float32", "shape": [512, 512]}, "weight_2": {"dtype": "float32", "shape": [512, 10]}, "bias_0": {"dtype": "float32", "shape": [512]}, "bias_1": {"dtype": "float32", "shape": [512]}, "bias_2": {"dtype": "float32", "shape": [10]}}, extra_outputs=[], exprss="data_0[N, M] +=!  data[N, K] * weight_0[K, M];   data_1[N, K] =   (data_0[N, K] + bias_0[K]).call(`max`, [0.0]);   data_2[N, M] +=!  data_1[N, K] * weight_1[K, M];   data_3[N, K] =   (data_2[N, K] + bias_1[K]).call(`max`, [0.0]);   data_4[N, M] +=!  data_3[N, K] * weight_2[K, M];   data_5[N, K] =   (data_4[N, K] + bias_2[K]);")' make
+# Example-1: Run the following command in bash to tune MatMul (4096, 4096) x (4096, 4096) using 2000 trials:
+COMMIT=force STEP=2000 COMPUTE_V1='- S = 4096; einstein_v2(input_dict={"input0": {"dtype": "float32", "shape": [S, S]}, "input1": {"dtype": "float32", "shape": [S, S]}}, exprss="output0[N, M] +=! input0[N, K] * input1[K, M]")' make
+
+# Example-2: Run the following command in bash to tune MNIST-inference using 5000 trials:
+COMMIT=force STEP=5000 COMPUTE_V1='- einstein_v2(input_dict={"data": {"dtype": "float32", "shape": [64, 784]}, "weight_0": {"dtype": "float32", "shape": [784, 512]}, "weight_1": {"dtype": "float32", "shape": [512, 512]}, "weight_2": {"dtype": "float32", "shape": [512, 10]}, "bias_0": {"dtype": "float32", "shape": [512]}, "bias_1": {"dtype": "float32", "shape": [512]}, "bias_2": {"dtype": "float32", "shape": [10]}}, extra_outputs=[], exprss="data_0[N, M] +=!  data[N, K] * weight_0[K, M];   data_1[N, K] =   (data_0[N, K] + bias_0[K]).call(`max`, [0.0]);   data_2[N, M] +=!  data_1[N, K] * weight_1[K, M];   data_3[N, K] =   (data_2[N, K] + bias_1[K]).call(`max`, [0.0]);   data_4[N, M] +=!  data_3[N, K] * weight_2[K, M];   data_5[N, K] =   (data_4[N, K] + bias_2[K]);")' make
 
 ```
   Apart from detailed reporting logs during the tuning procedure, the best kernel record will be saved to directory [antares/codehub](codehub). If you don't want to create/overwrite existing kernel record in codehub, environment variable `COMMIT=force` in the tuning command can be removed.
