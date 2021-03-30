@@ -1,3 +1,31 @@
+diff --git a/python/tvm/autotvm/task/task.py b/python/tvm/autotvm/task/task.py
+index c8b50ad33..138a8028d 100644
+--- a/python/tvm/autotvm/task/task.py
++++ b/python/tvm/autotvm/task/task.py
+@@ -559,7 +559,7 @@ def compute_flop(sch):
+         if isinstance(exp, expr.Call):
+             return sum([_count_flop(x) for x in exp.args])
+ 
+-        raise FlopCalculationError("Found unsupported operator in the compute expr")
++        return 1
+ 
+     def traverse(ops):
+         """accumulate flops"""
+@@ -569,11 +569,10 @@ def compute_flop(sch):
+                 num_element = _prod_length(op.axis)
+ 
+                 body = op.body
+-                if len(body) != 1:
+-                    raise FlopCalculationError("Found multiple output in the compute")
+-                exp = body[0]
++                for i in range(len(body)):
++                  exp = body[i]
++                  ret += num_element * _count_flop(exp)
+ 
+-                ret += num_element * _count_flop(exp)
+                 ret += traverse([t.op for t in op.input_tensors])
+ 
+             elif isinstance(op, tensor.PlaceholderOp):
 diff --git a/python/tvm/autotvm/tuner/tuner.py b/python/tvm/autotvm/tuner/tuner.py
 index ba54291ad..fe21a3f20 100644
 --- a/python/tvm/autotvm/tuner/tuner.py
@@ -25,50 +53,6 @@ index f0c4cbca9..347163278 100644
      // Return the first reduce iterator
      for (const auto& iter : stage->iters) {
        if (iter->iter_kind == IteratorKind::kReduction) {
-diff --git a/src/runtime/cuda/cuda_common.h b/src/runtime/cuda/cuda_common.h
-index 471fefb23..9a6d9c033 100644
---- a/src/runtime/cuda/cuda_common.h
-+++ b/src/runtime/cuda/cuda_common.h
-@@ -65,4 +65,39 @@ class CUDAThreadEntry {
- };
- }  // namespace runtime
- }  // namespace tvm
-+
-+#include <fstream>
-+#define cudaDeviceGetAttribute antaresDeviceGetAttribute
-+#define DEF_ATTR(key_attr)  attr2sattr[cudaDevAttr ## key_attr] = # key_attr
-+
-+inline cudaError_t cudaDeviceGetAttribute(int *value, cudaDeviceAttr attr, int device) {
-+  static std::unordered_map<std::string, int> sattr2val;
-+  static std::unordered_map<cudaDeviceAttr, std::string> attr2sattr;
-+  if (!attr2sattr.size()) {
-+    std::ifstream fin(getenv("ANTARES_DRIVER_PATH") + std::string("/device_properties.cfg"));
-+    std::string key, val;
-+    while (getline(fin, key, ':') && getline(fin, val))
-+      sattr2val[key] = std::atoi(val.c_str());
-+    DEF_ATTR(MaxThreadsPerBlock);
-+    DEF_ATTR(WarpSize);
-+    DEF_ATTR(MaxSharedMemoryPerBlock);
-+    DEF_ATTR(ComputeCapabilityMajor);
-+    DEF_ATTR(ComputeCapabilityMinor);
-+    DEF_ATTR(ClockRate);
-+    DEF_ATTR(MultiProcessorCount);
-+    DEF_ATTR(MaxBlockDimX);
-+    DEF_ATTR(MaxBlockDimY);
-+    DEF_ATTR(MaxBlockDimZ);
-+    DEF_ATTR(MaxRegistersPerBlock);
-+    if (!sattr2val["MaxRegistersPerBlock"])
-+      sattr2val["MaxRegistersPerBlock"] = 64 << 10;
-+  }
-+  auto sattr = attr2sattr.find(attr);
-+  assert(sattr != attr2sattr.end());
-+  auto pvalue = sattr2val.find(sattr->second);
-+  assert(pvalue != sattr2val.end());
-+  *value = pvalue->second;
-+  return cudaSuccess;
-+}
-+
- #endif  // TVM_RUNTIME_CUDA_CUDA_COMMON_H_
 diff --git a/src/target/source/codegen_c.cc b/src/target/source/codegen_c.cc
 index ca9b80564..574628563 100644
 --- a/src/target/source/codegen_c.cc

@@ -19,9 +19,9 @@ class OpTensor:
         if isinstance(other, OpTensor):
           return other
         if isinstance(other, int):
-          return OpTensor('const', other, 'int32', 0)
+          return OpTensor('const', other, 'int32')
         if isinstance(other, float):
-          return OpTensor('const', other, 'float32', 0)
+          return OpTensor('const', other, 'float32')
         raise Exception("Unrecognized const node type: %s" % type(other))
 
     def dtype(self):
