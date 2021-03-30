@@ -47,7 +47,6 @@ typedef int cudaDeviceAttr;
 _STUB(cudaGetErrorString)
 _STUB(cudaSetDevice)
 _STUB(cudaGetDevice)
-_STUB(cudaDeviceGetAttribute)
 _STUB(cuDeviceGetName)
 _STUB(cuGetErrorName)
 _STUB(cuModuleGetGlobal)
@@ -79,5 +78,39 @@ _STUB(nvrtcCompileProgram)
 _STUB(nvrtcGetPTXSize)
 _STUB(nvrtcGetPTX)
 _STUB(nvrtcDestroyProgram)
+
+#include <unordered_map>
+#include <fstream>
+#define DEF_ATTR(key_attr)  attr2sattr[cudaDevAttr ## key_attr] = # key_attr
+
+inline cudaError_t cudaDeviceGetAttribute(int *value, cudaDeviceAttr attr, int device) {
+  static std::unordered_map<std::string, int> sattr2val;
+  static std::unordered_map<cudaDeviceAttr, std::string> attr2sattr;
+  if (!attr2sattr.size()) {
+    std::ifstream fin(getenv("ANTARES_DRIVER_PATH") + std::string("/device_properties.cfg"));
+    std::string key, val;
+    while (getline(fin, key, ':') && getline(fin, val))
+      sattr2val[key] = std::atoi(val.c_str());
+    DEF_ATTR(MaxThreadsPerBlock);
+    DEF_ATTR(WarpSize);
+    DEF_ATTR(MaxSharedMemoryPerBlock);
+    DEF_ATTR(ComputeCapabilityMajor);
+    DEF_ATTR(ComputeCapabilityMinor);
+    DEF_ATTR(ClockRate);
+    DEF_ATTR(MultiProcessorCount);
+    DEF_ATTR(MaxBlockDimX);
+    DEF_ATTR(MaxBlockDimY);
+    DEF_ATTR(MaxBlockDimZ);
+    DEF_ATTR(MaxRegistersPerBlock);
+    if (!sattr2val["MaxRegistersPerBlock"])
+      sattr2val["MaxRegistersPerBlock"] = 64 << 10;
+  }
+  auto sattr = attr2sattr.find(attr);
+  assert(sattr != attr2sattr.end());
+  auto pvalue = sattr2val.find(sattr->second);
+  assert(pvalue != sattr2val.end());
+  *value = pvalue->second;
+  return cudaSuccess;
+}
 
 #endif

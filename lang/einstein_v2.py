@@ -19,24 +19,18 @@ class OpTensor:
         if isinstance(other, OpTensor):
           return other
         if isinstance(other, int):
-          return OpTensor('const', other, 'int32', 0)
+          return OpTensor('const', other, 'int32')
         if isinstance(other, float):
-          return OpTensor('const', other, 'float32', 0)
+          return OpTensor('const', other, 'float32')
         raise Exception("Unrecognized const node type: %s" % type(other))
-
-    def filter_flop(self, other):
-        if self._op == 'get_item' or other._op == 'get_item':
-          return 1
-        return 0
 
     def dtype(self):
         return self._dtype
 
-    def __init__(self, _op, _value, _dtype, _flopbase=0):
+    def __init__(self, _op, _value, _dtype):
         self._op = _op
         self._value = _value
         self._dtype = _dtype
-        self._flopbase = _flopbase
 
     def __repr__(self):
         return 'OpTensor{"%s", "%s", "%s"}' % (self._op, self._value, self._dtype)
@@ -45,14 +39,12 @@ class OpTensor:
         if self._op != 'tensor':
             raise Exception("The instance to access its dim values must be a tensor array.")
         key = list(key if isinstance(key, tuple) else (key, ))
-        _flopbase = self._flopbase
         for i in range(len(key)):
           key[i] = OpTensor.parse(key[i])
           it = key[i]
-          _flopbase += it._flopbase
           if it._op == 'axis' and explicit_range[it._value] is None:
             explicit_range[it._value] = ast_props['input_dict'][self._value]['shape'][i]
-        return OpTensor('get_item', {"tensor": self, "index": key}, self._dtype, _flopbase)
+        return OpTensor('get_item', {"tensor": self, "index": key}, self._dtype)
 
     # Calculation Ops
     def __mul__(self, other):
@@ -61,7 +53,7 @@ class OpTensor:
             return self
         if self._op == 'const' and self._value == 1:
             return other
-        return OpTensor('op', {"name": "*", "inputs": [self, other]}, self._dtype, self._flopbase + other._flopbase + self.filter_flop(other))
+        return OpTensor('op', {"name": "*", "inputs": [self, other]}, self._dtype)
 
     def __rmul__(self, other):
         other = OpTensor.parse(other)
@@ -76,7 +68,7 @@ class OpTensor:
             assert self._value in explicit_range and explicit_range[self._value] is not None
             if op_name == '//' and explicit_range[self._value] < other._value:
                 return OpTensor.parse(int(0))
-        return OpTensor('op', {"name": op_name, "inputs": [self, other]}, self._dtype, self._flopbase + other._flopbase + self.filter_flop(other))
+        return OpTensor('op', {"name": op_name, "inputs": [self, other]}, self._dtype)
 
     def __rtruediv__(self, other):
         other = OpTensor.parse(other)
@@ -100,7 +92,7 @@ class OpTensor:
                 assert self._value in explicit_range and explicit_range[self._value] is not None
                 if explicit_range[self._value] <= other._value:
                     return self
-        return OpTensor('op', {"name": "%", "inputs": [self, other]}, self._dtype, self._flopbase + other._flopbase + self.filter_flop(other))
+        return OpTensor('op', {"name": "%", "inputs": [self, other]}, self._dtype)
 
     def __add__(self, other):
         other = OpTensor.parse(other)
@@ -108,7 +100,7 @@ class OpTensor:
             return self
         if self._op == 'const' and self._value == 0:
             return other
-        return OpTensor('op', {"name": "+", "inputs": [self, other]}, self._dtype, self._flopbase + other._flopbase + self.filter_flop(other))
+        return OpTensor('op', {"name": "+", "inputs": [self, other]}, self._dtype)
 
     def __radd__(self, other):
         other = OpTensor.parse(other)
@@ -118,7 +110,7 @@ class OpTensor:
         other = OpTensor.parse(other)
         if other._op == 'const' and other._value == 0:
             return self
-        return OpTensor('op', {"name": "-", "inputs": [self, other]}, self._dtype, self._flopbase + other._flopbase + self.filter_flop(other))
+        return OpTensor('op', {"name": "-", "inputs": [self, other]}, self._dtype)
 
     def __rsub__(self, other):
         other = OpTensor.parse(other)
@@ -130,53 +122,51 @@ class OpTensor:
     # Relation Ops
     def __lt__ (self, other):
         other = OpTensor.parse(other)
-        return OpTensor('op', {"name": "<", "inputs": [self, other]}, 'int8', self._flopbase + other._flopbase)
+        return OpTensor('op', {"name": "<", "inputs": [self, other]}, 'int8')
 
     def __le__ (self, other):
         other = OpTensor.parse(other)
-        return OpTensor('op', {"name": "<=", "inputs": [self, other]}, 'int8', self._flopbase + other._flopbase)
+        return OpTensor('op', {"name": "<=", "inputs": [self, other]}, 'int8')
 
     def __gt__ (self, other):
         other = OpTensor.parse(other)
-        return OpTensor('op', {"name": "<", "inputs": [other, self]}, 'int8', self._flopbase + other._flopbase)
+        return OpTensor('op', {"name": "<", "inputs": [other, self]}, 'int8')
 
     def __ge__ (self, other):
         other = OpTensor.parse(other)
-        return OpTensor('op', {"name": "<=", "inputs": [other, self]}, 'int8', self._flopbase + other._flopbase)
+        return OpTensor('op', {"name": "<=", "inputs": [other, self]}, 'int8')
 
     def __eq__ (self, other):
         other = OpTensor.parse(other)
-        return OpTensor('op', {"name": "==", "inputs": [self, other]}, 'int8', self._flopbase + other._flopbase)
+        return OpTensor('op', {"name": "==", "inputs": [self, other]}, 'int8')
 
     def __ne__ (self, other):
         other = OpTensor.parse(other)
-        return OpTensor('op', {"name": "!=", "inputs": [self, other]}, 'int8', self._flopbase + other._flopbase)
+        return OpTensor('op', {"name": "!=", "inputs": [self, other]}, 'int8')
 
     def __and__(self, other):
         other = OpTensor.parse(other)
-        return OpTensor('op', {"name": "&", "inputs": [self, other]}, 'int8', self._flopbase + other._flopbase)
+        return OpTensor('op', {"name": "&", "inputs": [self, other]}, 'int8')
 
     def __or__(self, other):
         other = OpTensor.parse(other)
-        return OpTensor('op', {"name": "|", "inputs": [self, other]}, 'int8', self._flopbase + other._flopbase)
+        return OpTensor('op', {"name": "|", "inputs": [self, other]}, 'int8')
 
     def __invert__(self):
-        return OpTensor('op', {"name": "~", "inputs": [self]}, 'int8', self._flopbase)
+        return OpTensor('op', {"name": "~", "inputs": [self]}, 'int8')
 
     # Special Ops
     def cast(self, dtype):
-        return OpTensor('cast', {"name": dtype, "inputs": [self]}, dtype, self._flopbase)
+        return OpTensor('cast', {"name": dtype, "inputs": [self]}, dtype)
 
     def call(self, func_name, others=None, dtype=None):
         if others is None:
           others = []
-        _flopbase = self._flopbase + self.filter_flop(self)
         for i in range(len(others)):
           others[i] = OpTensor.parse(others[i])
-          _flopbase += others[i]._flopbase
         if dtype is None:
           dtype = self._dtype
-        return OpTensor('call', {"name": func_name, "inputs": [self] + others}, dtype, _flopbase)
+        return OpTensor('call', {"name": func_name, "inputs": [self] + others}, dtype)
 
     def when(self, conditions, other, merge_op='all'):
         other = OpTensor.parse(other)
@@ -184,7 +174,7 @@ class OpTensor:
         conditions = conditions if isinstance(conditions, list) else [conditions]
         for cond in conditions:
           assert(cond._dtype == 'int8')
-        return OpTensor('when', {"if": conditions, "true": self, "false": other, "merge_op": merge_op}, self._dtype, max(self._flopbase, other._flopbase))
+        return OpTensor('when', {"if": conditions, "true": self, "false": other, "merge_op": merge_op}, self._dtype)
 
 def parse_to_ast(expr, input_dict={}):
   expr = expr.strip().replace('`', '"').replace('\'', '"')
@@ -231,7 +221,7 @@ def parse_to_ast(expr, input_dict={}):
     explicit_range[k.strip()] = int(v.strip())
 
   # Parse compute set-op, get lval & rval
-  props = {'data_axes': [], 'reduce_axes': [], 'input_dict': copy.deepcopy(input_dict), 'output_name': None, 'reduce_type': None, 'flopbase': None}
+  props = {'data_axes': [], 'reduce_axes': [], 'input_dict': copy.deepcopy(input_dict), 'output_name': None, 'reduce_type': None}
   global ast_props
   ast_props = props
 
@@ -274,9 +264,7 @@ def parse_to_ast(expr, input_dict={}):
     if explicit_range[x] is None:
       raise Exception("The range of axis `%s` is undeterminzed, please use `where` clause to set the range explicitly." % x)
 
-  # Collect output inferences & compute flopbase
-  props['flopbase'] = max(1, _root._flopbase if props['reduce_type'] is None else _root._flopbase + 1)
-
+  # Collect output inferences
   props['data_axes'] = [{'name': x, 'range': explicit_range[x]} for x in props['data_axes']]
   props['reduce_axes'] = [{'name': x, 'range': explicit_range[x]} for x in props['reduce_axes']]
 
@@ -472,8 +460,7 @@ def ir_graph_parser(exprss, input_dict, extra_outputs):
     root, props = ast['root'], ast['props']
     output_shape = [x['range'] for x in props['data_axes']]
     output_name = props['output_name']
-    all_axis_range = np.product(output_shape) * np.product([x['range'] for x in props['reduce_axes']])
-    output_begin = '%s = output(shape=%s, flops=(%d * %d), func=lambda %s: ' % (output_name, output_shape, props['flopbase'], all_axis_range, ', '.join([warp_axis(x['name']) for x in props['data_axes']]))
+    output_begin = '%s = output(shape=%s, func=lambda %s: ' % (output_name, output_shape, ', '.join([warp_axis(x['name']) for x in props['data_axes']]))
     basic_body = emit_tvm_body(root, props)
     output_end = ', dtype="%s", tag="%s", name="%s", final_output=%s); ' % (root._dtype, '', output_name, output_name in output_dict)
     return output_begin + reduce_pattern % basic_body + output_end

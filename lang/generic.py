@@ -85,11 +85,9 @@ def input(name, shape, dtype="float32"):
 def loop(length, start=0):
   return te.reduce_axis((start, length))
 
-def output(shape, func=None, flops=None, name='output0', topi=None, dtype=None, tag='', final_output=True):
+def output(shape, func=None, name='output0', topi=None, dtype=None, tag='', final_output=True):
   if len(shape) == 0:
     shape = [1]
-  if flops is None:
-    flops = np.product(shape)
   if topi is not None:
     result = te.compute(topi.shape, lambda *X: topi[X], name=name, tag='')
   else:
@@ -106,7 +104,6 @@ def output(shape, func=None, flops=None, name='output0', topi=None, dtype=None, 
 
   global output_saver
   output_saver["outputs"].append(result)
-  output_saver["flops"] += flops
   return result
 
 def traverse_inline(s, final_op, callback):
@@ -178,7 +175,7 @@ def get_template_op(**kwargs):
   assert program.startswith('- '), "The computing expression doesn't start with proper prefix: - ..."
 
   global placeholders, output_saver
-  placeholders, output_saver = {}, {"outputs": [], "flops": 0}
+  placeholders, output_saver = {}, {"outputs": []}
   AntaresGlobal.local_arg_pros = {'_in': [], '_out': []}
 
   program = program[2:].strip()
@@ -219,7 +216,6 @@ def get_template_op(**kwargs):
 
     if not hasattr(AntaresGlobal, 'auto_config'):
       AntaresGlobal.auto_config = AutoConfig()
-      autotvm.get_config().flop = AntaresGlobal.auto_config.flop = output_saver["flops"]
 
     def _callback(explicit_ops):
       attrs = Mock()
