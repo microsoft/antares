@@ -10,6 +10,9 @@ def get_execution_parallism():
   return ngpus
 
 def do_native_translation_v2(codeset, **kwargs):
+  if 'HIP_PLATFORM' in os.environ:
+    os.environ.pop('HIP_PLATFORM')
+
   kernel_name, in_args, out_args, body = codeset
   expand_args = ', '.join([f'{x[0]}* __restrict__ {x[1]}' for x in in_args + out_args])
 
