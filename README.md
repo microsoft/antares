@@ -179,6 +179,14 @@ Before running `make` command in antares root directory, you need to ensure the 
 
     `Requirement: run bash command "make install_host" in antares root directory beforehand`
 
+- Predependencies for backend `c-ocl_android`:
+
+    `Requirement: Ubuntu >= 18.04`
+
+    `Requirement: Install package "adb", connect to rooted Android device and ensure command "adb shell su -c 'ls /sdcard'" works`
+
+    `Requirement: run bash command "make install_host" in antares root directory beforehand`
+
 - Predependencies for backend `c-rocm`, `c-ocl_amdgpu`:
 
     `Requirement: Ubuntu >= 18.04`
