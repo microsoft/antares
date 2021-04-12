@@ -10,19 +10,30 @@ import numpy as np
 # Tensor name: the first charactor must be lower case letter, and the following charactors must be within [a-zA-Z_]
 # Axis name: the first charactor must be upper case letter, and the following charactors must be within [a-zA-Z]
 
-ast_props = None
+full_tensor_dict = None
 explicit_range = None
 
 class OpTensor:
     @staticmethod
-    def parse(other):
+    def parse(other, output_dtype=None):
         if isinstance(other, OpTensor):
-          return other
+          return other.cast(output_dtype)
+        if output_dtype is not None:
+          return OpTensor('const', other, output_dtype)
         if isinstance(other, int):
           return OpTensor('const', other, 'int32')
         if isinstance(other, float):
           return OpTensor('const', other, 'float32')
         raise Exception("Unrecognized const node type: %s" % type(other))
+
+    @staticmethod
+    def merge_dtype(first, second):
+        dtypes = (first._dtype, second._dtype)
+        ordered_dtypes = ['float64', 'float32', 'int32', 'int16', 'int8']
+        for _dtype in ordered_dtypes:
+          if _dtype in dtypes:
+            return _dtype
+        return first._dtype
 
     def dtype(self):
         return self._dtype
@@ -43,17 +54,18 @@ class OpTensor:
           key[i] = OpTensor.parse(key[i])
           it = key[i]
           if it._op == 'axis' and explicit_range[it._value] is None:
-            explicit_range[it._value] = ast_props['input_dict'][self._value]['shape'][i]
+            explicit_range[it._value] = full_tensor_dict[self._value]['shape'][i]
         return OpTensor('get_item', {"tensor": self, "index": key}, self._dtype)
 
     # Calculation Ops
     def __mul__(self, other):
         other = OpTensor.parse(other)
+        output_dtype = OpTensor.merge_dtype(self, other)
         if other._op == 'const' and other._value == 1:
-            return self
+            return self.cast(output_dtype)
         if self._op == 'const' and self._value == 1:
-            return other
-        return OpTensor('op', {"name": "*", "inputs": [self, other]}, self._dtype)
+            return other.cast(output_dtype)
+        return OpTensor('op', {"name": "*", "inputs": [self, other]}, output_dtype)
 
     def __rmul__(self, other):
         other = OpTensor.parse(other)
@@ -62,13 +74,14 @@ class OpTensor:
     def __truediv__(self, other):
         other = OpTensor.parse(other)
         op_name = '//' if self._dtype == 'int32' and other._dtype == 'int32' else '/'
+        output_dtype = OpTensor.merge_dtype(self, other)
         if other._op == 'const' and other._value == 1:
-            return self
+            return self.cast(output_dtype)
         if other._op == 'const' and self._op == 'axis':
             assert self._value in explicit_range and explicit_range[self._value] is not None
             if op_name == '//' and explicit_range[self._value] < other._value:
-                return OpTensor.parse(int(0))
-        return OpTensor('op', {"name": op_name, "inputs": [self, other]}, self._dtype)
+                return OpTensor.parse(0, output_dtype)
+        return OpTensor('op', {"name": op_name, "inputs": [self, other]}, output_dtype)
 
     def __rtruediv__(self, other):
         other = OpTensor.parse(other)
@@ -87,7 +100,7 @@ class OpTensor:
         if other._op == 'const':
             assert other._dtype == 'int32'
             if other._value == 1:
-                return OpTensor.parse(int(0))
+                return OpTensor.parse(0, self._dtype)
             if self._op == 'axis':
                 assert self._value in explicit_range and explicit_range[self._value] is not None
                 if explicit_range[self._value] <= other._value:
@@ -96,11 +109,12 @@ class OpTensor:
 
     def __add__(self, other):
         other = OpTensor.parse(other)
+        output_dtype = OpTensor.merge_dtype(self, other)
         if other._op == 'const' and other._value == 0:
-            return self
+            return self.cast(output_dtype)
         if self._op == 'const' and self._value == 0:
-            return other
-        return OpTensor('op', {"name": "+", "inputs": [self, other]}, self._dtype)
+            return other.cast(output_dtype)
+        return OpTensor('op', {"name": "+", "inputs": [self, other]}, output_dtype)
 
     def __radd__(self, other):
         other = OpTensor.parse(other)
@@ -108,16 +122,17 @@ class OpTensor:
 
     def __sub__(self, other):
         other = OpTensor.parse(other)
+        output_dtype = OpTensor.merge_dtype(self, other)
         if other._op == 'const' and other._value == 0:
-            return self
-        return OpTensor('op', {"name": "-", "inputs": [self, other]}, self._dtype)
+            return self.cast(output_dtype)
+        return OpTensor('op', {"name": "-", "inputs": [self, other]}, output_dtype)
 
     def __rsub__(self, other):
         other = OpTensor.parse(other)
         return other.__sub__(self)
 
     def __neg__(self):
-        return OpTensor.parse(0).cast(self._dtype).__sub__(self)
+        return OpTensor.parse(0, self._dtype).__sub__(self)
 
     # Relation Ops
     def __lt__ (self, other):
@@ -156,27 +171,30 @@ class OpTensor:
         return OpTensor('op', {"name": "~", "inputs": [self]}, 'int8')
 
     # Special Ops
-    def cast(self, dtype):
-        return OpTensor('cast', {"name": dtype, "inputs": [self]}, dtype)
+    def cast(self, output_dtype):
+        if output_dtype is None or self._dtype == output_dtype:
+          return self
+        return OpTensor('cast', {"inputs": [self]}, output_dtype)
 
-    def call(self, func_name, others=None, dtype=None):
+    def call(self, func_name, others=None, output_dtype=None):
         if others is None:
           others = []
         for i in range(len(others)):
           others[i] = OpTensor.parse(others[i])
-        if dtype is None:
-          dtype = self._dtype
-        return OpTensor('call', {"name": func_name, "inputs": [self] + others}, dtype)
+        if output_dtype is None:
+          output_dtype = self._dtype
+        return OpTensor('call', {"name": func_name, "inputs": [self] + others}, output_dtype)
 
     def when(self, conditions, other, merge_op='all'):
         other = OpTensor.parse(other)
         assert self._dtype == other._dtype or '@' in self._dtype or '@' in other._dtype, "Conditional true and false values must have same datatype (%s v.s. %s)" % (self._dtype, other._dtype)
         conditions = conditions if isinstance(conditions, list) else [conditions]
         for cond in conditions:
-          assert(cond._dtype == 'int8')
+          assert cond._dtype == 'int8', 'Each condition in when statement must be boolean(int8) type, get: %s' % cond._dtype
         return OpTensor('when', {"if": conditions, "true": self, "false": other, "merge_op": merge_op}, self._dtype)
 
-def parse_to_ast(expr, input_dict={}):
+def parse_to_ast(expr):
+  global full_tensor_dict
   expr = expr.strip().replace('`', '"').replace('\'', '"')
   if re.search('\[ *\]', expr):
     expr = re.sub('\[ *\]', '[0]', expr)
@@ -221,9 +239,7 @@ def parse_to_ast(expr, input_dict={}):
     explicit_range[k.strip()] = int(v.strip())
 
   # Parse compute set-op, get lval & rval
-  props = {'data_axes': [], 'reduce_axes': [], 'input_dict': copy.deepcopy(input_dict), 'output_name': None, 'reduce_type': None}
-  global ast_props
-  ast_props = props
+  props = {'data_axes': [], 'reduce_axes': [], 'input_dict': None, 'output_name': None, 'reduce_type': None}
 
   at_index = expr.find('=')
   if expr[at_index - 1] != ' ':
@@ -253,10 +269,10 @@ def parse_to_ast(expr, input_dict={}):
     if x not in props['data_axes']:
       props['reduce_axes'].append(x)
 
-  for input_name in input_dict:
+  for input_name in full_tensor_dict:
     if not input_name[0].islower():
       raise Exception("Tensor variable name must start with lower case letter: %s" % input_name)
-    exec('%s = OpTensor("tensor", input_name, "%s")' % (input_name, input_dict[input_name]["dtype"]))
+    exec('%s = OpTensor("tensor", input_name, "%s")' % (input_name, full_tensor_dict[input_name]["dtype"]))
     
   # Build ast according to rval & fill uncertain axis range
   _root = eval(rval)
@@ -270,7 +286,21 @@ def parse_to_ast(expr, input_dict={}):
 
   output_name = lval[:lval.index('[')].strip()
   props['output_name'] = output_name
-  return {'props': props, 'root': _root}
+
+  ast = {'props': props, 'root': _root}
+
+  input_names = set()
+  def scan_items(root, input_names):
+    if root._op != 'get_item':
+      return
+    input_names.add(root._value['tensor']._value)
+  walk_in_ast(ast['root'], scan_items, [input_names,], ast, 'root')
+
+  local_input_dict = {}
+  for name in input_names:
+    local_input_dict[name] = full_tensor_dict[name]
+  props['input_dict'] = local_input_dict
+  return ast
 
 def const(other):
   return OpTensor.parse(other)
@@ -343,7 +373,7 @@ def emit_tvm_body(node, props):
     else:
       raise Exception('Unrecognized op type: %s[%d]' % (op_name, op_input_size))
   elif node._op == 'cast':
-    return '%s.astype(cast_dtype("%s"))' % (emit_tvm_body(node._value["inputs"][0], props), node._value['name'])
+    return '%s.astype(cast_dtype("%s"))' % (emit_tvm_body(node._value["inputs"][0], props), node._dtype)
   elif node._op == 'call':
     return 'tir.call_pure_extern(cast_dtype("%s"), "%s", %s)' % (node._dtype, node._value['name'], ', '.join([emit_tvm_body(x, props) for x in node._value["inputs"]]))
   elif node._op == 'when':
@@ -385,20 +415,21 @@ def walk_in_ast(node, func, args, parent, attr_id):
 
 def ir_graph_parser(exprss, input_dict, extra_outputs):
   statements = [s_.strip() for s_ in exprss.split(';')]
-  tensor_dict = copy.deepcopy(input_dict)
+  global full_tensor_dict
+  full_tensor_dict = copy.deepcopy(input_dict)
   output_dict = {}
   ast_seq = []
   for s in statements:
     if not s:
       continue
-    ast = parse_to_ast(s, tensor_dict)
+    ast = parse_to_ast(s)
     k = ast['props']['output_name']
     ast_outputs_dict = {k: {"shape": [x['range'] for x in ast['props']['data_axes']], "dtype": ast['root']._dtype}}
-    tensor_dict[k] = ast_outputs_dict[k]
+    full_tensor_dict[k] = ast_outputs_dict[k]
     if k in extra_outputs:
       output_dict[k] = ast_outputs_dict[k]
     ast_seq.append(ast)
-  os.environ['MEDIATE_TENSORS'] = json.dumps(tensor_dict)
+  os.environ['MEDIATE_TENSORS'] = json.dumps(full_tensor_dict)
 
   # Also include the last output
   if k not in extra_outputs:
