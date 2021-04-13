@@ -426,7 +426,7 @@ def main_compute(code_only=False):
             target_source = None
           target_sources.append(target_source)
 
-        expected_timecost = tuner.task.best.timecost
+        expected_timecost = tuner.task.best.timecost if math.isinf(tuner.task.best.timecost) else float(os.environ.get('EXPECTED_TIMEOUT', '30'))
         for i in range(len(inputs)):
           dir_sid = AntaresGlobal.current_step + i + 1
           futures.append(thread_pool.submit(run_config_entity, target_sources[i], config_strs[i], dir_sid, expected_timecost, i % dev_num))
@@ -460,7 +460,7 @@ def main_compute(code_only=False):
         return results
 
       tuner.task.best = Mock()
-      tuner.task.best.timecost = float(os.environ.get('EXPECTED_TIMEOUT', '30'))
+      tuner.task.best.timecost = float('inf')
       tuner.task.best.config = None
       tuner.task.best.occur = -1
 
