@@ -264,7 +264,19 @@ struct ExecutionModule {
         if (--tensor_used[it->in_args[i]] == 0) {
           ab::release(tensor_memory[it->in_args[i]], local_tensors[it->in_args[i]].mem_size());
         }
+
+#if 1 // No Debug
     }
+#else
+      for (auto &arg: it->out_args) {
+        float d[4];
+        ab::memcpyDtoH(d, tensor_memory[arg], sizeof(d));
+        ab::synchronize();
+        fprintf(stderr, "[DEBUG] %s = %g, %g, %g, %g ..\n", arg.c_str(), d[0], d[1], d[2], d[3]);
+      }
+    }
+    fprintf(stderr, "[DEBUG] =======================\n");
+#endif
     return 0;
   }
 };
