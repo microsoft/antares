@@ -73,9 +73,6 @@ def common_reduce(name, args=(0,)):
   return te.comm_reducer(reduce_op, lambda t: tir.const(args[0], dtype=t), name=name)
 
 def input(name, shape, dtype="float32"):
-  if not name.startswith("_"):
-    AntaresGlobal.local_arg_pros['_in'] += [{'name': name, 'dtype': dtype, 'shape': shape}]
-
   global placeholders
   if len(shape) == 0:
     shape = [1]
@@ -94,13 +91,6 @@ def output(shape, func=None, name='output0', topi=None, dtype=None, tag='', fina
     result = te.compute(shape, func, name=name, tag=tag)
   if not final_output:
     return result
-
-  if not shape:
-    shape = result.shape
-  if not dtype:
-    dtype = result.dtype
-  target = {'name': name, 'shape': shape, 'dtype': dtype}
-  AntaresGlobal.local_arg_pros['_out'].append(target)
 
   global output_saver
   output_saver["outputs"].append(result)
@@ -176,13 +166,10 @@ def get_template_op(**kwargs):
 
   global placeholders, output_saver
   placeholders, output_saver = {}, {"outputs": []}
-  AntaresGlobal.local_arg_pros = {'_in': [], '_out': []}
 
   program = program[2:].strip()
   if program:
     exec('import tvm; from tvm import topi; ' + program, globals())
-    AntaresGlobal.local_arg_pros['_in'].sort(key=lambda x: x['name'])
-    AntaresGlobal.local_arg_pros['_out'].sort(key=lambda x: x['name'])
 
     inputs = sorted(list(placeholders.values()), key=lambda x: x.name)
     outputs = sorted(output_saver["outputs"], key=lambda x: x.op.name)

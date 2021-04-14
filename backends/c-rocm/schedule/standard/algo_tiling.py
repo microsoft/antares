@@ -35,9 +35,9 @@ def schedule_branch(attrs, output, prefix):
   num_elements = 1
   for i, ax in enumerate(s[output].op.axis):
     num_elements *= attrs.get_extent(ax)
-    data_sizes.append(cfg.define_split(f"{prefix}D{i}", attrs.get_extent(ax), num_outputs=4, init_vals=[[-1, 1, init_threads[i], 1],[-1, init_vthreads[i], init_threads[i], 1],[-1, 1, init_threads[i], init_vthreads[i]]]))
+    data_sizes.append(cfg.define_split(f"{prefix}D{i}", attrs.get_extent(ax), num_outputs=4, init_vals=[[-1, 1, init_threads[i], 1]]))
   for i, ax in enumerate(s[output].op.reduce_axis):
-    reduce_sizes.append(cfg.define_split(f"{prefix}R{i}", attrs.get_extent(ax), num_outputs=3))
+    reduce_sizes.append(cfg.define_split(f"{prefix}R{i}", attrs.get_extent(ax), num_outputs=3, init_vals=[[-1, 1, 1]]))
 
   num_threads, num_vthreads = 1, 1
   for i in range(len(s[output].op.axis)):
@@ -46,10 +46,9 @@ def schedule_branch(attrs, output, prefix):
 
   assert num_vthreads <= 512, "Unrecommended large vthread counts: %d" % num_vthreads
   # assert num_threads >= min(num_elements, 64), "Unrecommended small thread counts: %d" % num_threads
-
   assert num_threads <= attrs.device_props.max_threads_per_block, "Invalid schedule plans: num_threads(%d) > %d" % (num_threads, attrs.device_props.max_threads_per_block)
 
-  reduce_at = cfg.define_knob(f"{prefix}RA", [x for x in range(len(s[output].op.reduce_axis))])
+  reduce_at = cfg.define_knob(f"{prefix}RA", [x for x in range(len(s[output].op.reduce_axis))], init_vals=[0])
 
   output, output_local = s.cache_local(output)
   output_local_rv_o_o, output_local_rv_o_i, output_local_rv_i = cfg.apply_split(s, output_local, output_local.op.reduce_axis[reduce_at], reduce_sizes[reduce_at])
