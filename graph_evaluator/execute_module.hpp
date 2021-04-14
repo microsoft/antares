@@ -171,8 +171,11 @@ struct ExecutionModule {
   std::string backend;
 
   void *hModule;
+  bool debug_output;
 
   ExecutionModule(std::string source) {
+    debug_output = getenv("AB_DEBUG") && *getenv("AB_DEBUG") ? atoi(getenv("AB_DEBUG")) : 0;
+
     static const char file_proto[] = "file://";
 
     if (0 == strncmp(source.c_str(), file_proto, sizeof(file_proto) - 1)) {
@@ -264,7 +267,26 @@ struct ExecutionModule {
         if (--tensor_used[it->in_args[i]] == 0) {
           ab::release(tensor_memory[it->in_args[i]], local_tensors[it->in_args[i]].mem_size());
         }
+
+      if (debug_output) {
+        for (auto &arg: it->out_args) {
+          char d[32];
+          ab::memcpyDtoH(d, tensor_memory[arg], sizeof(d));
+          ab::synchronize();
+          if (local_tensors[arg].dtype == "float32")
+            fprintf(stderr, "[DEBUG] %s(%s) = %g, %g, %g, %g ..\n", arg.c_str(), local_tensors[arg].dtype.c_str(), ((float*)d)[0], ((float*)d)[1], ((float*)d)[2], ((float*)d)[3]);
+          else if (local_tensors[arg].dtype == "float64")
+            fprintf(stderr, "[DEBUG] %s(%s) = %g, %g, %g, %g ..\n", arg.c_str(), local_tensors[arg].dtype.c_str(), ((double*)d)[0], ((double*)d)[1], ((double*)d)[2], ((double*)d)[3]);
+          else if (local_tensors[arg].dtype == "int32")
+            fprintf(stderr, "[DEBUG] %s(%s) = %d, %d, %d, %d ..\n", arg.c_str(), local_tensors[arg].dtype.c_str(), ((int*)d)[0], ((int*)d)[1], ((int*)d)[2], ((int*)d)[3]);
+          else
+            fprintf(stderr, "[DEBUG] %s(%s) = %016x, %016x, %016x, %016x ..\n", arg.c_str(), local_tensors[arg].dtype.c_str(), ((int*)d)[0], ((int*)d)[1], ((int*)d)[2], ((int*)d)[3]);
+        }
+      }
     }
+    if (debug_output)
+      fprintf(stderr, "[DEBUG] =======================\n");
+
     return 0;
   }
 };

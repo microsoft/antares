@@ -65,7 +65,7 @@ class OpTensor:
             return self.cast(output_dtype)
         if self._op == 'const' and self._value == 1:
             return other.cast(output_dtype)
-        return OpTensor('op', {"name": "*", "inputs": [self, other]}, output_dtype)
+        return OpTensor('op', {"name": "*", "inputs": [self.cast(output_dtype), other.cast(output_dtype)]}, output_dtype)
 
     def __rmul__(self, other):
         other = OpTensor.parse(other)
@@ -114,7 +114,7 @@ class OpTensor:
             return self.cast(output_dtype)
         if self._op == 'const' and self._value == 0:
             return other.cast(output_dtype)
-        return OpTensor('op', {"name": "+", "inputs": [self, other]}, output_dtype)
+        return OpTensor('op', {"name": "+", "inputs": [self.cast(output_dtype), other.cast(output_dtype)]}, output_dtype)
 
     def __radd__(self, other):
         other = OpTensor.parse(other)
@@ -125,7 +125,7 @@ class OpTensor:
         output_dtype = OpTensor.merge_dtype(self, other)
         if other._op == 'const' and other._value == 0:
             return self.cast(output_dtype)
-        return OpTensor('op', {"name": "-", "inputs": [self, other]}, output_dtype)
+        return OpTensor('op', {"name": "-", "inputs": [self.cast(output_dtype), other.cast(output_dtype)]}, output_dtype)
 
     def __rsub__(self, other):
         other = OpTensor.parse(other)
