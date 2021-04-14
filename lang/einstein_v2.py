@@ -447,7 +447,9 @@ def ir_graph_parser(exprss, input_dict, extra_outputs):
     arg_props['_out'].append(prop)
   arg_props['_in'].sort(key=lambda x: x['name'])
   arg_props['_out'].sort(key=lambda x: x['name'])
-  os.environ['GLOBAL_ARG_PROPS'] = json.dumps(arg_props)
+
+  from antares.common import AntaresGlobal
+  AntaresGlobal.global_arg_pros = arg_props
 
   import importlib
   passes = os.listdir('lang/pass')

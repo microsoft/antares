@@ -56,8 +56,10 @@ class AutoConfig(object):
   def __init__(self):
     self._config = dict()
     self._candidate = None
+
   def get_config_space(self):
     return self._config
+
   def set_candidate(self, candidate):
     self._candidate = candidate
 
@@ -74,19 +76,25 @@ class AutoConfig(object):
     self._config[key] = {'_type': 'factor', '_value': [target_size, num_outputs], '_init': init_vals}
     if self._candidate:
       return self._candidate[key]
-    return [-1] + [x for x in self._config[key]['_init'][0][1:]]
-  def define_reorder(self, key, count, policy='all'):
+    return [-1] + init_vals[0][1:]
+
+  def define_reorder(self, key, count, policy='all', init_vals=[]):
+    if not init_vals:
+      init_vals = [[x for x in range(count)]]
     assert isinstance(count, int), "Reorder value must be integer type."
     assert policy == 'all', "Unhandled reorder policy: %s" % policy
     self._config[key] = {'_type': 'perm', '_value': count}
     if self._candidate:
       return self._candidate[key]
-    return [x for x in range(count)]
-  def define_knob(self, key, choices):
-    self._config[key] = {'_type': 'choice', '_value': [x for x in range(len(choices))]}
+    return init_vals[0]
+
+  def define_knob(self, key, choices, init_vals=[]):
+    if not init_vals:
+      init_vals = [0]
+    self._config[key] = {'_type': 'choice', '_value': [x for x in range(len(choices))], '_init': init_vals}
     if self._candidate:
       return choices[self._candidate[key]]
-    return choices[0]
+    return choices[init_vals[0]]
 
   def apply_split(self, s, output, ax, sizes):
     slices = []
