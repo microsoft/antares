@@ -46,12 +46,43 @@ except:
   exit(1)
 
 def get_global_arg_props():
-  global_arg_props = os.environ.get('GLOBAL_ARG_PROPS', '')
-  if not global_arg_props:
-    global_arg_props = AntaresGlobal.local_arg_pros
-  else:
-    global_arg_props = json.loads(global_arg_props)
-  return global_arg_props
+  return AntaresGlobal.global_arg_pros
+
+def device_properties():
+  return AntaresGlobal.attrs.device_props
+
+def verify_body(kernel_name, body):
+  max_threads_per_block = device_properties().max_threads_per_block
+  max_shared_memory_per_block = device_properties().max_shared_memory_per_block
+  assert max_threads_per_block > 0 and max_shared_memory_per_block >= 0, '[Error] Invalid device properties, maybe device is not detected correctly.'
+
+  thread_extents, shared_mem_in_bytes = dict(), 0
+  thread_extent_symbol, shared_symbol = '// [thread_extent] ', '__shared__ '
+  for line in body.split('\n'):
+    ll = line.strip()
+    if ll.startswith(thread_extent_symbol):
+      key, val = ll[len(thread_extent_symbol):].split(' = ')
+      if key not in thread_extents:
+        thread_extents[key] = int(val)
+      else:
+        assert thread_extents[key] == int(val), "Inequivalent thread_extents in function `%s`: %d v.s. %d" % (kernel_name, thread_extents[key], int(val))
+    if ll.startswith(shared_symbol):
+      assert ll.endswith('];');
+      ctype, _, count = ll[len(shared_symbol):-2].replace('[', ' ').split()
+      if ctype in ('double', 'long'):
+        shared_mem_in_bytes += int(count) * 8
+      elif ctype in ('float', 'int'):
+        shared_mem_in_bytes += int(count) * 4
+      elif ctype in ('half', 'short'):
+        shared_mem_in_bytes += int(count) * 2
+      elif ctype in ('bool', 'char'):
+        shared_mem_in_bytes += int(count) * 1
+      else:
+        raise Exception("Unrecoginized C datatype: %s" % ctype)
+
+  num_threads = thread_extents.get('threadIdx.x', 1) * thread_extents.get('threadIdx.y', 1) * thread_extents.get('threadIdx.z', 1)
+  assert num_threads <= max_threads_per_block, "Invalid num_threads used in function `%s`: num_threads(%d) > max_threads_per_block(%d)" % (kernel_name, num_threads, max_threads_per_block)
+  assert shared_mem_in_bytes <= max_shared_memory_per_block, "Invalid shared memory used in function `%s`: used_shared_mem_in_bytes %d > max_shared_memory_per_block %d" % (kernel_name, shared_mem_in_bytes, max_shared_memory_per_block)
 
 def translate_code(code, config):
   global_arg_props = get_global_arg_props()
@@ -90,6 +121,7 @@ def translate_code(code, config):
     kernel_id = int(kernel_name[len(kernel_prefix):])
     idx = kernel.index(') {', idy)
     body = kernel[idx+3:kernel.index('\n}', idx)].strip()
+    verify_body(kernel_name, body)
     args = [(x.split('*')[0].strip(), x.split()[-1], mediate_tensors[decode_name(x.split()[-1])]) for x in kernel[idy+1:idx].split(',')]
     kernel_slices.append((kernel_id, kernel_name, args, body))
 
@@ -113,10 +145,6 @@ def translate_code(code, config):
   except:
     defs = ''
   return '%s\n%s%s' % (get_kernel_metadata(), defs, code)
-
-def device_properties():
-  props = AntaresGlobal.attrs.device_props
-  return props
 
 def compute_gflops(flop, t):
   try:
@@ -191,51 +219,6 @@ def get_target_source(best_config, dir_sid=None):
       lower_file = local_get_dir_file('my_kernel.lower', dir_sid=dir_sid)
       with open(lower_file, 'w') as fp:
         fp.write(lower_source)
-
-      # Verify Lower Code Code
-      if len(('\n' + lower_source).split('\nprimfn(')) != 2:
-        raise Exception('[Not Support Multi Unfuse-able kernels]\n\n' + lower_source)
-
-      max_threads_per_block = device_properties().max_threads_per_block
-      max_shared_memory_per_block = device_properties().max_shared_memory_per_block
-      assert max_threads_per_block > 0 and max_shared_memory_per_block >= 0, '[Error] Invalid device properties, maybe device is not detected correctly.'
-
-      lower_lines = lower_source.split('\n')
-      thread_extents, allocate_shared = [], []
-      for ll in lower_lines:
-        if ll.strip().startswith('attr [IterVar(') and ll.find(' "thread_extent" = ') >= 0:
-          thread_name = ll.split('attr [IterVar(')[-1].split(':')[0]
-          thread_val = int(ll.split(' "thread_extent" = ')[-1].split(';')[0].strip().split(' ')[0])
-          thread_extents.append((thread_name, thread_val))
-        elif ll.strip().startswith('allocate(') and ll.find('.shared, ') >= 0:
-          last_arg_id = ll.rindex(', [')
-          allocate_val = [int(x) for x in ll[last_arg_id+3:ll.rindex(']')].split(', ')]
-          allocate_val = int(np.product(allocate_val))
-          allocate_type = ll[ll.index(', ') + 2:last_arg_id]
-          allocate_shared.append((allocate_type, allocate_val))
-
-      reserved_axes = dict()
-      for thread_name, thread_val in thread_extents:
-        if thread_name in reserved_axes:
-          assert reserved_axes[thread_name] == thread_val, "Invalid code: Multiple hints for thread extent conflict with each other: %d v.s. %d" % (reserved_axes[thread_name], thread_val)
-        else:
-          reserved_axes[thread_name] = thread_val
-
-      num_threads = 1
-      for thread_name in ['threadIdx.x', 'threadIdx.y', 'threadIdx.z']:
-        num_threads *= reserved_axes.get(thread_name, 1)
-      assert num_threads <= max_threads_per_block, "Invalid kernel code: using num_threads(%d) > max_threads_per_block(%d)" % (num_threads, max_threads_per_block)
-
-      shared_memory_in_bytes = 0
-      for allocate_type, allocate_size in allocate_shared:
-        if allocate_type.startswith('custom['):
-          type_name = allocate_type[7:].split(']')[0]
-        else:
-          type_name = allocate_type
-        shared_memory_in_bytes += get_type_size(type_name) * allocate_size
-
-      if shared_memory_in_bytes > max_shared_memory_per_block:
-        raise Exception("Invalid kernel code: using shared_memory_in_bytes %d > max_shared_memory_per_block %d" % (shared_memory_in_bytes, max_shared_memory_per_block))
 
       # Compile Source Code
       def build_template():
