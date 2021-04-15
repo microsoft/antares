@@ -25,7 +25,8 @@ output_logits = CustomOp(ir=f'''
   mpool_1[N, C, HO, WO ] >=! conv_1[N, C, HO * 2 + KH, WO * 2 + KW].call(`max`, [0.0]) where HO in 13, WO in 13, KH in 3, KW in 3;
   conv_2[N, F, HO, WO] +=! mpool_1[N, C, -1 + HO + KH, -1 + WO + KW].when([-1 + HO + KH >= 0, -1 + HO + KH < 13, -1 + WO + KW >= 0, -1 + WO + KW < 13], 0.0) * const_2_[KH, KW, C, F] where HO in 13, WO in 13;
   conv_3[N, F, HO, WO] +=! conv_2[N, C, -1 + HO + KH, -1 + WO + KW].call(`max`, [0.0]).when([-1 + HO + KH >= 0, -1 + HO + KH < 13, -1 + WO + KW >= 0, -1 + WO + KW < 13], 0.0) * const_3_[KH, KW, C, F] where HO in 13, WO in 13;
-  mpool_2[N, C, HO, WO] >=! conv_3[N, C, HO * 2 + KH, WO * 2 + KW].call(`max`, [0.0]) where HO in 6, WO in 6, KH in 3, KW in 3;
+  conv_4[N, F, HO, WO] +=! conv_3[N, C, -1 + HO + KH, -1 + WO + KW].call(`max`, [0.0]).when([-1 + HO + KH >= 0, -1 + HO + KH < 13, -1 + WO + KW >= 0, -1 + WO + KW < 13], 0.0) * const_4_[KH, KW, C, F] where HO in 13, WO in 13;
+  mpool_2[N, C, HO, WO] >=! conv_4[N, C, HO * 2 + KH, WO * 2 + KW].call(`max`, [0.0]) where HO in 6, WO in 6, KH in 3, KW in 3;
   reshape_0[N0, N1] = mpool_2[N0, N1 // 36 % 256, N1 // 6 % 6, N1 % 6] where N1 in 9216;
   dense_0[N, M] +=! reshape_0[N, K] * const_5_[K, M];
   dense_1[N, M] +=! dense_0[N, K].call(`max`, [0.0]) * const_6_[K, M];
