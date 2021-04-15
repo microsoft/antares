@@ -386,7 +386,6 @@ class Population(object):
         self.individual = None
         for _ in range(self.population_size):
             if self.individual:
-                print('here')
                 self.individual = pickle.loads(pickle.dumps(self.individual, -1))
                 for key in search_space.keys():
                     if '_init' in  search_space[key].keys():
@@ -403,8 +402,7 @@ class Population(object):
 
             self.init_cand.append(self.individual) 
 
-        # self.individual = Individual(
-        #     self.search_spaces[0], self.mutate_rate)
+            self.individual = pickle.loads(pickle.dumps(self.individual, -1))
 
         # self.volume = 1
         # for key, value in self.individual.params.items():
@@ -431,7 +429,6 @@ class Population(object):
         if len(self.fitness) < parents_size:
             while self.init_cand:
                 child = self.init_cand.pop()
-                print(child in children)
                 if child not in children:
                     children.append(child)
             for _ in range(offspring_size - len(children)):
