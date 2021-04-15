@@ -65,6 +65,9 @@ class Choice(Parameter):
     def pick_out(self):
         return self.value
 
+    def __repr__(self):
+        return self.value.__repr__()
+
 
 class Discrete(Parameter):
     """discrete type parameter
@@ -102,6 +105,9 @@ class Discrete(Parameter):
 
     def pick_out(self):
         return self.value
+
+    def __repr__(self):
+        return self.value.__repr__()
 
 
 class Permutation(Parameter):
@@ -380,6 +386,7 @@ class Population(object):
         self.individual = None
         for _ in range(self.population_size):
             if self.individual:
+                print('here')
                 self.individual = pickle.loads(pickle.dumps(self.individual, -1))
                 for key in search_space.keys():
                     if '_init' in  search_space[key].keys():
@@ -424,6 +431,7 @@ class Population(object):
         if len(self.fitness) < parents_size:
             while self.init_cand:
                 child = self.init_cand.pop()
+                print(child in children)
                 if child not in children:
                     children.append(child)
             for _ in range(offspring_size - len(children)):
