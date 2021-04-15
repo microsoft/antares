@@ -28,14 +28,18 @@ def get_tensorflow_antares_component(tf_module_path, op_name, using_mpi=False):
     if flag.startswith('-l:libtensorflow_framework.so'):
       libtf_so_name = flag[3:].strip()
       break
-  if os.system(f'ldd {dist_path}/{libtf_so_name} 2>/dev/null | grep -e libamdhip64 >/dev/null') == 0:
-    with_cuda = "-DGOOGLE_CUDA -D__HIP_PLATFORM_HCC__=1 -I/opt/rocm/include -L/opt/rocm/lib -lamdhip64"
+  if tf.test.is_built_with_rocm():
+    with_cuda = "-DANTARES_ROCM -DGOOGLE_CUDA -D__HIP_PLATFORM_HCC__=1 -I/opt/rocm/include -L/opt/rocm/lib -lamdhip64"
     if using_mpi:
       with_cuda += ' -lmpi_cxx -lrccl'
-  else:
-    with_cuda = "-DGOOGLE_CUDA -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -lcudart -lcuda"
+  elif tf.test.is_built_with_cuda():
+    with_cuda = "-DANTARES_CUDA -DGOOGLE_CUDA -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -lcudart -lcuda"
     if using_mpi:
       with_cuda += ' -lmpi_cxx -lnccl'
+  else:
+    with_cuda = "-DANTARES_ONEAPI"
+    if using_mpi:
+      with_cuda += ' -lmpi_cxx'
 
   self_pid = os.getpid()
   # Compile TF library

@@ -9,13 +9,9 @@
 #include "tensorflow/core/platform/mutex.h"
 #include "tensorflow/core/platform/stream_executor.h"
 
-#ifndef __HIP_PLATFORM_HCC__
-#include <cuda_runtime_api.h>
-#include <nccl.h>
-#else
+#if defined(ANTARES_ROCM)
 #include <hip/hip_runtime_api.h>
 #include <rccl.h>
-
 #define cudaSuccess hipSuccess
 #define cudaSetDevice hipSetDevice
 #define cudaMallocHost hipHostMalloc
@@ -35,33 +31,42 @@
 #define cudaEventElapsedTime hipEventElapsedTime
 #define cudaEventDisableTiming 0
 
+#elif defined(ANTARES_CUDA)
+#include <cuda_runtime_api.h>
+#include <nccl.h>
+
+#elif defined(ANTARES_ONEAPI)
+// #include <CL/sycl.hpp>
+
+#else
+#error "Cannot detect which tensorflow platform is using: ANTARES_CUDA/ANTARES_ROCM/ANTARES_ONEAPI."
 #endif
-
-#include <dirent.h>
-#include <sys/stat.h>
-#include <pthread.h>
-
-#include <mpi.h>
-
-#include <memory>
-#include <queue>
-#include <string>
-#include <vector>
-#include <unordered_map>
-
 
 #if !defined(__linux__)
 #error "Only Linux platform is supported at the moment (with CUDA)."
 #endif
+
+#include <dirent.h>
+#include <mpi.h>
+#include <pthread.h>
+#include <sys/stat.h>
+
+#include <chrono>
+#include <memory>
+#include <queue>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 
 namespace tensorflow {
 namespace {
 
 using namespace std;
 
-typedef Eigen::ThreadPoolDevice CPUDevice;
-typedef Eigen::GpuDevice GPUDevice;
+static pthread_mutex_t __g_lock = PTHREAD_MUTEX_INITIALIZER;
 
+#if defined(GOOGLE_CUDA)
 
 class Nccl2Handle {
  public:
@@ -93,9 +98,7 @@ class Nccl2Handle {
   ncclComm_t comm;
 };
 
-
 static shared_ptr<Nccl2Handle> __ncclComm;
-static pthread_mutex_t __g_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static shared_ptr<Nccl2Handle> initializeNccl2() {
   pthread_mutex_lock(&__g_lock);
@@ -179,7 +182,7 @@ class Nccl2AllreduceOpKernel: public AsyncOpKernel {
   TF_DISALLOW_COPY_AND_ASSIGN(Nccl2AllreduceOpKernel);
 };
 
-REGISTER_KERNEL_BUILDER(Name("Nccl2Allreduce").Device(DEVICE_GPU), Nccl2AllreduceOpKernel<GPUDevice>);
+REGISTER_KERNEL_BUILDER(Name("Nccl2Allreduce").Device(DEVICE_GPU), Nccl2AllreduceOpKernel<Eigen::GpuDevice>);
 
 REGISTER_OP("Nccl2Allreduce")
     .Input("tensor: N * T")
@@ -240,7 +243,7 @@ class Nccl2ReducescatterOpKernel: public AsyncOpKernel {
   TF_DISALLOW_COPY_AND_ASSIGN(Nccl2ReducescatterOpKernel);
 };
 
-REGISTER_KERNEL_BUILDER(Name("Nccl2Reducescatter").Device(DEVICE_GPU), Nccl2ReducescatterOpKernel<GPUDevice>);
+REGISTER_KERNEL_BUILDER(Name("Nccl2Reducescatter").Device(DEVICE_GPU), Nccl2ReducescatterOpKernel<Eigen::GpuDevice>);
 
 REGISTER_OP("Nccl2Reducescatter")
     .Input("tensor: N * T")
@@ -300,7 +303,7 @@ class Nccl2AllgatherOpKernel: public AsyncOpKernel {
   TF_DISALLOW_COPY_AND_ASSIGN(Nccl2AllgatherOpKernel);
 };
 
-REGISTER_KERNEL_BUILDER(Name("Nccl2Allgather").Device(DEVICE_GPU), Nccl2AllgatherOpKernel<GPUDevice>);
+REGISTER_KERNEL_BUILDER(Name("Nccl2Allgather").Device(DEVICE_GPU), Nccl2AllgatherOpKernel<Eigen::GpuDevice>);
 
 REGISTER_OP("Nccl2Allgather")
     .Input("tensor: N * T")
@@ -360,7 +363,7 @@ class Nccl2BroadcastOpKernel: public AsyncOpKernel {
   TF_DISALLOW_COPY_AND_ASSIGN(Nccl2BroadcastOpKernel);
 };
 
-REGISTER_KERNEL_BUILDER(Name("Nccl2Broadcast").Device(DEVICE_GPU), Nccl2BroadcastOpKernel<GPUDevice>);
+REGISTER_KERNEL_BUILDER(Name("Nccl2Broadcast").Device(DEVICE_GPU), Nccl2BroadcastOpKernel<Eigen::GpuDevice>);
 
 REGISTER_OP("Nccl2Broadcast")
     .Input("tensor: N * T")
@@ -370,7 +373,6 @@ REGISTER_OP("Nccl2Broadcast")
     .SetIsStateful();
 
 /////////////////////////////////////////////////////////////////////////////////////
-static cudaEvent_t lastMetricEvent = NULL;
 
 template <typename Device>
 class MetricOpKernel: public AsyncOpKernel {
@@ -382,14 +384,12 @@ class MetricOpKernel: public AsyncOpKernel {
   void ComputeAsync(OpKernelContext* c, DoneCallback done) override {
     auto GetGpuStream = [](OpKernelContext* context) -> cudaStream_t {
       const cudaStream_t* ptr = CHECK_NOTNULL(
-        reinterpret_cast<const cudaStream_t*>(context->op_device_context()
-                                                ->stream()
-                                                ->implementation()
-                                                ->GpuStreamMemberHack()));
+        reinterpret_cast<const cudaStream_t*>(context->op_device_context()->stream()->implementation()->GpuStreamMemberHack()));
       return *ptr;
     };
     cudaStream_t cu_stream = GetGpuStream(c);
 
+    static cudaEvent_t lastMetricEvent = NULL;
     auto compute = [&]() {
       for (int i = c->num_inputs() - 1; i >= 0; --i) {
         Tensor* output;
@@ -436,7 +436,60 @@ class MetricOpKernel: public AsyncOpKernel {
   TF_DISALLOW_COPY_AND_ASSIGN(MetricOpKernel);
 };
 
-REGISTER_KERNEL_BUILDER(Name("Metric").Device(DEVICE_GPU), MetricOpKernel<GPUDevice>);
+REGISTER_KERNEL_BUILDER(Name("Metric").Device(DEVICE_GPU), MetricOpKernel<Eigen::GpuDevice>);
+
+#else
+template <typename Device>
+class MetricOpKernel: public AsyncOpKernel {
+ public:
+  explicit MetricOpKernel(OpKernelConstruction* c)
+      : AsyncOpKernel(c) {
+  }
+
+  void ComputeAsync(OpKernelContext* c, DoneCallback done) override {
+    static std::chrono::time_point<std::chrono::system_clock> lastMetricEvent;
+    static bool hasLastEvent = false;
+
+    auto compute = [&]() {
+      for (int i = c->num_inputs() - 1; i >= 0; --i) {
+        Tensor* output;
+        OP_REQUIRES_OK_ASYNC(c, c->allocate_output(i, c->input(i).shape(), &output), done);
+        size_t type_size = 0;
+        if (output->dtype() == DT_INT32 || output->dtype() == DT_FLOAT)
+          type_size = 4;
+        else if (output->dtype() == DT_DOUBLE)
+          type_size = 8;
+        CHECK_GT(type_size, 0);
+        memcpy((void*)output->tensor_data().data(), (void*)c->input(i).tensor_data().data(), output->NumElements() * type_size);
+      }
+    };
+
+    pthread_mutex_lock(&__g_lock);
+    if (hasLastEvent) {
+      auto currMetricEvent = std::chrono::system_clock::now();
+      double sec = max(1e-8, 1e-9 * std::chrono::duration_cast<std::chrono::nanoseconds>(currMetricEvent - lastMetricEvent).count());
+      LOG(INFO) << "Antares Metric Record: ElapsedTime = " << sec << " sec.";
+      hasLastEvent = false;
+      compute();
+    } else {
+      LOG(INFO) << "Antares Metric Record: Initialize Metric Record.";
+      compute();
+      lastMetricEvent = std::chrono::system_clock::now();
+      hasLastEvent = true;
+    }
+    pthread_mutex_unlock(&__g_lock);
+
+    done();
+  }
+
+ private:
+  TF_DISALLOW_COPY_AND_ASSIGN(MetricOpKernel);
+};
+
+REGISTER_KERNEL_BUILDER(Name("Metric").Device(DEVICE_CPU), MetricOpKernel<Eigen::ThreadPoolDevice>);
+
+#endif
+
 
 REGISTER_OP("Metric")
     .Input("tensor: N * T")
