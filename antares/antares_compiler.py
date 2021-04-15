@@ -267,7 +267,7 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
   def do_evaluate(expected_timeout):
     try:
       if expected_timeout is None:
-        expected_timeout = os.environ.get('EXPECTED_TIMEOUT', 'inf')
+        expected_timeout = os.environ.get('EXPECTED_TIMEOUT', '')
       if expected_timeout in ('', 'inf', float('inf')):
         expected_timeout = ''
       else:
@@ -409,7 +409,7 @@ def main_compute(code_only=False):
             target_source = None
           target_sources.append(target_source)
 
-        expected_timecost = tuner.task.best.timecost if math.isinf(tuner.task.best.timecost) else float(os.environ.get('EXPECTED_TIMEOUT', '30'))
+        expected_timecost = tuner.task.best.timecost if not math.isinf(tuner.task.best.timecost) else min(30, float(os.environ['EXPECTED_TIMEOUT']))
         for i in range(len(inputs)):
           dir_sid = AntaresGlobal.current_step + i + 1
           futures.append(thread_pool.submit(run_config_entity, target_sources[i], config_strs[i], dir_sid, expected_timecost, i % dev_num))
