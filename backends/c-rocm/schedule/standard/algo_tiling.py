@@ -35,7 +35,7 @@ def schedule_branch(attrs, output, prefix):
   num_elements = 1
   for i, ax in enumerate(s[output].op.axis):
     num_elements *= attrs.get_extent(ax)
-    data_sizes.append(cfg.define_split(f"{prefix}D{i}", attrs.get_extent(ax), num_outputs=4, init_vals=[[-1, 1, init_threads[i], 1]]))
+    data_sizes.append(cfg.define_split(f"{prefix}D{i}", attrs.get_extent(ax), num_outputs=4, init_vals=[[-1, 1, init_threads[i], 1], [-1, init_vthreads[i], init_threads[i], 1],[-1, 1, init_threads[i], init_vthreads[i]]]))
   for i, ax in enumerate(s[output].op.reduce_axis):
     reduce_sizes.append(cfg.define_split(f"{prefix}R{i}", attrs.get_extent(ax), num_outputs=3, init_vals=[[-1, 1, 1]]))
 
