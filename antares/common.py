@@ -3,7 +3,7 @@
 
 import os
 import subprocess
-
+import numpy as np
 
 class Mock(object):
   pass
@@ -67,12 +67,16 @@ class AutoConfig(object):
     assert isinstance(target_size, int), "Split target must be integer type."
     if not init_vals:
       init_vals = [[-1] + [1] * (num_outputs - 1), ]
-    else:
-      unique_vals = []
-      for item in init_vals:
-        if item not in unique_vals:
-          unique_vals.append(item)
-      init_vals = unique_vals
+    for val in init_vals:
+      psum = int(np.product(val[1:]))
+      assert target_size % psum == 0
+      val[0] = target_size // psum
+    unique_vals = []
+    for item in init_vals:
+      if item not in unique_vals:
+        unique_vals.append(item)
+    init_vals = unique_vals
+    del unique_vals
     self._config[key] = {'_type': 'factor', '_value': [target_size, num_outputs], '_init': init_vals}
     if self._candidate:
       return self._candidate[key]
@@ -83,7 +87,7 @@ class AutoConfig(object):
       init_vals = [[x for x in range(count)]]
     assert isinstance(count, int), "Reorder value must be integer type."
     assert policy == 'all', "Unhandled reorder policy: %s" % policy
-    self._config[key] = {'_type': 'perm', '_value': count}
+    self._config[key] = {'_type': 'perm', '_value': count, '_init': init_vals}
     if self._candidate:
       return self._candidate[key]
     return init_vals[0]
