@@ -376,19 +376,28 @@ class Population(object):
         self.population = []
         self.fitness = []
 
-        self.search_spaces = []
+        self.init_cand = []
+        self.individual = None
         for _ in range(self.population_size):
-            ss = {}
-            for key in search_space.keys():
-                ss[key] = {}
-                ss[key]['_type'] = search_space[key]['_type']
-                ss[key]['_value'] = search_space[key]['_value']
-                if '_init' in  search_space[key].keys():
-                    ss[key]['_init'] = random.choice(search_space[key]['_init'])
-            self.search_spaces.append(ss) 
+            if self.individual:
+                self.individual = pickle.loads(pickle.dumps(self.individual, -1))
+                for key in search_space.keys():
+                    if '_init' in  search_space[key].keys():
+                        self.individual.params[key].value = random.choice(search_space[key]['_init'])
+            else:
+                ss = {}
+                for key in search_space.keys():
+                    ss[key] = {}
+                    ss[key]['_type'] = search_space[key]['_type']
+                    ss[key]['_value'] = search_space[key]['_value']
+                    if '_init' in  search_space[key].keys():
+                        ss[key]['_init'] = random.choice(search_space[key]['_init'])
+                self.individual = Individual(ss, self.mutate_rate)
 
-        self.individual = Individual(
-            self.search_spaces[0], self.mutate_rate)
+            self.init_cand.append(self.individual) 
+
+        # self.individual = Individual(
+        #     self.search_spaces[0], self.mutate_rate)
 
         # self.volume = 1
         # for key, value in self.individual.params.items():
@@ -413,9 +422,10 @@ class Population(object):
     def get_offspring(self, parents_size, offspring_size):
         children = []
         if len(self.fitness) < parents_size:
-            while self.search_spaces:
-                ss = self.search_spaces.pop()
-                children.append(Individual(ss, self.mutate_rate))
+            while self.init_cand:
+                child = self.init_cand.pop()
+                if child not in children:
+                    children.append(child)
             for _ in range(offspring_size - len(children)):
                 child = pickle.loads(pickle.dumps(self.individual.reset(), -1))
                 while child in self.population or child in children:
@@ -556,7 +566,7 @@ class MainTuner(Tuner):
 
         self.serve_list = self.serve_list[self.batch_size:]
         try:
-            self.expected_timecost = self.task.flop / self.population.fitness[15]
+            self.expected_timecost = self.task.flop / self.population.fitness[-1]
         except:
             self.expected_timecost = np.inf
 
