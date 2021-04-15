@@ -368,33 +368,24 @@ class Population(object):
     """Population class
     """
 
-    def __init__(self, search_space, mutate_rate, opt_mode='maximize'):
+    def __init__(self, search_space, mutate_rate, population_size, opt_mode='maximize'):
         self.search_space = search_space
         self.mutate_rate = mutate_rate
+        self.population_size = population_size
         self.opt_mode = opt_mode
         self.population = []
         self.fitness = []
+
         self.search_spaces = []
-
-        def generate_search_space(ss, search_space):
-            if search_space.keys():
-                key = list(search_space.keys())[0]
-            else:
-                self.search_spaces.append(pickle.loads(pickle.dumps(ss, -1)))
-                return
-            ss[key] = {}
-            ss[key]['_type'] = search_space[key]['_type']
-            ss[key]['_value'] = search_space[key]['_value']
-            if '_init' in search_space[key]:
-                for init in search_space[key]['_init']:
-                    ss[key]['_init'] = init
-                    generate_search_space(ss,
-                        {i: search_space[i] for i in search_space if i != key})
-            else:
-                generate_search_space(ss,
-                    {i: search_space[i] for i in search_space if i != key})
-
-        generate_search_space({}, self.search_space)
+        for _ in range(self.population_size):
+            ss = {}
+            for key in search_space.keys():
+                ss[key] = {}
+                ss[key]['_type'] = search_space[key]['_type']
+                ss[key]['_value'] = search_space[key]['_value']
+                if '_init' in  search_space[key].keys():
+                    ss[key]['_init'] = random.choice(search_space[key]['_init'])
+            self.search_spaces.append(ss) 
 
         self.individual = Individual(
             self.search_spaces[0], self.mutate_rate)
@@ -439,6 +430,9 @@ class Population(object):
         else:
             prob = np.array(self.fitness[:parents_size]) / \
                 np.sum(self.fitness[:parents_size])
+
+            self.population = self.population[:parents_size]
+            self.fitness = self.fitness[:parents_size]
 
             for i in range(offspring_size):
                 child = pickle.loads(pickle.dumps(self.individual.reset(), -1))
@@ -532,6 +526,7 @@ class MainTuner(Tuner):
         self.population = Population(
             search_space,
             self.mutate_rate,
+            self.parents_size,
             self.optimize_mode
         )
         # self.logger.debug('Total search space volume: '
