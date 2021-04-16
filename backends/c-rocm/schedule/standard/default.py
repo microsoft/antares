@@ -8,7 +8,7 @@ import sys, time, subprocess
 import json
 import os
 
-def _schedule_single(attrs, output, rank, have_tail):
+def _schedule_single(attrs, output, op_name, have_tail):
   s = attrs.scheduler
 
   def cache_local(output):
@@ -25,14 +25,14 @@ def _schedule_single(attrs, output, rank, have_tail):
   # Rough classification of computing features
   if num_inputs > 1 and len(output.op.reduce_axis) > 0:
     from .algo_tiling import schedule_branch
-    return schedule_branch(attrs, output, f"T{rank}:")
+    return schedule_branch(attrs, output, f"T{op_name}:")
 
   if not have_tail and len(output.op.reduce_axis) > 0:
     from .algo_reduce import schedule_branch
-    return schedule_branch(attrs, output, f"R{rank}:")
+    return schedule_branch(attrs, output, f"R{op_name}:")
 
   from .algo_format import schedule_branch
-  return schedule_branch(attrs, output, f"F{rank}:")
+  return schedule_branch(attrs, output, f"F{op_name}:")
 
 def schedule(attrs):
   config = os.environ.get('CONFIG', '').strip()
@@ -48,4 +48,4 @@ def schedule(attrs):
       tail_op, explicit_ops = explicit_ops[-1], explicit_ops[:-1]
 
   for rank, op in enumerate(reversed(explicit_ops)):
-    _schedule_single(attrs, op.output(0), rank, tail_op is not None and rank == 0)
+    _schedule_single(attrs, op.output(0), op.name, tail_op is not None and rank == 0)
