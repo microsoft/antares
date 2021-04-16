@@ -65,6 +65,9 @@ class Choice(Parameter):
     def pick_out(self):
         return self.value
 
+    def __repr__(self):
+        return self.value.__repr__()
+
 
 class Discrete(Parameter):
     """discrete type parameter
@@ -102,6 +105,9 @@ class Discrete(Parameter):
 
     def pick_out(self):
         return self.value
+
+    def __repr__(self):
+        return self.value.__repr__()
 
 
 class Permutation(Parameter):
@@ -368,36 +374,35 @@ class Population(object):
     """Population class
     """
 
-    def __init__(self, search_space, mutate_rate, opt_mode='maximize'):
+    def __init__(self, search_space, mutate_rate, population_size, opt_mode='maximize'):
         self.search_space = search_space
         self.mutate_rate = mutate_rate
+        self.population_size = population_size
         self.opt_mode = opt_mode
         self.population = []
         self.fitness = []
-        self.search_spaces = []
 
-        def generate_search_space(ss, search_space):
-            if search_space.keys():
-                key = list(search_space.keys())[0]
+        self.init_cand = []
+        self.individual = None
+        for _ in range(self.population_size):
+            if self.individual:
+                self.individual = pickle.loads(pickle.dumps(self.individual, -1))
+                for key in search_space.keys():
+                    if '_init' in  search_space[key].keys():
+                        self.individual.params[key].value = random.choice(search_space[key]['_init'])
             else:
-                self.search_spaces.append(pickle.loads(pickle.dumps(ss, -1)))
-                return
-            ss[key] = {}
-            ss[key]['_type'] = search_space[key]['_type']
-            ss[key]['_value'] = search_space[key]['_value']
-            if '_init' in search_space[key]:
-                for init in search_space[key]['_init']:
-                    ss[key]['_init'] = init
-                    generate_search_space(ss,
-                        {i: search_space[i] for i in search_space if i != key})
-            else:
-                generate_search_space(ss,
-                    {i: search_space[i] for i in search_space if i != key})
+                ss = {}
+                for key in search_space.keys():
+                    ss[key] = {}
+                    ss[key]['_type'] = search_space[key]['_type']
+                    ss[key]['_value'] = search_space[key]['_value']
+                    if '_init' in  search_space[key].keys():
+                        ss[key]['_init'] = random.choice(search_space[key]['_init'])
+                self.individual = Individual(ss, self.mutate_rate)
 
-        generate_search_space({}, self.search_space)
+            self.init_cand.append(self.individual) 
 
-        self.individual = Individual(
-            self.search_spaces[0], self.mutate_rate)
+            self.individual = pickle.loads(pickle.dumps(self.individual, -1))
 
         # self.volume = 1
         # for key, value in self.individual.params.items():
@@ -422,9 +427,10 @@ class Population(object):
     def get_offspring(self, parents_size, offspring_size):
         children = []
         if len(self.fitness) < parents_size:
-            while self.search_spaces:
-                ss = self.search_spaces.pop()
-                children.append(Individual(ss, self.mutate_rate))
+            while self.init_cand:
+                child = self.init_cand.pop()
+                if child not in children:
+                    children.append(child)
             for _ in range(offspring_size - len(children)):
                 child = pickle.loads(pickle.dumps(self.individual.reset(), -1))
                 while child in self.population or child in children:
@@ -439,6 +445,9 @@ class Population(object):
         else:
             prob = np.array(self.fitness[:parents_size]) / \
                 np.sum(self.fitness[:parents_size])
+
+            self.population = self.population[:parents_size]
+            self.fitness = self.fitness[:parents_size]
 
             for i in range(offspring_size):
                 child = pickle.loads(pickle.dumps(self.individual.reset(), -1))
@@ -532,6 +541,7 @@ class MainTuner(Tuner):
         self.population = Population(
             search_space,
             self.mutate_rate,
+            self.parents_size,
             self.optimize_mode
         )
         # self.logger.debug('Total search space volume: '
@@ -561,7 +571,7 @@ class MainTuner(Tuner):
 
         self.serve_list = self.serve_list[self.batch_size:]
         try:
-            self.expected_timecost = self.task.flop / self.population.fitness[15]
+            self.expected_timecost = self.task.flop / self.population.fitness[-1]
         except:
             self.expected_timecost = np.inf
 
