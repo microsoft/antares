@@ -5,6 +5,7 @@ import os, sys, time, math
 import numpy as np
 import subprocess
 import hashlib
+import traceback
 
 def init(**kwargs):
     backend_root = kwargs['backend_root']

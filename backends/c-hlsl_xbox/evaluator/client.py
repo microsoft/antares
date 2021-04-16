@@ -19,7 +19,11 @@ def eval(kernel_path, **kwargs):
     kernel_data = fp.read()
 
   try:
-    req = urllib.request.Request(tune_agent_url, headers={'ET': str(kwargs['expected_timeout']), 'OT': os.environ.get('AGENT_OT', '5')}, data=kernel_data, method='PUT')
+    req = urllib.request.Request(tune_agent_url, headers={
+      'ET': str(kwargs['expected_timeout']),
+      'OT': os.environ.get('AGENT_OT', '5'),
+      'DEV': str(kwargs['dev_id']),
+    }, data=kernel_data, method='PUT')
     with urllib.request.urlopen(req) as fp:
       output_content = fp.read().decode()
   except:
