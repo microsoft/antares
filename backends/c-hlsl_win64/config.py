@@ -13,7 +13,9 @@ if not os.path.exists(f'{local_dll_path}/dxcompiler.dll'):
     os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.2.0/dxcompiler.dll -o {local_dll_path}/dxcompiler.dll')
 
 def get_execution_parallism():
-    return 1
+    batch_size = os.environ.get('BATCH', '')
+    batch_size = 16 if not batch_size else int(batch_size)
+    return batch_size
 
 def do_native_translation_v2(codeset, **kwargs):
     kernel_name, in_args, out_args, body = codeset
@@ -79,8 +81,8 @@ def do_native_translation_v2(codeset, **kwargs):
     registers = ''.join(registers)
 
     full_body = f'''
-#ifndef __CUDA_COMMON_MACRO__
-#define __CUDA_COMMON_MACRO__
+#ifndef __HLSL_COMMON_MACRO__
+#define __HLSL_COMMON_MACRO__
 
 #define __ITEM_0_OF__(v) (v).x
 #define __ITEM_1_OF__(v) (v).y
