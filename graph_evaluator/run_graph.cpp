@@ -51,8 +51,8 @@ int main(int argc, char** argv)
         for (size_t x = byte_size - byte_size % sizeof(int); x < byte_size; x++)
           ((char*)hptr.data())[x] = 1;
       }
-      ab::memcpyHtoD(dptr, hptr.data(), hptr.size());
-      ab::synchronize();
+      ab::memcpyHtoD(dptr, hptr.data(), hptr.size(), nullptr);
+      ab::synchronize(nullptr);
     }
     for (auto &it: gm.global_outputs) {
       void *dptr = allocate_tensor(it);
@@ -66,8 +66,8 @@ int main(int argc, char** argv)
       void *dptr = global_args[gm.global_inputs.size() + i];
 
       std::vector<char> hptr(it.mem_size());
-      ab::memcpyDtoH(hptr.data(), dptr, hptr.size());
-      ab::synchronize();
+      ab::memcpyDtoH(hptr.data(), dptr, hptr.size(), nullptr);
+      ab::synchronize(nullptr);
 
       size_t byte_size = it.mem_size();
       double digest = 0.0;
@@ -90,10 +90,10 @@ int main(int argc, char** argv)
     }
 
     do {
-      auto x = ab::recordTime();
+      auto x = ab::recordTime(nullptr);
       gm.compute(global_args.data());
-      auto y = ab::recordTime();
-      ab::synchronize();
+      auto y = ab::recordTime(nullptr);
+      ab::synchronize(nullptr);
 
       double tpr = ab::convertToElapsedTime(x, y);
       if ((expected_timeout > 0 && tpr > expected_timeout) || tpr > 2) {
@@ -103,10 +103,10 @@ int main(int argc, char** argv)
 
       int num_runs = (int)std::max(1LU, std::min(10000LU, (unsigned long)(1.0 / tpr)));
       tpr = 0.0f;
-      x = ab::recordTime();
+      x = ab::recordTime(nullptr);
       for (int i = 0; i < num_runs; ++i)
         gm.compute(global_args.data());
-      y = ab::recordTime();
+      y = ab::recordTime(nullptr);
       tpr = ab::convertToElapsedTime(x, y) / num_runs;
       printf("\n- TPR: %g\n", tpr);
     } while (0);
