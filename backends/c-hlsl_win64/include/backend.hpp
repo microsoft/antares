@@ -57,36 +57,36 @@ namespace ab {
     return { hFunction };
   }
 
-  void launchKernel(const std::vector<void*> &hFunction, const std::vector<void*> &krnl_args) {
+  void launchKernel(const std::vector<void*> &hFunction, const std::vector<void*> &krnl_args, void *stream) {
     LOAD_ONCE(dxShaderLaunchAsync, int (*)(void*, void* const*, void*));
-    CHECK(0 == dxShaderLaunchAsync(hFunction[0], krnl_args.data(), nullptr), "Failed to launch a shader.");
+    CHECK(0 == dxShaderLaunchAsync(hFunction[0], krnl_args.data(), stream), "Failed to launch a shader.");
   }
 
-  void memcpyHtoD(void *dptr, void *hptr, size_t byteSize) {
+  void memcpyHtoD(void *dptr, void *hptr, size_t byteSize, void *stream) {
     LOAD_ONCE(dxMemcpyHtoDAsync, int (*)(void* dst, void* src, size_t bytes, void* hStream));
-    CHECK(0 == dxMemcpyHtoDAsync(dptr, hptr, byteSize, nullptr), "Failed to copy memory to device.");
+    CHECK(0 == dxMemcpyHtoDAsync(dptr, hptr, byteSize, stream), "Failed to copy memory to device.");
   }
 
-  void memcpyDtoH(void *hptr, void *dptr, size_t byteSize) {
+  void memcpyDtoH(void *hptr, void *dptr, size_t byteSize, void *stream) {
     LOAD_ONCE(dxMemcpyDtoHAsync, int (*)(void* dst, void* src, size_t bytes, void* hStream));
-    CHECK(0 == dxMemcpyDtoHAsync(hptr, dptr, byteSize, nullptr), "Failed to copy memory from device.");
+    CHECK(0 == dxMemcpyDtoHAsync(hptr, dptr, byteSize, stream), "Failed to copy memory from device.");
   }
 
-  void synchronize() {
+  void synchronize(void *stream) {
     LOAD_ONCE(dxStreamSynchronize, int (*)(void* hStream));
-    CHECK(0 == dxStreamSynchronize(nullptr), "Failed to sychronize default device stream.");
+    CHECK(0 == dxStreamSynchronize(stream), "Failed to sychronize default device stream.");
   }
 
-  void* recordTime() {
+  void* recordTime(void *stream) {
     LOAD_ONCE(dxEventCreate, void* (*)());
     LOAD_ONCE(dxEventRecord, int (*)(void*, void*));
     void *hEvent = dxEventCreate();
-    CHECK(0 == dxEventRecord(hEvent, nullptr), "Failed to record event to default stream.");
+    CHECK(0 == dxEventRecord(hEvent, stream), "Failed to record event to default stream.");
     return hEvent;
   }
 
   double convertToElapsedTime(void *hStart, void *hStop) {
-    ab::synchronize();
+    ab::synchronize(nullptr);
     LOAD_ONCE(dxEventElapsedSecond, float (*)(void*, void*));
     LOAD_ONCE(dxEventDestroy, int (*)(void*));
 

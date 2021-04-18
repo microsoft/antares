@@ -64,7 +64,7 @@ namespace ab {
     return nullptr;
   }
 
-  void launchKernel(const std::vector<void*> &hFunction, const std::vector<void*> &krnl_args) {
+  void launchKernel(const std::vector<void*> &hFunction, const std::vector<void*> &krnl_args, void *stream) {
     std::vector<void*> task = hFunction;
     task.insert(task.end(), krnl_args.begin(), krnl_args.end());
     _task_queue.push_back(std::move(task));
@@ -72,7 +72,7 @@ namespace ab {
     _max_threads_in_task_queue = std::max(_max_threads_in_task_queue, (long)hFunction[1]);
   }
 
-  void synchronize() {
+  void synchronize(void *stream) {
     if (_task_queue.size()) {
       std::vector<pthread_t> tid(_max_threads_in_task_queue);
       pthread_barrier_init(&_thread_barrier, nullptr, tid.size());
@@ -88,20 +88,20 @@ namespace ab {
     }
   }
 
-  void memcpyHtoD(void *dptr, void *hptr, size_t byteSize) {
-    ab::synchronize();
+  void memcpyHtoD(void *dptr, void *hptr, size_t byteSize, void *stream) {
+    ab::synchronize(stream);
 
     memcpy(dptr, hptr, byteSize);
   }
 
-  void memcpyDtoH(void *hptr, void *dptr, size_t byteSize) {
-    ab::synchronize();
+  void memcpyDtoH(void *hptr, void *dptr, size_t byteSize, void *stream) {
+    ab::synchronize(stream);
 
     memcpy(hptr, dptr, byteSize);
   }
 
-  void* recordTime() {
-    ab::synchronize();
+  void* recordTime(void *stream) {
+    ab::synchronize(stream);
 
     auto pt = new std::chrono::high_resolution_clock::time_point;
     *pt = std::chrono::high_resolution_clock::now();

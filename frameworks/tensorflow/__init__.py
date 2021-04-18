@@ -17,10 +17,9 @@ from http import client as http_client
 import json, os, hashlib, shutil, time
 
 
-def get_tensorflow_antares_component(tf_module_path, op_name, using_mpi=False):
+def get_tensorflow_antares_component(tf_module_path, op_name, compiler):
   dist_path = tf.sysconfig.get_include() + '/..'
   abi_flag = tf.sysconfig.CXX11_ABI_FLAG
-  compiler = 'mpicc' if using_mpi else 'gcc'
   if os.path.exists(f'{tf_module_path}.so.{compiler}'):
     return f'{tf_module_path}.so.{compiler}'
 
@@ -30,15 +29,16 @@ def get_tensorflow_antares_component(tf_module_path, op_name, using_mpi=False):
       break
   if tf.test.is_built_with_rocm():
     with_cuda = "-DANTARES_ROCM -DGOOGLE_CUDA -D__HIP_PLATFORM_HCC__=1 -I/opt/rocm/include -L/opt/rocm/lib -lamdhip64"
-    if using_mpi:
+    if compiler == 'mpicc':
       with_cuda += ' -lmpi_cxx -lrccl'
   elif tf.test.is_built_with_cuda():
     with_cuda = "-DANTARES_CUDA -DGOOGLE_CUDA -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -lcudart -lcuda"
-    if using_mpi:
+    if compiler == 'mpicc':
       with_cuda += ' -lmpi_cxx -lnccl'
   else:
-    with_cuda = "-DANTARES_ONEAPI"
-    if using_mpi:
+    compiler = 'dpcpp'
+    with_cuda = '-DANTARES_ONEAPI -D__BACKEND__=\\"c-sycl_intel\\" -Wno-string-compare -Wno-unused-value'
+    if compiler == 'mpicc':
       with_cuda += ' -lmpi_cxx'
 
   self_pid = os.getpid()
@@ -156,7 +156,7 @@ def make_op(ir, feed_dict, extra_outputs=[]):
         fp.write(f'\n    c->set_output({i}, c->MakeShape({{ {str(shape)[1:-1]} }}));')
       fp.write('\n    return ::tensorflow::Status::OK();\n  });')
 
-    libops_path = get_tensorflow_antares_component(tf_module_path, code_name)
+    libops_path = get_tensorflow_antares_component(tf_module_path, code_name, 'gcc')
     library = loader.load_op_library(libops_path)
     antares_func = None
     for attr in dir(library):
@@ -190,7 +190,7 @@ communicate_library = None
 def init_library():
   global communicate_library
   if communicate_library is None:
-    libcommunicate_path = get_tensorflow_antares_component(os.path.dirname(__file__) + '/communicate_ops.cc', 'AntaresCommunicate', using_mpi=True)
+    libcommunicate_path = get_tensorflow_antares_component(os.path.dirname(__file__) + '/communicate_ops.cc', 'AntaresCommunicate', 'mpicc')
     communicate_library = loader.load_op_library(libcommunicate_path)
   return communicate_library
 

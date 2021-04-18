@@ -19,6 +19,7 @@
 #define cuMemAllocHost hipHostMalloc
 #define cuMemFreeHost hipHostFree
 #define cuStreamSynchronize hipStreamSynchronize
+#define cuCtxSynchronize hipDeviceSynchronize
 #define cuMemcpyHtoDAsync hipMemcpyHtoDAsync
 #define cuMemcpyDtoHAsync hipMemcpyDtoHAsync
 #define CUdeviceptr hipDeviceptr_t
@@ -111,34 +112,35 @@ namespace ab {
     return { hfunc, query("blockIdx.x"), query("blockIdx.y"), query("blockIdx.z"), query("threadIdx.x"), query("threadIdx.y"), query("threadIdx.z") };
   }
 
-  void launchKernel(const std::vector<void*> &hFunc, const std::vector<void*> &krnl_args) {
+  void launchKernel(const std::vector<void*> &hFunc, const std::vector<void*> &krnl_args, void *stream) {
     std::vector<void* const*> pargs(krnl_args.size());
     for (int i = 0; i < pargs.size(); ++i)
       pargs[i] = &krnl_args[i];
-    CHECK_OK(0 == cuLaunchKernel((CUfunction)hFunc[0], (long)hFunc[1], (long)hFunc[2], (long)hFunc[3], (long)hFunc[4], (long)hFunc[5], (long)hFunc[6], 0, nullptr, (void**)pargs.data(), nullptr));
+    CHECK_OK(0 == cuLaunchKernel((CUfunction)hFunc[0], (long)hFunc[1], (long)hFunc[2], (long)hFunc[3], (long)hFunc[4], (long)hFunc[5], (long)hFunc[6],
+      0, (CUstream)stream, (void**)pargs.data(), nullptr));
   }
 
-  void memcpyHtoD(void *dptr, void *hptr, size_t byteSize) {
-    CHECK_OK(0 == cuMemcpyHtoDAsync((CUdeviceptr)dptr, hptr, byteSize, nullptr));
+  void memcpyHtoD(void *dptr, void *hptr, size_t byteSize, void *stream) {
+    CHECK_OK(0 == cuMemcpyHtoDAsync((CUdeviceptr)dptr, hptr, byteSize, (CUstream)stream));
   }
 
-  void memcpyDtoH(void *hptr, void *dptr, size_t byteSize) {
-    CHECK_OK(0 == cuMemcpyDtoHAsync(hptr, (CUdeviceptr)dptr, byteSize, nullptr));
+  void memcpyDtoH(void *hptr, void *dptr, size_t byteSize, void *stream) {
+    CHECK_OK(0 == cuMemcpyDtoHAsync(hptr, (CUdeviceptr)dptr, byteSize, (CUstream)stream));
   }
 
-  void synchronize() {
-    CHECK_OK(0 == cuStreamSynchronize(nullptr));
+  void synchronize(void *stream) {
+    CHECK_OK(0 == cuStreamSynchronize((CUstream)stream));
   }
 
-  void* recordTime() {
+  void* recordTime(void *stream) {
     CUevent hEvent;
     CHECK_OK(0 == cuEventCreate(&hEvent, 0));
-    CHECK_OK(0 == cuEventRecord(hEvent, nullptr));
+    CHECK_OK(0 == cuEventRecord(hEvent, (CUstream)stream));
     return hEvent;
   }
 
   double convertToElapsedTime(void *hStart, void *hStop) {
-    synchronize();
+    CHECK_OK(0 == cuCtxSynchronize());
 
     float ms;
     CHECK_OK(0 == cuEventElapsedTime(&ms, (CUevent)hStart, (CUevent)hStop));

@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
 # mpiexec -n 2 --allow-run-as-root --map-by slot --bind-to none -x N=$((1024 * 1024)) -x R=1 -x OP='all_reduce:+' ./tf_nccl_benchmark.py
 import os, tensorflow as tf

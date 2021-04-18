@@ -72,19 +72,19 @@ namespace ab {
     return { dlsym((void*)hModule, fname.c_str()) };
   }
 
-  void launchKernel(const std::vector<void*> &hFunction, const std::vector<void*> &krnl_args) {
+  void launchKernel(const std::vector<void*> &hFunction, const std::vector<void*> &krnl_args, void *stream) {
     ((void(*)(void*, void* const*))hFunction[0])(&_sycl_queue, krnl_args.data());
     if (__BACKEND__ == "c-sycl_intel")
       _sycl_queue.wait();
   }
 
-  void synchronize() {
+  void synchronize(void *stream) {
     _sycl_queue.wait();
   }
 
-  void memcpyHtoD(void *dptr, void *hptr, size_t byteSize) {
+  void memcpyHtoD(void *dptr, void *hptr, size_t byteSize, void *stream) {
     if (__BACKEND__ == "c-sycl_intel") {
-      ab::synchronize();
+      ab::synchronize(stream);
       memcpy(dptr, hptr, byteSize);
       return;
     }
@@ -94,12 +94,12 @@ namespace ab {
       auto d_data = buff.get_access<cl::sycl::access::mode::discard_write>(cgh);
       cgh.copy(hptr, d_data);
     });
-    ab::synchronize();
+    ab::synchronize(stream);
   }
 
-  void memcpyDtoH(void *hptr, void *dptr, size_t byteSize) {
+  void memcpyDtoH(void *hptr, void *dptr, size_t byteSize, void *stream) {
     if (__BACKEND__ == "c-sycl_intel") {
-      ab::synchronize();
+      ab::synchronize(stream);
       memcpy(hptr, dptr, byteSize);
       return;
     }
@@ -109,11 +109,11 @@ namespace ab {
       auto d_data = buff.get_access<cl::sycl::access::mode::read>(cgh);
       cgh.copy(d_data, hptr);
     });
-    ab::synchronize();
+    ab::synchronize(stream);
   }
 
-  void* recordTime() {
-    ab::synchronize();
+  void* recordTime(void *stream) {
+    ab::synchronize(stream);
 
     auto pt = new std::chrono::high_resolution_clock::time_point;
     *pt = std::chrono::high_resolution_clock::now();

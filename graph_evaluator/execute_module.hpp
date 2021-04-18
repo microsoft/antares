@@ -230,7 +230,7 @@ struct ExecutionModule {
     }
   }
 
-  size_t compute(void **args) {
+  size_t compute(void **args, void *stream = nullptr) {
     std::unordered_map<std::string, int> tensor_used;
     for (int i = 0; i < global_inputs.size(); ++i)
       ++tensor_used[global_inputs[i].name];
@@ -260,7 +260,7 @@ struct ExecutionModule {
       for (auto &arg: it->out_args)
         krnl_args.push_back(tensor_memory[arg]);
 
-      ab::launchKernel(it->hFunction, krnl_args);
+      ab::launchKernel(it->hFunction, krnl_args, stream);
 
       int num_inputs = it->in_args.size();
       for (int i = 0; i < num_inputs; ++i)
@@ -271,8 +271,8 @@ struct ExecutionModule {
       if (debug_output) {
         for (auto &arg: it->out_args) {
           char d[32];
-          ab::memcpyDtoH(d, tensor_memory[arg], sizeof(d));
-          ab::synchronize();
+          ab::memcpyDtoH(d, tensor_memory[arg], sizeof(d), stream);
+          ab::synchronize(stream);
           if (local_tensors[arg].dtype == "float32")
             fprintf(stderr, "[DEBUG] %s(%s) = %g, %g, %g, %g ..\n", arg.c_str(), local_tensors[arg].dtype.c_str(), ((float*)d)[0], ((float*)d)[1], ((float*)d)[2], ((float*)d)[3]);
           else if (local_tensors[arg].dtype == "float64")

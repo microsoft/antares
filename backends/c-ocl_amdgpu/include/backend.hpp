@@ -80,27 +80,27 @@ namespace ab {
     return { kernel, (void*)(gx * lx), (void*)(gy * ly), (void*)(gz * lz), (void*)lx, (void*)ly, (void*)lz };
   }
 
-  void launchKernel(const std::vector<void*> &hFunction, const std::vector<void*> &krnl_args) {
+  void launchKernel(const std::vector<void*> &hFunction, const std::vector<void*> &krnl_args, void *stream) {
     auto kernel = (cl_kernel)hFunction[0];
     for (int i = 0; i < krnl_args.size(); ++i)
       CHECK_OK(0 == clSetKernelArg(kernel, i, sizeof(cl_mem), (void*)&krnl_args[i]));
     CHECK_OK(0 == clEnqueueNDRangeKernel(cmdqueue, kernel, 3, nullptr, (size_t*)(hFunction.data() + 1), (size_t*)(hFunction.data() + 4), 0, nullptr, nullptr));
   }
 
-  void memcpyHtoD(void *dptr, void *hptr, size_t byteSize) {
+  void memcpyHtoD(void *dptr, void *hptr, size_t byteSize, void *stream) {
     CHECK_OK(0 == clEnqueueWriteBuffer(cmdqueue, (cl_mem)dptr, CL_FALSE /* blocking_write */, 0, byteSize, hptr, 0, NULL, NULL));
   }
 
-  void memcpyDtoH(void *hptr, void *dptr, size_t byteSize) {
+  void memcpyDtoH(void *hptr, void *dptr, size_t byteSize, void *stream) {
     CHECK_OK(0 == clEnqueueReadBuffer(cmdqueue, (cl_mem)dptr, CL_FALSE /* blocking_read */, 0, byteSize, hptr, 0, NULL, NULL));
   }
 
-  void synchronize() {
+  void synchronize(void *stream) {
     CHECK_OK(0 == clFinish(cmdqueue));
   }
 
-  void* recordTime() {
-    ab::synchronize();
+  void* recordTime(void *stream) {
+    ab::synchronize(stream);
 
     auto pt = new std::chrono::high_resolution_clock::time_point;
     *pt = std::chrono::high_resolution_clock::now();
@@ -108,8 +108,6 @@ namespace ab {
   }
 
   double convertToElapsedTime(void *hStart, void *hStop) {
-    ab::synchronize();
-
     auto h1 = (std::chrono::high_resolution_clock::time_point*)hStart;
     auto h2 = (std::chrono::high_resolution_clock::time_point*)hStop;
 
