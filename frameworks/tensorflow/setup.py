@@ -27,6 +27,10 @@ shutil.copyfile(root_path + '/communicate_ops.cc', dist_path + '/communicate_ops
 
 shutil.copyfile(root_path + '/main_ops.cc.in', dist_path + '/main_ops.cc.in')
 shutil.copyfile(root_path + '/../../graph_evaluator/execute_module.hpp', dist_path + '/execute_module.hpp')
-shutil.copyfile(root_path + '/../../backends/c-rocm/include/backend.hpp', dist_path + '/backend.hpp')
 
-print("Finish Installation.")
+if tf.test.is_built_with_gpu_support():
+  shutil.copyfile(root_path + '/../../backends/c-rocm/include/backend.hpp', dist_path + '/backend.hpp')
+else:
+  shutil.copyfile(root_path + '/../../backends/c-sycl_intel/include/backend.hpp', dist_path + '/backend.hpp')
+
+print("Finish Installation libraries to: %s" % os.path.realpath(dist_path))

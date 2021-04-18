@@ -20,10 +20,6 @@ namespace {
 
 using namespace std;
 
-typedef Eigen::ThreadPoolDevice CPUDevice;
-typedef Eigen::GpuDevice GPUDevice;
-
-
 template <typename Device>
 class MainOpKernel: public AsyncOpKernel {
  public:
@@ -61,8 +57,6 @@ class MainOpKernel: public AsyncOpKernel {
 
   void ComputeAsync(OpKernelContext* c, DoneCallback done) override {
     // LOG(INFO) << "ComputeAsync(..)";
-    CUstream cu_stream = *reinterpret_cast<CUstream*>(c->op_device_context()->stream()->implementation()->GpuStreamMemberHack());
-
     std::vector<Tensor*> outputs(meta_outputs.size());
     for (int i = 0; i < outputs.size(); ++i) {
       OP_REQUIRES_OK_ASYNC(c, c->allocate_output(i, tensorflow::TensorShape(gtl::ArraySlice<int64>(output_shapes[i].data(), output_shapes[i].size())), &outputs[i]), done);
@@ -72,10 +66,12 @@ class MainOpKernel: public AsyncOpKernel {
       args[i] = (void*)c->input(i).tensor_data().data();
     for (int i = 0; i < meta_outputs.size(); ++i)
       args[meta_inputs.size() + i] = (void*)outputs[i]->tensor_data().data();
-
-    CHECK_EQ(0, cuStreamSynchronize(cu_stream));
-    gm->compute(args.data());
-    CHECK_EQ(0, cuStreamSynchronize(nullptr));
+#if defined(GOOGLE_CUDA)
+    CUstream stream = *reinterpret_cast<CUstream*>(c->op_device_context()->stream()->implementation()->GpuStreamMemberHack());
+#else
+    auto stream = nullptr;
+#endif
+    gm->compute(args.data(), stream);
     done();
   }
 
@@ -91,10 +87,11 @@ class MainOpKernel: public AsyncOpKernel {
   std::shared_ptr<ExecutionModule> gm;
 };
 
-#if GOOGLE_CUDA
-REGISTER_KERNEL_BUILDER(Name(OP_NAME).Device(DEVICE_GPU), MainOpKernel<GPUDevice>);
+#if defined(GOOGLE_CUDA)
+REGISTER_KERNEL_BUILDER(Name(OP_NAME).Device(DEVICE_GPU), MainOpKernel<Eigen::GpuDevice>);
+#else
+REGISTER_KERNEL_BUILDER(Name(OP_NAME).Device(DEVICE_CPU), MainOpKernel<Eigen::ThreadPoolDevice>);
 #endif
-// REGISTER_KERNEL_BUILDER(Name(OP_NAME).Device(DEVICE_CPU), MainOpKernel<CPUDevice>);
 
 }
 }  // namespace tensorflow

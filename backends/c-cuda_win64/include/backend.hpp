@@ -93,40 +93,41 @@ namespace ab {
     return { hFunction, query("blockIdx.x"), query("blockIdx.y"), query("blockIdx.z"), query("threadIdx.x"), query("threadIdx.y"), query("threadIdx.z") };
   }
 
-  void launchKernel(const std::vector<void*> &hFunc, const std::vector<void*> &krnl_args) {
+  void launchKernel(const std::vector<void*> &hFunc, const std::vector<void*> &krnl_args, void *stream) {
     LOAD_ONCE(cuLaunchKernel, int (*)(...));
     std::vector<void* const*> pargs(krnl_args.size());
     for (int i = 0; i < pargs.size(); ++i)
       pargs[i] = &krnl_args[i];
-    CHECK(0 == cuLaunchKernel(hFunc[0], (int)(size_t)hFunc[1], (int)(size_t)hFunc[2], (int)(size_t)hFunc[3], (int)(size_t)hFunc[4], (int)(size_t)hFunc[5], (int)(size_t)hFunc[6], 0, nullptr, (void**)pargs.data(), nullptr), "Failed to launch kernel.");
+    CHECK(0 == cuLaunchKernel(hFunc[0], (int)(size_t)hFunc[1], (int)(size_t)hFunc[2], (int)(size_t)hFunc[3], (int)(size_t)hFunc[4], (int)(size_t)hFunc[5], (int)(size_t)hFunc[6], 0, stream, (void**)pargs.data(), nullptr), "Failed to launch kernel.");
   }
 
-  void memcpyHtoD(void *dptr, void *hptr, size_t byteSize) {
+  void memcpyHtoD(void *dptr, void *hptr, size_t byteSize, void *stream) {
     LOAD_ONCE(cuMemcpyHtoDAsync_v2, int (*)(...));
-    CHECK(0 == cuMemcpyHtoDAsync_v2(dptr, hptr, byteSize, nullptr), "Failed to copy memory to device.");
+    CHECK(0 == cuMemcpyHtoDAsync_v2(dptr, hptr, byteSize, stream), "Failed to copy memory to device.");
   }
 
-  void memcpyDtoH(void *hptr, void *dptr, size_t byteSize) {
+  void memcpyDtoH(void *hptr, void *dptr, size_t byteSize, void *stream) {
     LOAD_ONCE(cuMemcpyDtoHAsync_v2, int (*)(...));
-    CHECK(0 == cuMemcpyDtoHAsync_v2(hptr, dptr, byteSize, nullptr), "Failed to copy memory from device.");
+    CHECK(0 == cuMemcpyDtoHAsync_v2(hptr, dptr, byteSize, stream), "Failed to copy memory from device.");
   }
 
-  void synchronize() {
+  void synchronize(void *stream) {
     LOAD_ONCE(cuStreamSynchronize, int (*)(void*));
-    CHECK(0 == cuStreamSynchronize(nullptr), "Failed to sychronize default stream.");
+    CHECK(0 == cuStreamSynchronize(stream), "Failed to sychronize default stream.");
   }
 
-  void* recordTime() {
+  void* recordTime(void *stream) {
     void *hEvent;
     LOAD_ONCE(cuEventCreate, int (*)(void*, int));
     LOAD_ONCE(cuEventRecord, int (*)(void*, void*));
     CHECK(0 == cuEventCreate(&hEvent, 0), "Failed to create event.");
-    CHECK(0 == cuEventRecord(hEvent, nullptr), "Failed to record event.");
+    CHECK(0 == cuEventRecord(hEvent, stream), "Failed to record event.");
     return hEvent;
   }
 
   double convertToElapsedTime(void *hStart, void *hStop) {
-    ab::synchronize();
+    LOAD_ONCE(cuCtxSynchronize, int (*)());
+    CHECK(0 == cuCtxSynchronize(), "Failed to sychronize device.");
 
     float ms;
     LOAD_ONCE(cuEventElapsedTime, int (*)(float*, void*, void*));

@@ -42,26 +42,26 @@ namespace ab {
     return { dlsym((void*)hModule, fname.c_str()) };
   }
 
-  void launchKernel(const std::vector<void*> &hFunction, const std::vector<void*> &krnl_args) {
+  void launchKernel(const std::vector<void*> &hFunction, const std::vector<void*> &krnl_args, void *stream) {
     // fprintf(stderr, "launchKernel()\n");
     ((void(*)(int, void* const*))hFunction[0])(0, krnl_args.data());
   }
 
-  void memcpyHtoD(void *dptr, void *hptr, size_t byteSize) {
+  void memcpyHtoD(void *dptr, void *hptr, size_t byteSize, void *stream) {
     // fprintf(stderr, "memcpyHtoD(%zd)\n", byteSize);
     memcpy(dptr, hptr, byteSize);
   }
 
-  void memcpyDtoH(void *hptr, void *dptr, size_t byteSize) {
+  void memcpyDtoH(void *hptr, void *dptr, size_t byteSize, void *stream) {
     // fprintf(stderr, "memcpyDtoH(%zd)\n", byteSize);
     memcpy(hptr, dptr, byteSize);
   }
 
-  void synchronize() {
+  void synchronize(void *stream) {
     // fprintf(stderr, "synchronize()\n");
   }
 
-  void* recordTime() {
+  void* recordTime(void *stream) {
     // fprintf(stderr, "recordTime()\n");
     auto pt = new std::chrono::high_resolution_clock::time_point;
     *pt = std::chrono::high_resolution_clock::now();
