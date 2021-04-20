@@ -79,8 +79,11 @@ def input(name, shape, dtype="float32"):
   placeholders[name] = te.placeholder(shape, dtype=cast_dtype(dtype), name=name)
   return placeholders[name]
 
-def loop(length, start=0):
-  return te.reduce_axis((start, length))
+def loop(length, start=0, name=None):
+  if name is not None:
+    return te.reduce_axis((start, length), name=name)
+  else:
+    return te.reduce_axis((start, length))
 
 def output(shape, func=None, name='output0', topi=None, dtype=None, tag='', final_output=True):
   if len(shape) == 0:
