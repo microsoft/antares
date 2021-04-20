@@ -12,6 +12,15 @@ def do_native_translation_v2(codeset, **kwargs):
 
   body = body.replace('__syncthreads()', 'barrier(CLK_LOCAL_MEM_FENCE)').replace('__shared__', '__local')
 
+  pre_defines, post_defines = [''], []
+  for line in body.split('\n'):
+    if line.strip().startswith('__local '):
+      pre_defines.append('  ' + line.strip())
+    else:
+      post_defines.append(line)
+  pre_defines = '\n'.join(pre_defines)
+  body, post_defines = '\n'.join(post_defines), None
+
   for i, key in enumerate(['blockIdx.x', 'blockIdx.y', 'blockIdx.z']):
     body = body.replace(key, 'get_group_id(%d)' % i)
   for i, key in enumerate(['threadIdx.x', 'threadIdx.y', 'threadIdx.z']):
@@ -36,7 +45,7 @@ def do_native_translation_v2(codeset, **kwargs):
 
 #endif
 
-__kernel void {kernel_name}({expand_args}) {{
+__kernel void {kernel_name}({expand_args}) {{{pre_defines}
   {body}
 }}
 '''

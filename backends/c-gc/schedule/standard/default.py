@@ -9,8 +9,6 @@ def schedule(attrs):
   cfg, s = attrs.auto_config, attrs.scheduler
   assert len(attrs.explicit_ops) == 1, "Unhandled multiple explicit-op scheduling."
   output = attrs.explicit_ops[0].output(0)
-
-  inputs = attrs.inputs
   program = attrs.ir
 
   # Global tuning space
