@@ -207,7 +207,8 @@ def get_template_op(**kwargs):
     def _callback(explicit_ops):
       attrs = Mock()
       attrs.device_props = get_device_props()
-      attrs.inputs = inputs
+      attrs.inputs = list(inputs)
+      attrs.outputs = list(outputs)
       attrs.explicit_ops = explicit_ops
       attrs.scheduler = sch
       attrs.auto_config = AntaresGlobal.auto_config
@@ -217,8 +218,12 @@ def get_template_op(**kwargs):
       attrs.blend = ''
       attrs.get_extent = lambda axis: int(axis.dom.extent)
 
+      def get_lower():
+        return str(tvm.lower(sch, attrs.inputs + attrs.outputs, simple_mode=True)).split('#[metadata]')[0]
+
+      attrs.get_lower = get_lower
       AntaresGlobal.attrs = attrs
       do_native_scheduling(attrs)
 
     traverse_inline(sch, outputs[0].op, _callback)
-    return sch, list(inputs) + list(outputs)
+    return sch, AntaresGlobal.attrs.inputs + AntaresGlobal.attrs.outputs
