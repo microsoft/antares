@@ -3,6 +3,7 @@
 
 import os, subprocess
 import re
+from common import backend
 
 local_dll_path = os.environ["ANTARES_DRIVER_PATH"]
 
@@ -13,6 +14,8 @@ if not os.path.exists(f'{local_dll_path}/dxcompiler.dll'):
     os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.2.0/dxcompiler.dll -o {local_dll_path}/dxcompiler.dll')
 
 def get_execution_parallism():
+    if backend in ('c-hlsl_win64',):
+      return 1
     batch_size = os.environ.get('BATCH', '')
     batch_size = 16 if not batch_size else int(batch_size)
     return batch_size

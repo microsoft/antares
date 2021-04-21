@@ -40,10 +40,10 @@ int main(int argc, char** argv)
           ((int*)hptr.data())[x] = (x + i + 1) % 71;
       } else if (it.dtype == "float32") {
         for (size_t x = 0; x < size; ++x)
-          ((float*)hptr.data())[x] = ((x + i + 1) % 71 - 35.5) * 0.00001;
+          ((float*)hptr.data())[x] = (x + i + 1) % 71;
       } else if (it.dtype == "float64") {
         for (size_t x = 0; x < size; ++x)
-          ((double*)hptr.data())[x] = ((x + i + 1) % 71 - 35.5) * 0.00001;
+          ((double*)hptr.data())[x] = (x + i + 1) % 71;
       } else {
         size_t byte_size = size * it.type_size();
         for (size_t x = 0; x < byte_size / sizeof(int); ++x)
