@@ -426,6 +426,15 @@ class Population(object):
 
     def get_offspring(self, parents_size, offspring_size):
         children = []
+
+        def pop_child(child):
+            for _ in range(offspring_size * 1024):
+                if child in self.population or child in children:
+                    child = child.mutate()
+                else:
+                    break
+            return child
+
         if len(self.fitness) < parents_size:
             while self.init_cand:
                 child = self.init_cand.pop()
@@ -433,15 +442,11 @@ class Population(object):
                     children.append(child)
             for _ in range(offspring_size - len(children)):
                 child = pickle.loads(pickle.dumps(self.individual.reset(), -1))
-                while child in self.population or child in children:
-                    child = child.mutate()
-                children.append(child)
+                children.append(pop_child(child))
         elif self.fitness[0] < 1e-3:
             for _ in range(offspring_size):
                 child = pickle.loads(pickle.dumps(self.individual.reset(), -1))
-                while child in self.population or child in children:
-                    child = child.mutate()
-                children.append(child)
+                children.append(pop_child(child))
         else:
             prob = np.array(self.fitness[:parents_size]) / \
                 np.sum(self.fitness[:parents_size])
@@ -455,9 +460,7 @@ class Population(object):
                     idx = np.random.choice(range(parents_size), p=prob)
                     child.params[key] = self.population[idx].params[key]
                 child = child.mutate()
-                while child in self.population or child in children:
-                    child = child.mutate()
-                children.append(child)
+                children.append(pop_child(child))
 
         return children
 
