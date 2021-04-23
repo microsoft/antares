@@ -186,14 +186,7 @@ def get_target_source(best_config, dir_sid=None):
   if best_config.startswith('['):
     # Ansor config
     from tvm import auto_scheduler
-    origin_cfg = json.loads(best_config)
-    origin_cfg = {
-      "i": [['["main_compute.<locals>.auto_template"]', 'cuda -keys=cuda,gpu -max_num_threads=%d -thread_warp_size=%d' % (
-                device_properties().max_threads_per_block, device_properties().warp_size
-             )], origin_cfg],
-      "r": [[0], 0, 0, 0],
-      "v": "v0.2",
-    }
+    [origin_cfg] = json.loads(best_config)
     origin_cfg_file = local_get_dir_file('my_kernel.cfg', dir_sid=dir_sid)
     with open(origin_cfg_file, 'w') as fp:
       fp.write(json.dumps(origin_cfg))

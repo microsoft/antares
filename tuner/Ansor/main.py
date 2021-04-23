@@ -5,7 +5,7 @@ import os
 import json
 import tvm
 from tvm import auto_scheduler
-from antares.common import local_get_dir_file, AntaresGlobal
+from antares.common import local_get_dir_file, AntaresGlobal, backend
 
 GLOBAL_TUNER = None
 
@@ -33,8 +33,9 @@ def local_run(inputs, build_results, key, host, port, priority=1, n_parallel=1, 
     with open(str(build_results[i].filename), 'r') as fp:
       line = fp.readline()
     jobj = json.loads(line)
-    config = jobj['i'][1]
-    measure_inputs.append(tvm.autotvm.measure.MeasureInput(tuner.task.target, tuner.task, json.dumps(config)))
+    jobj['i'][0][0] = '["compute", "%s"]' % backend
+    jobj['i'][0][1] = 'cuda -max_num_threads=%d -thread_warp_size=%d' % (AntaresGlobal.attrs.device_props.max_threads_per_block, AntaresGlobal.attrs.device_props.warp_size)
+    measure_inputs.append(tvm.autotvm.measure.MeasureInput(tuner.task.target, tuner.task, json.dumps([jobj,])))
 
   results = GLOBAL_TUNER.measure_batch(measure_inputs)
   measure_results = []
@@ -48,7 +49,7 @@ def auto_template():
   return arg_bufs
 
 def create_auto_task(tvm_target):
-  return auto_scheduler.create_task(auto_template, (), tvm_target)
+  return auto_scheduler.SearchTask(auto_template, (), target=tvm_target)
 
 class MainTuner(object):
 
@@ -64,7 +65,7 @@ class MainTuner(object):
     global GLOBAL_TUNER
     GLOBAL_TUNER = self
     try:
-      auto_scheduler.auto_schedule(self.auto_task, tuning_options=auto_scheduler.TuningOptions(num_measure_trials=n_trial, num_measures_per_round=self.task.n_parallel, runner=self.measure_ctx.runner, measure_callbacks=[]))
+      self.auto_task.tune(tuning_options=auto_scheduler.TuningOptions(num_measure_trials=n_trial, num_measures_per_round=self.task.n_parallel, runner=self.measure_ctx.runner, measure_callbacks=[]))
     except:
       import traceback
       traceback.print_exc()
