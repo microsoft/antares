@@ -197,12 +197,16 @@ def init_library():
 def init_communicate_config():
   communicate_library = init_library()
   if not hasattr(communicate_library, 'comm_config'):
-    from mpi4py import MPI
-    comm = MPI.COMM_WORLD
-    local = comm.Split_type(MPI.COMM_TYPE_SHARED)
-    rank, size, local_rank = comm.Get_rank(), comm.Get_size(), local.Get_rank()
-    MPI.COMM_WORLD.Barrier()
-    communicate_library.comm_config = rank, size, local_rank
+    try:
+      from mpi4py import MPI
+      comm = MPI.COMM_WORLD
+      local = comm.Split_type(MPI.COMM_TYPE_SHARED)
+      rank, size, local_rank = comm.Get_rank(), comm.Get_size(), local.Get_rank()
+      MPI.COMM_WORLD.Barrier()
+      communicate_library.comm_config = rank, size, local_rank
+    except:
+      print('[WARN] Failed to load mpi4py config, fallback to single-node mode.')
+      communicate_library.comm_config = 0, 1, 0
   return communicate_library.comm_config
 
 def metric(data):

@@ -67,6 +67,8 @@ _STUB(cudaStreamSynchronize)
 _STUB(cudaEventCreate)
 _STUB(cudaEventRecord)
 _STUB(cudaEventDestroy)
+_STUB(cudaEventSynchronize)
+_STUB(cudaEventElapsedTime)
 _STUB(cuLaunchKernel)
 _STUB(cuMemsetD32)
 
