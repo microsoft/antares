@@ -3,6 +3,7 @@
 
 from tvm import te
 import numpy as np
+import psutil
 
 def schedule(attrs):
   cfg, s = attrs.auto_config, attrs.scheduler
@@ -15,6 +16,9 @@ def schedule(attrs):
     if not plan_threads:
       plan_threads = str(multiprocessing.cpu_count())
     plan_threads = int(plan_threads)
+
+  allowed_threads = psutil.virtual_memory().available // (1 << 20) // 16
+  plan_threads = min(plan_threads, allowed_threads)
 
   def mcpu_auto_schedule(s, output, rank):
     axo, axm = s[output].split(output.op.axis[0], nparts=plan_threads)

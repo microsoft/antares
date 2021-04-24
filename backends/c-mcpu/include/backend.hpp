@@ -1,7 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-//; eval_flags(c-mcpu): -ldl
+//; eval_flags(c-mcpu): -ldl -lpthread
+//; eval_flags(c-mcpu_avx512): -ldl -lpthread
 
 #include <dlfcn.h>
 #include <pthread.h>
@@ -10,8 +11,10 @@
 namespace ab {
 
   static std::unordered_map<size_t, std::vector<void*>> _cached_memory;
+  static bool use_avx512;
 
   void init(int dev) {
+    use_avx512 = (__BACKEND__ == "c-mcpu_avx512");
   }
 
   void finalize() {
@@ -37,7 +40,10 @@ namespace ab {
     ab_utils::TempFile tempfile("cpp", source);
     auto path = tempfile.get_path();
 
-    ab_utils::Process({"g++", path, "-std=c++17", "-ldl", "-lpthread", "-fPIC", "-shared", "-O2", "-o", path + ".out", "-ffast-math", "-march=native"}, 10);
+    if (use_avx512)
+      ab_utils::Process({"clang++-10", path, "-std=c++17", "-ldl", "-lpthread", "-fPIC", "-shared", "-O3", "-o", path + ".out", "-ffast-math", "-march=skylake-avx512"}, 10);
+    else
+      ab_utils::Process({"g++", path, "-std=c++17", "-ldl", "-lpthread", "-fPIC", "-shared", "-O3", "-o", path + ".out", "-ffast-math", "-march=native"}, 10);
 
     path = (path[0] == '/' ? path : "./" + path) + ".out";
     void* hmod = dlopen(path.c_str(), RTLD_NOW | RTLD_GLOBAL);
