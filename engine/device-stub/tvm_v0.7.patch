@@ -197,31 +197,6 @@ index e54acd222..49c6e2f9b 100644
    static const char access[] = {'x', 'y', 'z', 'w'};
    ICHECK(i >= 0 && i < (t.bits() == 8 ? 16 : (t.bits() == 16 || t.bits() == 32) ? 8 : 4));
    if (t.bits() == 8 && (t.is_int() || t.is_uint())) {
-@@ -759,7 +760,7 @@ void CodeGenCUDA::VisitStmt_(const EvaluateNode* op) {
- }
- 
- void CodeGenCUDA::VisitExpr_(const RampNode* op, std::ostream& os) {
--  os << "((make_int" << op->lanes << ")(";
-+  os << "(make_int" << op->lanes << "(";
-   for (int i = 0; i < op->lanes; i++) {
-     os << "(" << PrintExpr(op->base) << ")"
-        << "+(" << PrintExpr(op->stride) << "*" << i << ")";
-diff --git a/src/tir/op/op.cc b/src/tir/op/op.cc
-index af7880483..9b5ec29b2 100644
---- a/src/tir/op/op.cc
-+++ b/src/tir/op/op.cc
-@@ -357,9 +357,9 @@ PrimExpr operator/(PrimExpr a, PrimExpr b) { return div(a, b); }
- PrimExpr operator%(PrimExpr a, PrimExpr b) { return truncmod(a, b); }
- 
- // TODO(tqchen): switch to floordiv
--PrimExpr indexdiv(PrimExpr a, PrimExpr b, Span span) { return floordiv(a, b, span); }
-+PrimExpr indexdiv(PrimExpr a, PrimExpr b, Span span) { return truncdiv(a, b, span); }
- 
--PrimExpr indexmod(PrimExpr a, PrimExpr b, Span span) { return floormod(a, b, span); }
-+PrimExpr indexmod(PrimExpr a, PrimExpr b, Span span) { return truncmod(a, b, span); }
- 
- PrimExpr floordiv(PrimExpr a, PrimExpr b, Span span) {
-   ICHECK(a.dtype().is_int() || a.dtype().is_uint()) << a;
 diff --git a/src/tir/transforms/arg_binder.cc b/src/tir/transforms/arg_binder.cc
 index 9cd29357f..e65c61149 100644
 --- a/src/tir/transforms/arg_binder.cc

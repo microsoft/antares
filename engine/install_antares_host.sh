@@ -3,7 +3,7 @@
 cd $(dirname $0)/..
 ANTARES_ROOT=$(pwd)
 
-VERSION_TAG=v0.2dev6
+VERSION_TAG=v0.2dev7
 
 REQUIRED_PACKAGES="git python3-dev python3-pip g++ llvm-dev make curl libopenmpi-dev openmpi-bin"
 
@@ -20,7 +20,7 @@ dpkg -L ${REQUIRED_PACKAGES} >/dev/null 2>&1 || \
   sh -c "apt-get update && apt-get install -y --no-install-recommends ${REQUIRED_PACKAGES}"
 
 TVM_HOME=/opt/tvm
-GIT_COMMIT=a33eff5059
+GIT_COMMIT=0b24cbf1be
 
 if [ ! -e ${TVM_HOME} ] || ! sh -c "cd ${TVM_HOME} && git fetch && git reset --hard && git checkout ${GIT_COMMIT}"; then
   rm -rf ${TVM_HOME}
