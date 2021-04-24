@@ -3,6 +3,7 @@
 
 import os
 import subprocess
+import math
 import numpy as np
 
 class Mock(object):
@@ -68,9 +69,11 @@ class AutoConfig(object):
     if not init_vals:
       init_vals = [[-1] + [1] * (num_outputs - 1), ]
     for val in init_vals:
-      psum = int(np.product(val[1:]))
-      assert target_size % psum == 0
-      val[0] = target_size // psum
+      prod_rest = target_size
+      for i in range(1, len(val)):
+        val[i] = math.gcd(prod_rest, val[i])
+        prod_rest //= val[i]
+      val[0] = prod_rest
     unique_vals = []
     for item in init_vals:
       if item not in unique_vals:
