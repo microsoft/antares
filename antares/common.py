@@ -109,4 +109,4 @@ class AutoConfig(object):
       ax, ai = s[output].split(ax, factor=sz)
       slices.append(ai)
     slices.append(ax)
-    return reversed(slices)
+    return list(reversed(slices))
