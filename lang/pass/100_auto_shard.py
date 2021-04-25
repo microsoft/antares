@@ -143,3 +143,11 @@ def run_pass_v2(ast_seq, global_input_dict, global_output_dict):
   ast['props']['shard']['local_shape'] = [x['range'] for x in ast['props']['data_axes']]
   with open(local_get_dir_file('range_book.json'), 'w') as fp:
     json.dump(ast['props']['shard'], fp)
+  for k in global_input_dict:
+    if k in ast['props']['input_dict']:
+      global_input_dict[k] = ast['props']['input_dict'][k]
+
+  assert len(global_output_dict) == 1
+  for k in global_output_dict:
+    global_output_dict[k]['shape'] = [x['range'] for x in ast['props']['data_axes']]
+    break
