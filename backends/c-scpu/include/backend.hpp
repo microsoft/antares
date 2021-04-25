@@ -39,12 +39,15 @@ namespace ab {
 
   std::vector<void*> moduleGetFunction(const void *hModule, const std::string &fname, const std::unordered_map<std::string, int> &threads) {
     // fprintf(stderr, "moduleGetFunction(%s)\n", fname.c_str());
-    return { dlsym((void*)hModule, fname.c_str()) };
+    return { dlsym((void*)hModule, fname.c_str()), (void*)(long)threads.find("__rank__")->second };
   }
 
   void launchKernel(const std::vector<void*> &hFunction, const std::vector<void*> &krnl_args, void *stream) {
     // fprintf(stderr, "launchKernel()\n");
-    ((void(*)(int, void* const*))hFunction[0])(0, krnl_args.data());
+    const int num_threads = (long)hFunction[1];
+    const auto func = (void(*)(int, void* const*))hFunction[0];
+    for (int i = 0; i < num_threads; ++i)
+      func(i, krnl_args.data());
   }
 
   void memcpyHtoD(void *dptr, void *hptr, size_t byteSize, void *stream) {
