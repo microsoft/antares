@@ -11,10 +11,13 @@
 namespace ab {
 
   static std::unordered_map<size_t, std::vector<void*>> _cached_memory;
+  static int max_allowed_threads;
   static bool use_avx512;
 
   void init(int dev) {
     use_avx512 = (__BACKEND__ == "c-mcpu_avx512");
+    const auto env = getenv("CPU_THREADS");
+    max_allowed_threads = env && *env ? atoi(env) : 256;
   }
 
   void finalize() {
@@ -63,8 +66,10 @@ namespace ab {
     long rank = (long)args;
     for (auto &it: _task_queue) {
       auto func = ((void(*)(int, void* const*))it[0]);
-      if (rank < (long)it[1])
-        func(rank, it.data() + 2);
+      auto num_threads = (long)it[1];
+      auto args = it.data() + 2;
+      for (int i = rank; i < num_threads; i += max_allowed_threads)
+        func(i, args);
       pthread_barrier_wait(&_thread_barrier);
     }
     return nullptr;
@@ -80,7 +85,8 @@ namespace ab {
 
   void synchronize(void *stream) {
     if (_task_queue.size()) {
-      std::vector<pthread_t> tid(_max_threads_in_task_queue);
+      int num_cores = std::min((long)max_allowed_threads, _max_threads_in_task_queue);
+      std::vector<pthread_t> tid(num_cores);
       pthread_barrier_init(&_thread_barrier, nullptr, tid.size());
 
       for (int i = 0; i < tid.size(); ++i)
