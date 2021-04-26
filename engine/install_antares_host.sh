@@ -5,7 +5,7 @@ ANTARES_ROOT=$(pwd)
 
 VERSION_TAG=v0.2dev8
 
-REQUIRED_PACKAGES="git python3-dev python3-pip g++ llvm-dev make curl libopenmpi-dev openmpi-bin"
+REQUIRED_PACKAGES="git python3-dev python3-pip g++ llvm-dev make curl"
 
 if grep Microsoft /proc/sys/kernel/osrelease >/dev/null; then
   REQUIRED_PACKAGES="${REQUIRED_PACKAGES} g++-mingw-w64-x86-64"
