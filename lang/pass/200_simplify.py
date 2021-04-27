@@ -43,7 +43,7 @@ def run_pass_v2(ast_seq, global_input_dict, global_output_dict):
   # Just a rough check
   if 'plan/' in os.environ.get('COMPUTE_V1', ''):
     return
-  if os.environ.get('NO_SIMPLIFY', ''):
+  if os.environ.get('NO_SIMPLIFY', '') or backend in ('c-ipu',):
     return
   no_trivial_ax_input(ast_seq, global_input_dict, global_output_dict)
   update_global_dict(ast_seq, global_input_dict, global_output_dict)
