@@ -76,16 +76,34 @@ For complete programs, please follow examples here: [Antares Examples for Pytorc
 
 ### Senario-1: Quick Start for Developers that Use Antares to Tune Operator/Sub-graph in Foreground Terminal:
 
-- Step-1: Prepare Environment
+- Step-1 (Recommend for User with Root): Prepare Environment for Docker Mode
 ```sh
+# Setup Package dependencies
 sudo apt install docker.io
+
+# Get Antares
 git clone https://github.com/microsoft/antares --branch v0.2.x
 cd antares/
 
-# To set the backend type to environment variable `BACKEND` to build the corresponding environment:
+# Set default backend type:
 echo 'c-cuda' > backend.default
 
-# Build the environment for this backend: (if this step failed, please go to "Pre-dependencies" section to check which "backend-related dependencies" are missing)
+# Build the environment with sudo (if this step failed, please go to "Pre-dependencies" section to check which "backend-related dependencies" are missing):
+sudo make
+```
+- Step-1 (Recommend for Non-root Users): Prepare Environment for Host Mode
+```sh
+# Ensure Package dependencies (Please ensure the following root-required dependencies has been installed.)
+sudo apt install git python3-pip g++ make g++-mingw-w64-x86-64
+
+# Get Antares
+git clone https://github.com/microsoft/antares --branch v0.2.x
+cd antares/
+
+# Set default backend type:
+echo 'c-cuda' > backend.default
+
+# Build the environment without sudo (if this step failed, please go to "Pre-dependencies" section to check which "backend-related dependencies" are missing):
 make
 ```
   All valid backends are listed in directory [antares/backends](backends)

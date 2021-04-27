@@ -12,4 +12,4 @@ if [[ "$BACKEND" == "" ]]; then
   fi
 fi
 
-echo "${BACKEND:-c-cuda}"
+echo "${BACKEND:-c-mcpu}"

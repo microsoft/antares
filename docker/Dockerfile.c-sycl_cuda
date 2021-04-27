@@ -10,7 +10,7 @@ RUN sed -i 's/^#deb /deb /g' /etc/apt/sources.list
 RUN apt-get update && apt install -y --no-install-recommends git ca-certificates \
     vim-tiny less netcat-openbsd inetutils-ping curl patch iproute2 \
     g++ libpci3 libnuma-dev make file openssh-server kmod gdb libopenmpi-dev openmpi-bin psmisc \
-        autoconf automake autotools-dev libtool llvm-dev \
+        autoconf automake autotools-dev libtool \
         zlib1g-dev rename zip unzip librdmacm-dev gnupg \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
