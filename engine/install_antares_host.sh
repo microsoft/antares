@@ -5,7 +5,7 @@ ANTARES_ROOT=$(pwd)
 
 VERSION_TAG=v0.2dev8
 
-REQUIRED_PACKAGES="git python3-dev python3-pip g++ llvm-dev make curl"
+REQUIRED_PACKAGES="git python3-dev python3-pip g++ make"
 
 if grep Microsoft /proc/sys/kernel/osrelease >/dev/null; then
   REQUIRED_PACKAGES="${REQUIRED_PACKAGES} g++-mingw-w64-x86-64"
@@ -35,8 +35,8 @@ python3 -m pip install --user --upgrade pip cmake==3.18.0 setuptools && \
 git checkout ${GIT_COMMIT} && git apply device-stub/tvm_v0.7.patch && \
   git submodule init && git submodule update && \
   mkdir -p build && cd build && cp ../cmake/config.cmake . && \
-  sed -i 's/LLVM OFF/LLVM ON/g' config.cmake && sed -i 's~CUDA OFF~CUDA '"${TVM_HOME}/device-stub"'~g' config.cmake && \
-  PATH="${HOME}/.local/bin:${PATH}" cmake .. && make -j8
+  sed -i 's/LLVM OFF/LLVM OFF/g' config.cmake && sed -i 's~CUDA OFF~CUDA '"${TVM_HOME}/device-stub"'~g' config.cmake && \
+  PATH="${HOME}/.local/bin:${PATH}" cmake .. && make -j
 
 python3 -m pip install --user --upgrade tornado psutil xgboost==1.2.1 numpy decorator attrs pytest typed_ast cloudpickle
 
