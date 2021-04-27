@@ -95,7 +95,7 @@ def scan_items(root, ast, range_book):
   range_book[tensor_name] = current_range
 
 def run_pass_v2(ast_seq, global_input_dict, global_output_dict):
-  if backend not in ['c-gc']:
+  if backend not in ('c-ipu',):
     return
 
   if len(ast_seq) > 1:
@@ -111,9 +111,12 @@ def run_pass_v2(ast_seq, global_input_dict, global_output_dict):
 
   try:
     pieces = json.loads(pieces)
-    pieces = [pieces['axis_%d' % i][-1] for i in range(len(data_axes))]
+    pieces = [(pieces['tile_%d' % i][1] * pieces['tile_%d' % i][2]) for i in range(len(data_axes))]
   except:
     pieces = [1] * len(data_axes)
+  for i in range(len(pieces)):
+    assert data_axes[i]['range'] % pieces[i] == 0
+    pieces[i] = data_axes[i]['range'] // pieces[i]
 
   assert 'injective' not in ast, "Unhandled injective case for graphcore."
   range_book = {}

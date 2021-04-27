@@ -25,7 +25,7 @@ set -x
 TVM_HOME=${HOME}/.local/antares/thirdparty/tvm
 GIT_COMMIT=0b24cbf1be
 
-if [ ! -e ${TVM_HOME} ] || ! sh -c "cd ${TVM_HOME} && git fetch && git reset --hard && git checkout ${GIT_COMMIT}"; then
+if [ ! -e ${TVM_HOME} ] || ! sh -ce "cd ${TVM_HOME}; git fetch; git reset --hard; git checkout ${GIT_COMMIT}"; then
   rm -rf ${TVM_HOME}
   mkdir -p ${TVM_HOME}
   git clone https://github.com/apache/tvm ${TVM_HOME}

@@ -213,7 +213,7 @@ Before running `make` command in antares root directory, you need to ensure the 
 
     `Requirement: docker`
 
-- Predependencies for backend `c-gc`:
+- Predependencies for backend `c-ipu`:
 
     `Requirement: Ubuntu >= 18.04`
 
@@ -263,7 +263,7 @@ Before running `make` command in antares root directory, you need to ensure the 
 
 ## Current Support Table:
 
-|       | HIP-C(c-rocm/c-rocm_win64) | CUDA(c-cuda/c-cuda_win64) | CPU(c-mcpu/c-scpu) | DirectX12(c-hlsl_win64) | Graphcore(c-gc) | Intel OneAPI(c-sycl_intel) | Codeplay DPCPP (c-sycl_cuda) |
+|       | HIP-C(c-rocm/c-rocm_win64) | CUDA(c-cuda/c-cuda_win64) | CPU(c-mcpu/c-scpu) | DirectX12(c-hlsl_win64) | Graphcore(c-ipu) | Intel OneAPI(c-sycl_intel) | Codeplay DPCPP (c-sycl_cuda) |
 |---|---|---|---|---|---|---|---|
 | Deploy Environment | Linux/WSL1 | Linux | Linux | WSL1 | Linux | Linux |   |
 | Target Device | AMDGPU | NVGPU | Generic CPU | Generic Graphic Card | IPU Device | Intel CPU/HD Graphic/FPGA |  NVGPU |
