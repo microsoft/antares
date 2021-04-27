@@ -16,28 +16,9 @@ export PYTHONPATH=${TVM_HOME}/python:${TVM_HOME}/topi/python:${TVM_HOME}/nnvm/py
 
 VERSION_TAG=$(cat engine/install_antares_host.sh | grep ^VERSION_TAG | head -n 1 | awk -F\= '{print $NF}')
 
-if grep Microsoft /proc/sys/kernel/osrelease >/dev/null; then
-  export IS_WSL=1
-else
-  export IS_WSL=0
-fi
-
-if [[ "$(cat ${TVM_HOME}/VERSION_TAG 2>/dev/null)" != "${VERSION_TAG}" ]]; then
-  if [[ "$IS_WSL" == "1" ]]; then
-    echo 'Antares dependencies are not up-to-date with current Antares version. Try updating the dependencies with: `make install_host` ..'
-    make install_host
-  else
-    echo 'Antares dependencies are not up-to-date with current Antares version. Please update the dependencies with: `make install_host`'
-    exit 1
-  fi
-elif [ ! -e ${TVM_HOME}/build/libtvm.so ]; then
-  if [[ "$IS_WSL" == "1" ]]; then
-    echo 'Antares dependencies are not fully installed in this environment. Try installing them with: `make install_host`'
-    make install_host
-  else
-    echo 'Antares dependencies are not fully installed in this environment. Plese install them with: `make install_host`'
-    exit 1
-  fi
+if [[ "$(cat ${TVM_HOME}/VERSION_TAG 2>/dev/null)" != "${VERSION_TAG}" ]] || [ ! -e ${TVM_HOME}/build/libtvm.so ]; then
+  echo 'Antares dependencies are not up-to-date/fully installed for current Antares version. Try updating the dependencies with: `make install_host` ..'
+  make install_host
 fi
 
 if [[ "$COMPUTE_V1" == "" ]]; then
