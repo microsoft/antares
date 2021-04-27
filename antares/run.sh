@@ -24,18 +24,18 @@ fi
 
 if [[ "$(cat ${TVM_HOME}/VERSION_TAG 2>/dev/null)" != "${VERSION_TAG}" ]]; then
   if [[ "$IS_WSL" == "1" ]]; then
-    echo 'Antares dependencies are not up-to-date with current Antares version. Try updating the dependencies with: `sudo make install_host` ..'
-    sudo make install_host
+    echo 'Antares dependencies are not up-to-date with current Antares version. Try updating the dependencies with: `make install_host` ..'
+    make install_host
   else
-    echo 'Antares dependencies are not up-to-date with current Antares version. Please update the dependencies with: `sudo make install_host`'
+    echo 'Antares dependencies are not up-to-date with current Antares version. Please update the dependencies with: `make install_host`'
     exit 1
   fi
 elif [ ! -e ${TVM_HOME}/build/libtvm.so ]; then
   if [[ "$IS_WSL" == "1" ]]; then
-    echo 'Antares dependencies are not fully installed in this environment. Try installing them with: `sudo make install_host`'
-    sudo make install_host
+    echo 'Antares dependencies are not fully installed in this environment. Try installing them with: `make install_host`'
+    make install_host
   else
-    echo 'Antares dependencies are not fully installed in this environment. Plese install them with: `sudo make install_host`'
+    echo 'Antares dependencies are not fully installed in this environment. Plese install them with: `make install_host`'
     exit 1
   fi
 fi
