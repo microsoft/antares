@@ -14,8 +14,7 @@ except:
 from tensorflow.python.platform import resource_loader
 
 from http import client as http_client
-import json, os, hashlib, shutil, time
-
+import json, os, hashlib, shutil, time, subprocess
 
 def get_tensorflow_antares_component(tf_module_path, op_name, compiler):
   dist_path = tf.sysconfig.get_include() + '/..'
@@ -36,8 +35,8 @@ def get_tensorflow_antares_component(tf_module_path, op_name, compiler):
     if compiler == 'mpicc':
       with_cuda += ' -lmpi_cxx -lnccl'
   else:
-    compiler = 'dpcpp'
-    with_cuda = '-DANTARES_ONEAPI -D__BACKEND__=\\"c-sycl_intel\\" -Wno-string-compare -Wno-unused-value'
+    cpu_type = 'c-mcpu_avx512' if os.system("grep -r '\bavx512' /proc/cpuinfo >/dev/null") == 0 else 'c-mcpu'
+    with_cuda = '-DANTARES_MCPU -D__BACKEND__=\\"{cpu_type}\\" -Wno-string-compare -Wno-unused-value'
     if compiler == 'mpicc':
       with_cuda += ' -lmpi_cxx'
 
@@ -82,49 +81,30 @@ def make_op(ir, feed_dict, extra_outputs=[]):
   expression = f'- einstein_v2(input_dict={input_dict}, extra_outputs=[{extra_outputs}], exprss="{ir}")'
   print('+ [Antares Op]', expression)
 
-  def request_server(tune_step=0):
-    h = http_client.HTTPConnection(__default_server_addr__, timeout=10)
+  def get_antares_cmd(expression, backend='c-mcpu_avx512', step=0):
+    antares_local_path = os.environ.get('ANTARES_ROOT')
+    assert antares_local_path, "User environment `ANTARES_ROOT` for antares directory is not set, please set it by: export ANTARES_ROOT=<root-path-of-antares>"
+    return f"cd '{antares_local_path}' && BACKEND={backend} STEP={step} COMMIT=force COMPUTE_V1='{expression}' make"
+
+  def request_code():
+    source = subprocess.getoutput(get_antares_cmd(expression))
     try:
-      h.request('GET', '/', headers={'COMPUTE_V1': expression, 'STEP': tune_step})
+      source = source[source.index('// GLOBALS: '):source.rindex('// --------------')]
     except:
-      raise Exception("Failed to contact with Antares server: %s (not started?)" % __default_server_addr__)
-    res = h.getresponse()
-    if res.status != 200:
-      raise Exception("Fail to get server response, reason: %s" % res.reason)
-    response = res.read().decode()
-    if response.startswith('[ERROR]'):
-      raise Exception("IR Compilation Failed - %s" % response)
-    return response
+      raise Exception(f'[Error] Failed to request code from Antares:\n\n{source}\n')
+    return source
 
   def tune(step=100, use_cache=False, timeout=-1):
-    if use_cache and request_server().find('// Saved Perf =') >= 0 or step <= 0:
-      return request_server
-    request_server(tune_step=step)
-    timer, timeout, status = 1, int(timeout), ''
-    while timeout == -1 or timer < timeout:
-      try:
-        source = request_server() + '\n'
-      except:
-        source = ''
-      idx = source.find('// Saved Perf = ')
-      if idx >= 0:
-        status = source[idx:source.index('\n', idx)]
-      print('+ [Antares Op]', f'>> tuning status (time = {timer}/{timeout}): {status}', end='\r')
-      if source.find('// Antares Tuning Completed') >= 0:
-        break
-      if not timeout:
-        break
-      timer += 1
-      time.sleep(1)
-    print()
-    return request_server
+    if use_cache and request_code().find('// Saved Perf =') >= 0 or step <= 0:
+      return request_code
+    cmd = get_antares_cmd(expression, step=step)
+    print(f'[Exec] \033[92m{cmd}\033[0m')
+    os.system(cmd)
+    return request_code
 
   def emit():
-    source = request_server()
-    try:
-      meta_bgn = source.index('// GLOBALS: ') + len('// GLOBALS: ')
-    except:
-      raise Exception("Illegal syntax for Antares expression: %s" % expression)
+    source = request_code()
+    meta_bgn = source.index('// GLOBALS: ') + len('// GLOBALS: ')
     meta_pos = source.index(' -> ', meta_bgn)
     meta_end = source.index('\n', meta_pos)
     meta_inputs = source[meta_bgn:meta_pos - 1].split('], ')
@@ -181,9 +161,9 @@ def make_op(ir, feed_dict, extra_outputs=[]):
       result = tuple(result)
     return result
 
-  request_server.tune = tune
-  request_server.emit = emit
-  return request_server
+  request_code.tune = tune
+  request_code.emit = emit
+  return request_code
 
 communicate_library = None
 
