@@ -8,12 +8,13 @@ from http import client as http_client
 
 import antares_custom_op
 
-is_rocm = (os.system('ldd %s/lib/libtorch.so 2>/dev/null | grep "\blibamdhip64\b" >/dev/null' % torch.__path__[0]) == 0)
 if not torch.cuda.is_available():
   backend = 'c-mcpu_avx512' if os.system("grep -r '\bavx512' /proc/cpuinfo >/dev/null") == 0 else 'c-mcpu'
 else:
-  backend = 'c-rocm' if is_rocm else 'c-cuda'
-print(f'[Info] \033[92mInitialize Antares as backend = {backend}\033[0m')
+  from torch.utils.cpp_extension import IS_HIP_EXTENSION
+  is_cuda = not IS_HIP_EXTENSION
+  backend = 'c-cuda' if is_cuda else 'c-rocm'
+print(f'[Info] \033[92mInitialize Antares using backend = {backend}\033[0m')
 
 def generate_antares_expression(ir, feed_dict, extra_outputs):
   input_dict, kwargs = {}, {}
@@ -34,7 +35,8 @@ def generate_antares_expression(ir, feed_dict, extra_outputs):
 def get_antares_cmd(expression, step=0):
   antares_local_path = os.environ.get('ANTARES_ROOT')
   assert antares_local_path, "User environment `ANTARES_ROOT` for antares directory is not set, please set it by: export ANTARES_ROOT=<root-path-of-antares>"
-  return f"cd '{antares_local_path}' && BACKEND={backend} STEP={step} COMMIT=force COMPUTE_V1='{expression}' make"
+  commit = 'COMMIT=force' if step > 0 else ''
+  return f"cd '{antares_local_path}' && BACKEND={backend} STEP={step} {commit} COMPUTE_V1='{expression}' make"
 
 class CustomOp(torch.nn.Module):
   __custom_op_dict__ = dict()
