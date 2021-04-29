@@ -6,8 +6,8 @@
 import tensorflow as tf
 import shutil, os, sys
 
-if tf.version.VERSION < '2.4' and not tf.version.VERSION.startswith('1.15.'):
-  raise Exception("Current Antares plugin is for Tensorflow >= 1.5.x / 2.4.x only.")
+if tf.version.VERSION < '2.3' and not tf.version.VERSION.startswith('1.15.'):
+  raise Exception("Current Antares plugin is for Tensorflow >= 1.5.x / 2.3.x only.")
 
 dist_path = tf.sysconfig.get_include() + '/../contrib/antares'
 root_path = os.path.dirname(sys.argv[0])
@@ -31,6 +31,6 @@ shutil.copyfile(root_path + '/../../graph_evaluator/execute_module.hpp', dist_pa
 if tf.test.is_built_with_gpu_support():
   shutil.copyfile(root_path + '/../../backends/c-rocm/include/backend.hpp', dist_path + '/backend.hpp')
 else:
-  shutil.copyfile(root_path + '/../../backends/c-sycl_intel/include/backend.hpp', dist_path + '/backend.hpp')
+  shutil.copyfile(root_path + '/../../backends/c-mcpu/include/backend.hpp', dist_path + '/backend.hpp')
 
 print("Finish Installation libraries to: %s" % os.path.realpath(dist_path))

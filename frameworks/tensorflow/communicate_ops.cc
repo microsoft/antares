@@ -35,11 +35,10 @@
 #include <cuda_runtime_api.h>
 #include <nccl.h>
 
-#elif defined(ANTARES_ONEAPI)
-// #include <CL/sycl.hpp>
+#elif defined(ANTARES_MCPU)
 
 #else
-#error "Cannot detect which tensorflow platform is using: ANTARES_CUDA/ANTARES_ROCM/ANTARES_ONEAPI."
+#error "Cannot detect which tensorflow platform is using: ANTARES_CUDA/ANTARES_ROCM/ANTARES_MCPU."
 #endif
 
 #if !defined(__linux__)

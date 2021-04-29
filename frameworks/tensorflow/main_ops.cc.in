@@ -34,6 +34,7 @@ class MainOpKernel: public AsyncOpKernel {
 
     LOG(INFO) << "MainOpKernel(num_in=" << meta_inputs.size() << ", num_out=" << meta_outputs.size() << ", ir=`" << antares_ir << "`..)";
 
+    ab::init(0);
     gm = std::make_shared<ExecutionModule>(source);
 
     args.resize(meta_inputs.size() + meta_outputs.size());
@@ -72,6 +73,7 @@ class MainOpKernel: public AsyncOpKernel {
     auto stream = nullptr;
 #endif
     gm->compute(args.data(), stream);
+    ab::synchronize(stream);
     done();
   }
 

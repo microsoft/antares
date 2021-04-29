@@ -126,14 +126,7 @@ COMMIT=force STEP=5000 COMPUTE_V1='- einstein_v2(input_dict={"data": {"dtype": "
 
   You need to follow `Step-1` from Senario-1 to finish environment preparation beforehand. This prevents many environmental issues when walking to the next step.
 
-- Step-2: Set up Background Codegen Service
-
-  ```sh
-  make rest-server
-  ```
-  By default, it listens on TCP port = 8880, and the purpose of this service is to avoid bringing heavy backend-related dependencies in Pytorch/Tensorflow, which helps JIT plugin to be light-weighted.
-
-- Step-3: Set up a corresponding TF/TF2/Pytorch version that matches your CUDA/ROCm driver version. (**If you have installed TF/TF2/Pytorch, please just ignore this step**)
+- Step-2: Set up a corresponding TF/TF2/Pytorch version that matches your CUDA/ROCm driver version. (**If you have installed TF/TF2/Pytorch, please just ignore this step**)
 
   Here we provide several prebuilt package sources that match different environment requirements:
 
@@ -161,11 +154,14 @@ COMMIT=force STEP=5000 COMPUTE_V1='- einstein_v2(input_dict={"data": {"dtype": "
 - Step-4: Install JIT Plugin Client and Run Examples
 
     ```sh
-    # Set up JIT Plugin for Pytorch:
+    # If using Pytorch, set up JIT Plugin for Pytorch:
     sudo python3 ./frameworks/pytorch/setup.py
 
-    # Set up JIT Plugin for Tensorflow/Tensorflow2:
+    # If using Tensorflow, set up JIT Plugin for Tensorflow/Tensorflow2:
     sudo python3 ./frameworks/tensorflow/setup.py
+
+    # Set the path of Antares root directory:
+    export ANTARES_ROOT="(..clone path to antares..)/"
 
     # Test Examples for Pytorch:
     cd ./frameworks/pytorch/examples
@@ -272,7 +268,7 @@ Before running `make` command in antares root directory, you need to ensure the 
 | Head fusion       | Y | Y | Y | Y | Y | Y | Y |
 | Tail fusion       | Y | Y |   | Y |   |   | Y |
 | Evaluator         | Y | Y | Y | Y | Y | Y | Y |
-| Tensorflow Plugin | Y | Y |   |   |   |   |   |
+| Tensorflow Plugin | Y | Y | Y (intel-tensorflow) |   |   |   |   |
 | Pytorch Plugin    | Y | Y |   |   |   |   |   |
 | Multi Kernel Eval | Y | Y | Y | Y |   | Y | Y |
 
