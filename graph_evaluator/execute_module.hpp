@@ -102,7 +102,7 @@ std::vector<std::string> ssplit(const std::string &str, const std::string &sub, 
     }
     if (it < str.size() || allow_empty)
         ret.push_back(str.substr(it));
-    return std::move(ret);
+    return ret;
 }
 
 struct tensor_property {
@@ -155,7 +155,7 @@ std::vector<tensor_property> parse_properties(const std::string &encoded_inputs)
         tp.shape.push_back(std::atol(dim.c_str()));
       ret.push_back(std::move(tp));
     }
-    return std::move(ret);
+    return ret;
 }
 
 void *allocate_tensor(tensor_property &tp) {
@@ -246,7 +246,6 @@ struct ExecutionModule {
 
     int nodeCnt = 0;
     for (auto it = local_kernels.begin(); ++nodeCnt <= local_kernels.size(); ++it) {
-      const std::string &name = it->fname;
       if (nodeCnt != local_kernels.size()) {
         CHECK_OK(it->out_args.size() == 1);
         auto &arg_name = it->out_args[0];
