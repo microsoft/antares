@@ -72,7 +72,7 @@ class CustomOp(torch.nn.Module):
     meta_outputs = source[meta_pos + len(' -> '):meta_end - 1].split('], ')
 
     code_name = 'Antares' + expr_hash
-    source_path = '/tmp/antares_torch_%s.cc.kernel.cu' % code_name
+    source_path = f'/tmp/antares_torch_{backend}_{code_name}.cc.kernel.cu'
 
     # Compile Kernel object
     with open(source_path, 'w') as fp:

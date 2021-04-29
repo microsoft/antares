@@ -269,7 +269,7 @@ Before running `make` command in antares root directory, you need to ensure the 
 | Tail fusion       | Y | Y |   | Y |   |   | Y |
 | Evaluator         | Y | Y | Y | Y | Y | Y | Y |
 | Tensorflow Plugin | Y | Y | Y (intel-tensorflow) |   |   |   |   |
-| Pytorch Plugin    | Y | Y |   |   |   |   |   |
+| Pytorch Plugin    | Y | Y | Y |   |   |   |   |
 | Multi Kernel Eval | Y | Y | Y | Y |   | Y | Y |
 
 ## About Microsft Open Source

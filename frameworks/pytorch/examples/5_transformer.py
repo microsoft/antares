@@ -6,7 +6,7 @@
 import torch
 from torch.contrib.antares.custom_op import CustomOp
 
-device = torch.device("cuda")
+device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 dtype = torch.float32
 
 kwargs = {'dtype': dtype,

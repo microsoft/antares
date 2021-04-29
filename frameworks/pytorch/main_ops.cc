@@ -20,6 +20,13 @@ std::vector<torch::Tensor> custom_op_forward(std::vector<torch::Tensor> inputs,
   auto it = module_manager.find(hash);
   if (it == module_manager.end())
   {
+    int ord = 0;
+#if defined(ANTARES_CUDA)
+    cuCtxGetDevice(&ord);
+#elif defined(ANTARES_ROCM)
+    hipGetDevice(&ord);
+#endif
+    ab::init(ord);
     module_manager[hash] = std::make_shared<ExecutionModule>(source);
     it = module_manager.find(hash);
   }
@@ -59,6 +66,9 @@ std::vector<torch::Tensor> custom_op_forward(std::vector<torch::Tensor> inputs,
     args[meta_inputs.size() + i] = (void*)outputs[i].data_ptr();
 
   gm->compute(args.data());
+#if defined(ANTARES_MCPU)
+  ab::synchronize(0);
+#endif
   return outputs;
 }
 

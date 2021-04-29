@@ -31,8 +31,8 @@
 #define cuEventDestroy hipEventDestroy
 #define cuEventRecord hipEventRecord
 #define CUcontext long
-#define cuDevicePrimaryCtxRetain(x, y) hipSetDevice(y)
-#define cuCtxSetCurrent(x) 0
+#define cuDevicePrimaryCtxRetain(x, y) (*(x) = (CUcontext)((long)(y)), 0)
+#define cuCtxSetCurrent(x) hipSetDevice((long)(x))
 #define CUstream hipStream_t
 #endif
 
