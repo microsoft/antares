@@ -34,7 +34,13 @@ class MainOpKernel: public AsyncOpKernel {
 
     LOG(INFO) << "MainOpKernel(num_in=" << meta_inputs.size() << ", num_out=" << meta_outputs.size() << ", ir=`" << antares_ir << "`..)";
 
-    ab::init(0);
+    int ord = 0;
+#if defined(ANTARES_CUDA)
+    cuCtxGetDevice(&ord);
+#elif defined(ANTARES_ROCM)
+    hipGetDevice(&ord);
+#endif
+    ab::init(ord);
     gm = std::make_shared<ExecutionModule>(source);
 
     args.resize(meta_inputs.size() + meta_outputs.size());
@@ -69,11 +75,11 @@ class MainOpKernel: public AsyncOpKernel {
       args[meta_inputs.size() + i] = (void*)outputs[i]->tensor_data().data();
 #if defined(GOOGLE_CUDA)
     CUstream stream = *reinterpret_cast<CUstream*>(c->op_device_context()->stream()->implementation()->GpuStreamMemberHack());
-#else
-    auto stream = nullptr;
-#endif
     gm->compute(args.data(), stream);
-    ab::synchronize(stream);
+#else
+    gm->compute(args.data());
+    ab::synchronize(0);
+#endif
     done();
   }
 

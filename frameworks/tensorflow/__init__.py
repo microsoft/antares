@@ -119,7 +119,7 @@ def make_op(ir, feed_dict, extra_outputs=[]):
       return name, dtype, [int(x) for x in shapes.split(', ')]
 
     code_name = 'Antares' + hashlib.sha256(expression.encode()).hexdigest()
-    tf_module_path = '/tmp/antares_tf_%s.cc' % code_name
+    tf_module_path = f'/tmp/antares_tf_{backend}_{code_name}.cc'
 
     shutil.copyfile(resource_loader.get_path_to_datafile('main_ops.cc.in'), tf_module_path)
     with open(tf_module_path, 'a') as fp:
