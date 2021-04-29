@@ -268,7 +268,7 @@ Before running `make` command in antares root directory, you need to ensure the 
 | Head fusion       | Y | Y | Y | Y | Y | Y | Y |
 | Tail fusion       | Y | Y |   | Y |   |   | Y |
 | Evaluator         | Y | Y | Y | Y | Y | Y | Y |
-| Tensorflow Plugin | Y | Y |   |   |   |   |   |
+| Tensorflow Plugin | Y | Y | Y |   |   |   |   |
 | Pytorch Plugin    | Y | Y |   |   |   |   |   |
 | Multi Kernel Eval | Y | Y | Y | Y |   | Y | Y |
 

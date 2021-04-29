@@ -9,12 +9,12 @@ from http import client as http_client
 import antares_custom_op
 
 if not torch.cuda.is_available():
-  backend = 'c-mcpu_avx512' if os.system("grep -r '\bavx512' /proc/cpuinfo >/dev/null") == 0 else 'c-mcpu'
+  backend = 'c-mcpu_avx512' if os.system("grep -r '\\bavx512' /proc/cpuinfo >/dev/null") == 0 else 'c-mcpu'
 else:
   from torch.utils.cpp_extension import IS_HIP_EXTENSION
   is_cuda = not IS_HIP_EXTENSION
   backend = 'c-cuda' if is_cuda else 'c-rocm'
-print(f'[Info] \033[92mInitialize Antares using backend = {backend}\033[0m')
+print(f'[Info] \033[92mInitialize Antares for backend = {backend}\033[0m')
 
 def generate_antares_expression(ir, feed_dict, extra_outputs):
   input_dict, kwargs = {}, {}

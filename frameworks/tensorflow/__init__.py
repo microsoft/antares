@@ -16,6 +16,19 @@ from tensorflow.python.platform import resource_loader
 from http import client as http_client
 import json, os, hashlib, shutil, time, subprocess
 
+if not tf.test.is_built_with_gpu_support():
+  backend = 'c-mcpu_avx512' if os.system("grep -r '\\bavx512' /proc/cpuinfo >/dev/null") == 0 else 'c-mcpu'
+else:
+  is_cuda = tf.test.is_built_with_cuda()
+  backend = 'c-cuda' if is_cuda else 'c-rocm'
+print(f'[Info] \033[92mInitialize Antares for backend = {backend}\033[0m')
+
+def get_antares_cmd(expression, step=0):
+  antares_local_path = os.environ.get('ANTARES_ROOT')
+  assert antares_local_path, "User environment `ANTARES_ROOT` for antares directory is not set, please set it by: export ANTARES_ROOT=<root-path-of-antares>"
+  commit = 'COMMIT=force' if step > 0 else ''
+  return f"cd '{antares_local_path}' && BACKEND={backend} STEP={step} {commit} COMPUTE_V1='{expression}' make"
+
 def get_tensorflow_antares_component(tf_module_path, op_name, compiler):
   dist_path = tf.sysconfig.get_include() + '/..'
   abi_flag = tf.sysconfig.CXX11_ABI_FLAG
@@ -35,8 +48,7 @@ def get_tensorflow_antares_component(tf_module_path, op_name, compiler):
     if compiler == 'mpicc':
       with_cuda += ' -lmpi_cxx -lnccl'
   else:
-    cpu_type = 'c-mcpu_avx512' if os.system("grep -r '\bavx512' /proc/cpuinfo >/dev/null") == 0 else 'c-mcpu'
-    with_cuda = '-DANTARES_MCPU -D__BACKEND__=\\"{cpu_type}\\" -Wno-string-compare -Wno-unused-value'
+    with_cuda = '-DANTARES_MCPU -D__BACKEND__=\\"{backend}\\" -Wno-string-compare -Wno-unused-value'
     if compiler == 'mpicc':
       with_cuda += ' -lmpi_cxx'
 
@@ -74,11 +86,6 @@ def make_op(ir, feed_dict, extra_outputs=[]):
   extra_outputs = ', '.join(['"%s"' % x for x in extra_outputs])
   expression = f'- einstein_v2(input_dict={input_dict}, extra_outputs=[{extra_outputs}], exprss="{ir}")'
   print('+ [Antares Op]', expression)
-
-  def get_antares_cmd(expression, backend='c-mcpu_avx512', step=0):
-    antares_local_path = os.environ.get('ANTARES_ROOT')
-    assert antares_local_path, "User environment `ANTARES_ROOT` for antares directory is not set, please set it by: export ANTARES_ROOT=<root-path-of-antares>"
-    return f"cd '{antares_local_path}' && BACKEND={backend} STEP={step} COMMIT=force COMPUTE_V1='{expression}' make"
 
   def request_code():
     source = subprocess.getoutput(get_antares_cmd(expression))
