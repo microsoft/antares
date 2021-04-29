@@ -1,4 +1,4 @@
-FROM ubuntu:20.04
+FROM intelaipg/intel-optimized-tensorflow:2.3.0-avx512-mkl
 
 ENV DEBIAN_FRONTEND noninteractive
 ENV PYTHONDONTWRITEBYTECODE 1

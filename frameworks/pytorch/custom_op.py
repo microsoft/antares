@@ -2,13 +2,19 @@
 # Licensed under the MIT license.
 
 import torch
-import os, json, hashlib, time
+import os, json, hashlib, time, subprocess
 from torch.autograd import Function
 from http import client as http_client
 
 import antares_custom_op
 
-__default_server_addr__ = 'localhost:8880'
+if not torch.cuda.is_available():
+  backend = 'c-mcpu_avx512' if os.system("grep -r '\\bavx512' /proc/cpuinfo >/dev/null") == 0 else 'c-mcpu'
+else:
+  from torch.utils.cpp_extension import IS_HIP_EXTENSION
+  is_cuda = not IS_HIP_EXTENSION
+  backend = 'c-cuda' if is_cuda else 'c-rocm'
+print(f'[Info] \033[92mInitialize Antares for backend = {backend}\033[0m')
 
 def generate_antares_expression(ir, feed_dict, extra_outputs):
   input_dict, kwargs = {}, {}
@@ -26,11 +32,11 @@ def generate_antares_expression(ir, feed_dict, extra_outputs):
   expression = f'- einstein_v2(input_dict={input_dict}, extra_outputs=[{extra_outputs}], exprss="{ir}")'
   return expression
 
-def set_default_server_addr(server_addr):
-  global __default_server_addr__
-  __default_server_addr__ = server_addr
-  if server_addr.find(':') < 0:
-    __default_server_addr__ += ':8880'
+def get_antares_cmd(expression, step=0):
+  antares_local_path = os.environ.get('ANTARES_ROOT')
+  assert antares_local_path, "User environment `ANTARES_ROOT` for antares directory is not set, please set it by: export ANTARES_ROOT=<root-path-of-antares>"
+  commit = 'COMMIT=force' if step > 0 else ''
+  return f"cd '{antares_local_path}' && BACKEND={backend} STEP={step} {commit} COMPUTE_V1='{expression}' make"
 
 class CustomOp(torch.nn.Module):
   __custom_op_dict__ = dict()
@@ -42,25 +48,20 @@ class CustomOp(torch.nn.Module):
     feed_dict = sorted([(k, feed_dict[k]) for k in feed_dict], key=lambda x: x[0])
     self.values = [v for (k, v) in feed_dict]
 
-  def request_server(self, tune_step=0):
-    h = http_client.HTTPConnection(__default_server_addr__, timeout=10)
+  def request_code(self):
+    expression = self.expr
+    source = subprocess.getoutput(get_antares_cmd(expression))
     try:
-      h.request('GET', '/', headers={'COMPUTE_V1': self.expr, 'STEP': tune_step})
+      source = source[source.index('// GLOBALS: '):source.rindex('// --------------')]
     except:
-      raise Exception("Failed to contact with Antares server: %s (not started?)" % __default_server_addr__)
-    res = h.getresponse()
-    if res.status != 200:
-      raise Exception("Fail to get server response, reason: %s" % res.reason)
-    response = res.read().decode()
-    if response.startswith('[ERROR]'):
-      raise Exception("IR Compilation Failed - %s" % response)
-    return response
+      raise Exception(f'[Error] Failed to request code from Antares:\n\n{source}\n')
+    return source
 
   def fetch_and_compile_antares_kernel(self, expr_hash):
     expression = self.expr
     print('+ [Antares Op]', expression)
 
-    source = self.request_server()
+    source = self.request_code()
     try:
       meta_bgn = source.index('// GLOBALS: ') + len('// GLOBALS: ')
     except:
@@ -86,26 +87,12 @@ class CustomOp(torch.nn.Module):
     return output_names, (source, source_path, expr_hash, meta_inputs, meta_outputs)
 
   def tune(self, step=100, use_cache=False, timeout=-1):
-    if use_cache and self.request_server().find('// Saved Perf =') >= 0 or step <= 0:
+    if use_cache and self.request_code().find('// Saved Perf =') >= 0 or step <= 0:
       return self
-    self.request_server(tune_step=step)
-    timer, timeout, status = 1, int(timeout), ''
-    while timeout == -1 or timer < timeout:
-      try:
-        source = self.request_server() + '\n'
-      except:
-        source = ''
-      idx = source.find('// Saved Perf = ')
-      if idx >= 0:
-        status = source[idx:source.index('\n', idx)]
-      print('+ [Antares Op]', f'>> tuning status (time = {timer}/{timeout}): {status}', end='\r')
-      if source.find('// Antares Tuning Completed') >= 0:
-        break
-      if not timeout:
-        break
-      timer += 1
-      time.sleep(1)
-    print()
+    expression = self.expr
+    cmd = get_antares_cmd(expression, step=step)
+    print(f'[Exec] \033[92m{cmd}\033[0m')
+    os.system(cmd)
     return self
 
   def emit(self):
