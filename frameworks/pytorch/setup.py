@@ -18,6 +18,12 @@ root_path = os.path.dirname(sys.argv[0])
 if not root_path:
   root_path = '.'
 
+for tree in ('antares_custom_op.egg-info', 'build', 'dist'):
+  try:
+    shutil.rmtree(f'{root_path}/{tree}')
+  except:
+    pass
+
 os.chdir(root_path)
 root_path = '.'
 sys.dont_write_bytecode = False
@@ -29,9 +35,13 @@ except FileExistsError:
 
 shutil.copyfile(root_path + '/custom_op.py', dist_path + '/custom_op.py')
 shutil.copyfile(root_path + '/../../graph_evaluator/execute_module.hpp', dist_path + '/execute_module.hpp')
-shutil.copyfile(root_path + '/../../backends/c-rocm/include/backend.hpp', dist_path + '/backend.hpp')
 
-is_cuda = (os.system('ldd %s/lib/libtorch.so 2>/dev/null | grep -e libcudart >/dev/null' % torch.__path__[0]) == 0)
+if torch.cuda.is_available():
+  shutil.copyfile(root_path + '/../../backends/c-rocm/include/backend.hpp', dist_path + '/backend.hpp')
+  is_cuda = True
+else:
+  shutil.copyfile(root_path + '/../../backends/c-mcpu/include/backend.hpp', dist_path + '/backend.hpp')
+  is_cuda = False
 
 setup(
     name='antares_custom_op',

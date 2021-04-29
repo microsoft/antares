@@ -54,13 +54,7 @@ def get_tensorflow_antares_component(tf_module_path, op_name, compiler):
   return f'{tf_module_path}.so.{compiler}'
 
 __ops_name__ = __loader__.name.split('.')[-1]
-__default_server_addr__ = 'localhost:8880'
 
-def set_default_server_addr(server_addr):
-  global __default_server_addr__
-  __default_server_addr__ = server_addr
-  if server_addr.find(':') < 0:
-    __default_server_addr__ += ':8880'
 
 def make_op(ir, feed_dict, extra_outputs=[]):
   input_dict, kwargs = {}, {}
