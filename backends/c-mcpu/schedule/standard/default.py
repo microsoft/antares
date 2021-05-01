@@ -51,7 +51,19 @@ def schedule(attrs):
     # s[output_local].vectorize(fourth[-1])
     s[output_local].unroll(fourth[-1])
 
+  def mcpu_simple_schedule(s, output, prefix):
+    slice_data = [cfg.define_split(f"{prefix}:D{i}", attrs.get_extent(output.op.axis[i]), num_outputs=3, init_vals=[[-1, 1, 1],]) for i in range(len(output.op.axis))]
+    slice_axes = [cfg.apply_split(s, output, output.op.axis[i], [-1, 1] + slice_data[i][1:]) for i in range(len(output.op.axis))]
+
+    first, second, third, fourth = [x[0] for x in slice_axes], [x[1] for x in slice_axes], [x[2] for x in slice_axes], [x[3] for x in slice_axes]
+    s[output].reorder(*(first + second + third + fourth))
+
+    s[output].bind(s[output].fuse(*first), te.thread_axis('threadIdx.x'))
+    s[output].bind(s[output].fuse(*second), te.thread_axis('vthread'))
+
 
   for i, m in enumerate(attrs.explicit_ops):
+    if len(m.output(0).op.reduce_axis) == 0:
+      return mcpu_simple_schedule(s, m.output(0), f'T{m.output(0).name}')
     mcpu_auto_schedule(s, m.output(0), f'T{m.output(0).name}')
 
