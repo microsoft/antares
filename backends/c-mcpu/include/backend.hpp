@@ -8,19 +8,115 @@
 #include <pthread.h>
 #include <malloc.h>
 
+#ifndef __ANTARES_THREAD_POOL__
+#define __ANTARES_THREAD_POOL__
+
+#include <condition_variable>
+#include <future>
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <queue>
+#include <thread>
+#include <vector>
+
+class ThreadPool {
+public:
+    ThreadPool(size_t threads): stop(false) {
+        for(size_t i = 0; i < threads; ++i) {
+            workers.emplace_back([this] {
+                for(;;) {
+                    std::function<void()> task;
+                    {
+                        std::unique_lock<std::mutex> lock(this->queue_mutex);
+                        this->condition.wait(lock,
+                            [this]{ return this->stop || !this->tasks.empty(); });
+                        if(this->stop && this->tasks.empty())
+                            return;
+                        task = std::move(this->tasks.front());
+                        this->tasks.pop();
+                    }
+                    task();
+                }
+            });
+
+            cpu_set_t cpuset;
+            CPU_ZERO(&cpuset);
+            CPU_SET(i, &cpuset);
+            int rc = pthread_setaffinity_np(workers[i].native_handle(), sizeof(cpu_set_t), &cpuset);
+            CHECK_OK(rc == 0);
+        }
+    }
+
+    template<class F, class... Args>
+    auto enqueue(F&& f, Args&&... args)
+        -> std::future<typename std::result_of<F(Args...)>::type> {
+
+        using return_type = typename std::result_of<F(Args...)>::type;
+        auto task = std::make_shared< std::packaged_task<return_type()> >(
+                std::bind(std::forward<F>(f), std::forward<Args>(args)...)
+            );
+
+        std::future<return_type> res = task->get_future();
+        {
+            std::unique_lock<std::mutex> lock(queue_mutex);
+
+            if(stop)
+                throw std::runtime_error("enqueue on stopped ThreadPool");
+
+            tasks.emplace([task](){ (*task)(); });
+        }
+        condition.notify_one();
+        return res;
+    }
+
+    const std::vector<std::thread>& get_workers() const {
+      return this->workers;
+    }
+
+    ~ThreadPool() {
+        {
+            std::unique_lock<std::mutex> lock(queue_mutex);
+            stop = true;
+        }
+        condition.notify_all();
+        for(std::thread &worker: workers)
+            worker.join();
+    }
+
+private:
+    std::vector<std::thread> workers;
+    std::queue<std::function<void()>> tasks;
+    std::mutex queue_mutex;
+    std::condition_variable condition;
+    bool stop;
+};
+
+#endif
+
 namespace ab {
 
   static std::unordered_map<size_t, std::vector<void*>> _cached_memory;
-  static int max_allowed_threads;
   static bool use_avx512;
+
+  static std::shared_ptr<ThreadPool> _thread_pool;
+  static std::vector<std::vector<void*>> _task_queue;
 
   void init(int dev) {
     use_avx512 = (__BACKEND__ == "c-mcpu_avx512");
     const auto env = getenv("CPU_THREADS");
-    max_allowed_threads = env && *env ? atoi(env) : 256;
+
+    int max_allowed_threads = std::thread::hardware_concurrency();
+    if (env && *env)
+      max_allowed_threads = atoi(env);
+
+    // fprintf(stderr, "[DEBUG] `max_allowed_threads` = %d\n", max_allowed_threads);
+    _thread_pool = std::make_shared<ThreadPool>(max_allowed_threads);
+
   }
 
   void finalize() {
+    _thread_pool = nullptr;
   }
 
   void* alloc(size_t byteSize, const std::vector<size_t> &shape, const std::string &dtype, const std::string &name) {
@@ -58,44 +154,29 @@ namespace ab {
     return { dlsym((void*)hModule, fname.c_str()), (void*)(long)threads.find("__rank__")->second };
   }
 
-  static std::vector<std::vector<void*>> _task_queue;
-  static long _max_threads_in_task_queue;
-  static pthread_barrier_t _thread_barrier;
-
-  static void* thread_worker(void* args) {
-    long rank = (long)args;
-    for (auto &it: _task_queue) {
-      auto func = ((void(*)(int, void* const*))it[0]);
-      auto num_threads = (long)it[1];
-      auto args = it.data() + 2;
-      for (int i = rank; i < num_threads; i += max_allowed_threads)
-        func(i, args);
-      pthread_barrier_wait(&_thread_barrier);
-    }
-    return nullptr;
-  }
-
   void launchKernel(const std::vector<void*> &hFunction, const std::vector<void*> &krnl_args, void *stream) {
     std::vector<void*> task = hFunction;
     task.insert(task.end(), krnl_args.begin(), krnl_args.end());
     _task_queue.push_back(std::move(task));
-
-    _max_threads_in_task_queue = std::max(_max_threads_in_task_queue, (long)hFunction[1]);
   }
 
   void synchronize(void *stream) {
     if (_task_queue.size()) {
-      int num_cores = std::min((long)max_allowed_threads, _max_threads_in_task_queue);
-      std::vector<pthread_t> tid(num_cores);
-      pthread_barrier_init(&_thread_barrier, nullptr, tid.size());
+      const int max_allowed_threads = _thread_pool->get_workers().size();
+      for (auto &it: _task_queue) {
+        auto func = ((void(*)(int, void* const*))it[0]);
+        auto num_threads = (int)(long)it[1];
+        auto args = it.data() + 2;
 
-      for (int i = 0; i < tid.size(); ++i)
-        pthread_create(&tid[i], nullptr, thread_worker, (void*)(long)i);
-      for (int i = 0; i < tid.size(); ++i)
-        pthread_join(tid[i], nullptr);
-
-      pthread_barrier_destroy(&_thread_barrier);
-      _max_threads_in_task_queue = 0;
+        std::vector<std::future<void>> results;
+        for (int i = 0; i < max_allowed_threads; ++i)
+          results.emplace_back(_thread_pool->enqueue([=]() -> void {
+            for (int j = i; j < num_threads; j += max_allowed_threads)
+              func(j, args);
+          }));
+        for (auto &out: results)
+          out.wait();
+      }
       _task_queue.clear();
     }
   }
