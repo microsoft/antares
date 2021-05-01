@@ -163,20 +163,20 @@ namespace ab {
   void synchronize(void *stream) {
     if (_task_queue.size()) {
       const int max_allowed_threads = _thread_pool->get_workers().size();
-      std::vector<std::future<void>> results;
       for (auto &it: _task_queue) {
         auto func = ((void(*)(int, void* const*))it[0]);
         auto num_threads = (int)(long)it[1];
         auto args = it.data() + 2;
 
+        std::vector<std::future<void>> results;
         for (int i = 0; i < max_allowed_threads; ++i)
           results.emplace_back(_thread_pool->enqueue([=]() -> void {
             for (int j = i; j < num_threads; j += max_allowed_threads)
               func(j, args);
           }));
+        for (auto &out: results)
+          out.wait();
       }
-      for (auto &it: results)
-        it.wait();
       _task_queue.clear();
     }
   }
