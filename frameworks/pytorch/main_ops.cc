@@ -66,7 +66,7 @@ std::vector<torch::Tensor> custom_op_forward(std::vector<torch::Tensor> inputs,
     args[meta_inputs.size() + i] = (void*)outputs[i].data_ptr();
 
   gm->compute(args.data());
-#if defined(ANTARES_MCPU)
+#if !defined(ANTARES_CUDA) && !defined(ANTARES_ROCM)
   ab::synchronize(0);
 #endif
   return outputs;

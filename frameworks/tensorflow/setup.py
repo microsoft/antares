@@ -30,6 +30,8 @@ shutil.copyfile(root_path + '/../../graph_evaluator/execute_module.hpp', dist_pa
 
 if tf.test.is_built_with_gpu_support():
   shutil.copyfile(root_path + '/../../backends/c-rocm/include/backend.hpp', dist_path + '/backend.hpp')
+elif os.system('which dpcpp >/dev/null') == 0:
+  shutil.copyfile(root_path + '/../../backends/c-sycl_intel/include/backend.hpp', dist_path + '/backend.hpp')
 else:
   shutil.copyfile(root_path + '/../../backends/c-mcpu/include/backend.hpp', dist_path + '/backend.hpp')
 

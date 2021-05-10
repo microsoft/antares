@@ -35,10 +35,9 @@
 #include <cuda_runtime_api.h>
 #include <nccl.h>
 
-#elif defined(ANTARES_MCPU)
-
+#elif defined(ANTARES_MCPU) || defined(ANTARES_SYCL)
 #else
-#error "Cannot detect which tensorflow platform is using: ANTARES_CUDA/ANTARES_ROCM/ANTARES_MCPU."
+#error "Cannot detect which tensorflow platform is using: ANTARES_CUDA/ANTARES_ROCM/ANTARES_MCPU/ANTARES_SYCL."
 #endif
 
 #if !defined(__linux__)
@@ -65,7 +64,7 @@ using namespace std;
 
 static pthread_mutex_t __g_lock = PTHREAD_MUTEX_INITIALIZER;
 
-#if defined(GOOGLE_CUDA)
+#if defined(ANTARES_CUDA) || defined(ANTARES_ROCM)
 
 class Nccl2Handle {
  public:
