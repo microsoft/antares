@@ -73,7 +73,7 @@ class MainOpKernel: public AsyncOpKernel {
       args[i] = (void*)c->input(i).tensor_data().data();
     for (int i = 0; i < meta_outputs.size(); ++i)
       args[meta_inputs.size() + i] = (void*)outputs[i]->tensor_data().data();
-#if defined(GOOGLE_CUDA)
+#if defined(ANTARES_CUDA) || defined(ANTARES_ROCM)
     CUstream stream = *reinterpret_cast<CUstream*>(c->op_device_context()->stream()->implementation()->GpuStreamMemberHack());
     gm->compute(args.data(), stream);
 #else
@@ -95,7 +95,7 @@ class MainOpKernel: public AsyncOpKernel {
   std::shared_ptr<ExecutionModule> gm;
 };
 
-#if defined(GOOGLE_CUDA)
+#if defined(ANTARES_CUDA) || defined(ANTARES_ROCM)
 REGISTER_KERNEL_BUILDER(Name(OP_NAME).Device(DEVICE_GPU), MainOpKernel<Eigen::GpuDevice>);
 #else
 REGISTER_KERNEL_BUILDER(Name(OP_NAME).Device(DEVICE_CPU), MainOpKernel<Eigen::ThreadPoolDevice>);

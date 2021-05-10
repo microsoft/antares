@@ -1,4 +1,4 @@
-FROM intel/oneapi-hpckit:devel-ubuntu18.04
+FROM intel/oneapi-hpckit:2021.2-devel-ubuntu18.04
 
 ENV DEBIAN_FRONTEND noninteractive
 ENV PYTHONDONTWRITEBYTECODE 1
@@ -18,3 +18,5 @@ RUN /bin/echo -e "set backspace=indent,eol,start\nset nocompatible\nset ts=4" > 
 
 ADD ./engine /antares/engine
 RUN /antares/engine/install_antares_host.sh && rm -rf /var/lib/apt/lists/* ~/.cache
+
+RUN python3 -m pip install --upgrade intel-tensorflow && python3 -m pip install --upgrade numpy
