@@ -18,4 +18,4 @@ RUN /bin/echo -e "set backspace=indent,eol,start\nset nocompatible\nset ts=4" > 
 
 ADD ./engine /antares/engine
 RUN /antares/engine/install_antares_host.sh && rm -rf /var/lib/apt/lists/* ~/.cache
-
+RUN ln -s clang++-10 /usr/bin/clang++ || true

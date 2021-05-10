@@ -17,7 +17,10 @@ from http import client as http_client
 import json, os, hashlib, shutil, time, subprocess
 
 if not tf.test.is_built_with_gpu_support():
-  backend = 'c-mcpu_avx512' if os.system("grep -r '\\bavx512' /proc/cpuinfo >/dev/null") == 0 else 'c-mcpu'
+  if os.system('which dpcpp >/dev/null') == 0:
+    backend = 'c-sycl_intel'
+  else:
+    backend = 'c-mcpu_avx512' if os.system("grep -r '\\bavx512' /proc/cpuinfo >/dev/null") == 0 else 'c-mcpu'
 else:
   is_cuda = tf.test.is_built_with_cuda()
   backend = 'c-cuda' if is_cuda else 'c-rocm'
@@ -40,13 +43,18 @@ def get_tensorflow_antares_component(tf_module_path, op_name, compiler):
       libtf_so_name = flag[3:].strip()
       break
   if tf.test.is_built_with_rocm():
-    with_cuda = "-DANTARES_ROCM -DGOOGLE_CUDA -D__HIP_PLATFORM_HCC__=1 -I/opt/rocm/include -L/opt/rocm/lib -lamdhip64"
+    with_cuda = "-DANTARES_ROCM -D__HIP_PLATFORM_HCC__=1 -I/opt/rocm/include -L/opt/rocm/lib -lamdhip64"
     if compiler == 'mpicc':
       with_cuda += ' -lmpi_cxx -lrccl'
   elif tf.test.is_built_with_cuda():
-    with_cuda = "-DANTARES_CUDA -DGOOGLE_CUDA -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -lcudart -lcuda"
+    with_cuda = "-DANTARES_CUDA -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -lcudart -lcuda"
     if compiler == 'mpicc':
       with_cuda += ' -lmpi_cxx -lnccl'
+  elif backend in ('c-sycl_intel',):
+    with_cuda = f'-DANTARES_SYCL -D__BACKEND__=\\"{backend}\\" -ldl -lpthread -Wno-string-compare -Wno-unused-value'
+    compiler = 'dpcpp'
+    if compiler == 'mpicc':
+      with_cuda += ' -lmpi_cxx'
   else:
     with_cuda = f'-DANTARES_MCPU -D__BACKEND__=\\"{backend}\\" -Wno-string-compare -Wno-unused-value'
     if compiler == 'mpicc':
