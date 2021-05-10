@@ -79,6 +79,32 @@ def do_native_translation_v2(codeset, **kwargs):
           lines.append(line)
 
     body = '\n'.join(lines)
+
+    # FIXME: `pre_defines` is only for float32. Template dtype will be supported after the release of HLSL 2021.
+    pre_defines = ''
+
+    if re.search(r'\berf\b', body):
+      pre_defines += '''
+float erf(float x) {
+  float a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741, a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
+  int sign = (x >= 0) ? 1 : -1;
+  x = (x >= 0) ? x : -x;
+  float t = 1.0 / (1.0 + p * x);
+  float y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * exp(-x * x);
+  return sign * y;
+}
+'''
+    if re.search(r'\bpow\b', body):
+      pre_defines += '''
+float pow_ex(float x, float y) {
+  if (x >= 0)
+    return pow(x, y);
+  int yi = floor(y);
+  return (yi == y) ? -pow(-x, yi) : pow(x, y);
+}
+#define pow pow_ex
+'''
+
     body = re.sub(r'\b__syncthreads\b', 'GroupMemoryBarrierWithGroupSync', body);
     lds = '\n'.join(lds)
     registers = ''.join(registers)
@@ -99,7 +125,7 @@ def do_native_translation_v2(codeset, **kwargs):
 
 #define make_int2(x, y) ((int2)(x, y))
 #define make_int4(x, y, z, w) ((int4)(x, y, z, w))
-
+{pre_defines}
 #endif
 
 {lds}
