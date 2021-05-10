@@ -54,6 +54,11 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
     </Link>
+    <PostBuildEvent>
+      <Command>copy "$(WindowsSdkDir)Redist\D3D\$(PlatformTarget)\dxcompiler.dll" "$(TargetDir)" /Y
+copy "$(WindowsSdkDir)Redist\D3D\$(PlatformTarget)\dxil.dll" "$(TargetDir)" /Y
+</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="D3D12APIWrapper.h" />
