@@ -3,6 +3,7 @@
 
 //; eval_flags(c-mcpu): -ldl -lpthread
 //; eval_flags(c-mcpu_avx512): -ldl -lpthread
+//; eval_flags(c-mcpu_android): [aarch64-linux-android-clang++] -ldl -O2
 
 #include <dlfcn.h>
 #include <pthread.h>
@@ -39,12 +40,13 @@ public:
                     task();
                 }
             });
-
+#if !defined(__BACKEND_mcpu_android__)
             cpu_set_t cpuset;
             CPU_ZERO(&cpuset);
             CPU_SET(i, &cpuset);
             int rc = pthread_setaffinity_np(workers[i].native_handle(), sizeof(cpu_set_t), &cpuset);
             CHECK_OK(rc == 0);
+#endif
         }
     }
 
@@ -103,7 +105,11 @@ namespace ab {
   static std::vector<std::vector<void*>> _task_queue;
 
   void init(int dev) {
-    use_avx512 = (__BACKEND__ == "c-mcpu_avx512");
+#if defined(__BACKEND_mcpu_avx512__)
+    use_avx512 = true;
+#else
+    use_avx512 = false;
+#endif
     const auto env = getenv("CPU_THREADS");
 
     int max_allowed_threads = std::thread::hardware_concurrency();
@@ -136,6 +142,7 @@ namespace ab {
   }
 
   void* moduleLoad(const std::string &source) {
+#if !defined(__BACKEND_mcpu_android__)
     ab_utils::TempFile tempfile("cpp", source);
     auto path = tempfile.get_path();
 
@@ -145,6 +152,10 @@ namespace ab {
       ab_utils::Process({"g++", path, "-std=c++17", "-ldl", "-lpthread", "-fPIC", "-shared", "-O3", "-o", path + ".out", "-ffast-math", "-march=native"}, 10);
 
     path = (path[0] == '/' ? path : "./" + path) + ".out";
+#else
+    // Temporarily load `libcpu_module.so` that corresponds with launcher.sh
+    const std::string path = "/system/libcpu_module.so";
+#endif
     void* hmod = dlopen(path.c_str(), RTLD_NOW | RTLD_GLOBAL);
     CHECK_OK(hmod != nullptr);
     return hmod;

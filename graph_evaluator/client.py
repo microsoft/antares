@@ -46,7 +46,7 @@ def init(**kwargs):
             break
 
       error_info = f"SDK for `{backend}` is not configured correctly, please look into the error messages and reconfigure the corresponding environment."
-      compile_cmd = f'{compiler} {source_root}/run_graph.cpp -D__BACKEND__=\\"{backend}\\" -I{backend_root}/include -std=c++17 -Wno-string-compare -Wno-unused-result -Wno-unused-value -o {evaluator_path}.tmp {eval_flags}'
+      compile_cmd = f'{compiler} {source_root}/run_graph.cpp -D__BACKEND__=\\"{backend}\\" -D__BACKEND_{backend[backend.index("-")+1:]}__ -I{backend_root}/include -std=c++17 -Wno-string-compare -Wno-unused-result -Wno-unused-value -o {evaluator_path}.tmp {eval_flags}'
       print(f'\n[EvalAgent] Compiling Evaluator: {compile_cmd}')
       assert 0 == os.system(f'timeout 30s {compile_cmd}'), error_info
       os.system(f"cp {backend_root}/include/backend.hpp {os.environ['ANTARES_DRIVER_PATH']}/backend.hpp-{backend}")
@@ -71,7 +71,7 @@ def eval(kernel_path, **kwargs):
     launcher = f'{backend_root}/launcher.sh'
     if not os.path.exists(launcher):
       launcher = ''
-    exec_cmd = 'sh -c "cd %s && DEV_ID=%d EXPECTED_TIMEOUT=%s %s %s my_kernel.cc" || true' % (os.path.dirname(kernel_path), dev_id, kwargs['expected_timeout'], launcher, evaluator_path)
+    exec_cmd = f'sh -c "cd %s && DEV_ID={dev_id} EXPECTED_TIMEOUT=%s BACKEND={backend} {launcher} {evaluator_path} my_kernel.cc" || true' % (os.path.dirname(kernel_path), kwargs['expected_timeout'])
     try:
       output = subprocess.check_output(exec_cmd, shell=True).decode()
     except:

@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-//; eval_flags(c-ocl_android): [aarch64-linux-android22-clang++] -ldl -O2
+//; eval_flags(c-ocl_android): [aarch64-linux-android-clang++] -ldl -O2
 
 #include <dlfcn.h>
 
