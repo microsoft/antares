@@ -42,7 +42,7 @@ def schedule(attrs):
 
   if (len(explicit_ops) > 1 and
       not explicit_ops[-1].output(0).op.reduce_axis and
-      len(explicit_ops[-1].output(0).op.input_tensors) <= 1):
+      len(explicit_ops[-1].output(0).op.input_tensors) > 1):
     fuse_tail = attrs.auto_config.define_knob(f"FU", [False, True])
     if fuse_tail:
       tail_op, explicit_ops = explicit_ops[-1], explicit_ops[:-1]
