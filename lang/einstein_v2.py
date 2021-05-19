@@ -290,11 +290,11 @@ def parse_to_ast(expr):
   ast = {'props': props, 'root': _root}
 
   input_names = set()
-  def scan_items(root, input_names):
+  def scan_items(root, ancestor, input_names):
     if root._op != 'get_item':
       return
     input_names.add(root._value['tensor']._value)
-  walk_in_ast(ast['root'], scan_items, [input_names,], ast, 'root')
+  walk_in_ast(ast, 'root', scan_items, [input_names,])
 
   local_input_dict = {}
   for name in input_names:
@@ -382,10 +382,11 @@ def emit_tvm_body(node, props):
   else:
     raise Exception('Unrecognized node type: %s' % node._op)
 
-def walk_in_ast(node, func, args, parent, attr_id):
+def walk_in_ast(parent, attr_id, func, args):
+  node = getattr(parent, attr_id) if isinstance(parent, OpTensor) else parent[attr_id]
 
   def _walk(node, parent, attr_id):
-    updated_node = func(node, *args)
+    updated_node = func(node, (parent, attr_id), *args)
     if updated_node is not None:
       if isinstance(updated_node, str) and updated_node == '':
         return

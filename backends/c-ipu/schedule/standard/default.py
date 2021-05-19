@@ -19,7 +19,8 @@ def schedule(attrs):
     # cfg.define_knob('start_core', [x * align_width for x in range(num_cores // align_width)])
     return
 
-  configs = json.loads(os.environ.get('CONFIG', '{}'))
+  configs = os.environ.get('CONFIG', '').strip()
+  configs = json.loads(configs) if configs else {}
   inner_tiles = [configs.get(f'tile_{i}', [-1, 1, 1])[-1] for i in range(len(output.op.axis))]
 
   output_local = s.cache_write(output, 'local')

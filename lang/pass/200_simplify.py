@@ -25,10 +25,10 @@ def no_trivial_ax_input(ast_seq, global_input_dict, global_output_dict):
     if not ast['props']['reduce_axes']:
       ast['props']['reduce_type'] = None
 
-    def scan_trivial_axis(root, ax_elim):
+    def scan_trivial_axis(root, ancestor, ax_elim):
       if root._op == 'axis' and root._value in ax_elim:
         return OpTensor('const', 0, 'int32')
-    walk_in_ast(ast['root'], scan_trivial_axis, [ax_elim], ast, 'root')
+    walk_in_ast(ast, 'root', scan_trivial_axis, [ax_elim])
 
 def update_global_dict(ast_seq, global_input_dict, global_output_dict):
   for ast in ast_seq:

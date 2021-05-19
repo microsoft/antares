@@ -68,7 +68,7 @@ def infer_range(root, ax_rank, reduce_range):
 
   raise Exception('Unhandled infer_range op type: %s' % root)
 
-def scan_items(root, ast, range_book):
+def scan_items(root, ancestor, ast, range_book):
   if root._op != 'get_item':
     return
 
@@ -120,7 +120,7 @@ def run_pass_v2(ast_seq, global_input_dict, global_output_dict):
 
   assert 'injective' not in ast, "Unhandled injective case for graphcore."
   range_book = {}
-  walk_in_ast(ast['root'], scan_items, [ast, range_book], ast, 'root')
+  walk_in_ast(ast, 'root', scan_items, [ast, range_book])
   ast['props']['shard'] = {'nparts': pieces, 'book': range_book}
 
   # AST props: ast['props']['data_axes'], ast['props']['input_dict']
