@@ -13,4 +13,4 @@ if [[ "$BACKEND" == "c-mcpu_android" ]]; then
 fi
 
 cat "$1" | adb shell "su -c 'pkill evaluator -9; mount -o rw,remount /system; dd of=/system/evaluator && chmod a+x /system/evaluator'"
-cat "$kernel" | adb shell "su -c 'dd of=/system/kernel.cc && /system/evaluator /system/kernel.cc'"
+cat "$kernel" | timeout 30 adb shell "su -c 'dd of=/system/kernel.cc && CPU_THREADS=${CPU_THREADS} /system/evaluator /system/kernel.cc'"
