@@ -78,9 +78,9 @@ class OpTensor:
         if other._op == 'const' and other._value == 1:
             return self.cast(output_dtype)
         if other._op == 'const' and self._op == 'axis':
-            assert self._value in explicit_range and explicit_range[self._value] is not None
-            if op_name == '//' and explicit_range[self._value] < other._value:
-                return OpTensor.parse(0, output_dtype)
+            if self._value in explicit_range and explicit_range[self._value] is not None:
+                if op_name == '//' and explicit_range[self._value] < other._value:
+                    return OpTensor.parse(0, output_dtype)
         return OpTensor('op', {"name": op_name, "inputs": [self, other]}, output_dtype)
 
     def __rtruediv__(self, other):
@@ -309,20 +309,43 @@ def warp_axis(ax_name):
   assert(ax_name[0].isupper() or ax_name == '_id')
   return ax_name
 
-def emit_antares_ir(ast):
+def emit_antares_ir(ast, primal=False):
+  primal_ids = {"axis_id": 0, "tensor_id": 0}
+  axis_dict, tensor_dict = {}, {}
+  dummy_range = set()
+
   def _emit(node):
     if node._op == 'const':
       return 'const(%s)' % node._value
     elif node._op == 'axis':
+      _value = node._value
+      if primal:
+        if _value not in axis_dict:
+          axis_dict[_value] = '$X%d' % primal_ids['axis_id']
+          primal_ids['axis_id'] += 1
+        _value = axis_dict[_value]
       if hasattr(node, '_func'):
-        return node._func(node._value)
-      return node._value
+        return node._func(_value)
+      return _value
     elif node._op == 'op':
       if len(node._value['inputs']) == 2:
         return '(%s %s %s)' % (_emit(node._value['inputs'][0]), node._value['name'], _emit(node._value['inputs'][1]))
       raise
     elif node._op == 'get_item':
-      return '%s[%s]' % (node._value['tensor']._value, ', '.join([_emit(x) for x in node._value['index']]))
+      _value = node._value['tensor']._value
+      if primal:
+        if _value not in tensor_dict:
+          tensor_dict[_value] = '$i%d' % primal_ids['tensor_id']
+          primal_ids['tensor_id'] += 1
+        _value = tensor_dict[_value]
+      for i, ch in enumerate(node._value['index']):
+        if ch._op != 'axis':
+          continue
+        input_size = ast['props']['input_dict'][node._value['tensor']._value]['shape'][i]
+        access_size = [x['range'] for x in (ast['props']['data_axes'] + ast['props']['reduce_axes']) if x['name'] == ch._value][0]
+        if input_size == access_size:
+          dummy_range.add(ch._value)
+      return '%s[%s]' % (_value, ', '.join([_emit(x) for x in node._value['index']]))
     elif node._op == 'call':
       if len(node._value['inputs']) == 1:
         return '(%s).call(`%s`, dtype=`%s`)' % (_emit(node._value['inputs'][0]), node._value['name'], node._dtype)
@@ -335,9 +358,17 @@ def emit_antares_ir(ast):
       return '(%s).cast(`%s`)' % (_emit(node._value['inputs'][0]), node._dtype)
     else:
       raise Exception("Emit Antares IR: Unhanled reverse-emit op type: %s" % node._op)
-  lval = '%s[%s]' % (ast['props']['output_name'], ', '.join([x['name'] for x in ast['props']['data_axes']]))
+  output_name = '$o0' if primal else ast['props']['output_name']
+  lval = '%s[%s]' % (output_name, ', '.join([x['name'] for x in ast['props']['data_axes']]))
+
+  body = _emit(ast['root'])
   comp_type = '%s=%s' % (ast['props']['reduce_type'] if ast['props']['reduce_type'] else '', '!' if ast['props']['reduce_type'] else '')
-  return '%s %s %s where %s;' % (lval, comp_type, _emit(ast['root']), ', '.join(['%s in %d' % (x['name'], x['range']) for x in ast['props']['data_axes'] + ast['props']['reduce_axes']]))
+
+  explicit_axes = [x for x in ast['props']['data_axes'] + ast['props']['reduce_axes'] if x['name'] not in dummy_range]
+  if len(explicit_axes) > 0:
+    return '%s %s %s where %s;' % (lval, comp_type, body, ', '.join(['%s in %d' % (x['name'], x['range']) for x in explicit_axes]))
+  else:
+    return '%s %s %s;' % (lval, comp_type, body)
 
 def emit_tvm_body(node, props):
   if node._op == 'const':
