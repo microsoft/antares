@@ -419,12 +419,15 @@ def main_compute(code_only=False):
           results.append(autotvm.measure.MeasureResult(costs=(t,), error_no=0, all_cost=i, timestamp=time.time()))
         AntaresGlobal.current_step += len(results)
 
-        print('\nSTEP[%d / %d] Current Best Config = %s, Perf = %g sec / op (%g Gflops), MemRatio = %g %%, Occur Step = %d;\n' % (
+        stage_logs = 'STEP[%d / %d] Current Best Config = %s, Perf = %g sec / op (%g Gflops), MemRatio = %g %%, Occur Step = %d;' % (
           AntaresGlobal.current_step, num_trials,
           tuner.task.best.config,
           tuner.task.best.timecost, compute_gflops(tuner.task.flop, tuner.task.best.timecost),
           compute_mem_ratio(tuner.task.best.timecost),
-          tuner.task.best.occur))
+          tuner.task.best.occur)
+        print('\n\033[93m%s\033[0m' % ('=' * len(stage_logs)))
+        print(stage_logs)
+        print('\033[93m%s\033[0m\n' % ('=' * len(stage_logs)))
 
         if auto_commit and best_slot >= 0:
           with open(local_get_dir_file('my_kernel.cc', best_slot), 'r') as fp:
