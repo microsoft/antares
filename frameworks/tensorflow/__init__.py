@@ -183,7 +183,7 @@ def init_library():
     communicate_library = loader.load_op_library(libcommunicate_path)
   return communicate_library
 
-def init_communicate_config():
+def init_communicate_config(expect_nodes=None):
   communicate_library = init_library()
   if not hasattr(communicate_library, 'comm_config'):
     try:
@@ -196,6 +196,8 @@ def init_communicate_config():
     except:
       print('[WARN] Failed to load mpi4py config, fallback to single-node mode.')
       communicate_library.comm_config = 0, 1, 0
+  if expect_nodes is not None and expect_nodes != communicate_library.comm_config[1]:
+    raise Exception(f"The program is designed to use {expect_nodes} nodes, while the environment only detects {communicate_library.comm_config[1]} nodes.")
   return communicate_library.comm_config
 
 def metric(data):
@@ -203,7 +205,7 @@ def metric(data):
   results = communicate_library.metric(data)
   return results
 
-def communicate(comm_type, data, axes=[], names=[]):
+def communicate(comm_type, data, names=[]):
   rank, size, local_rank = init_communicate_config()
 
   if comm_type.startswith('all_reduce:'):
@@ -214,14 +216,19 @@ def communicate(comm_type, data, axes=[], names=[]):
     out = communicate_library.nccl2_reducescatter(data, reduce_type=ops, node_size=size)
     for i in range(len(data)):
       _shape = [int(x) for x in data[i].shape]
-      assert _shape[axes[i]] % size == 0, f"Tensor of shape %s cannot be evenly divided by {size} at axis %d" % (_shape, axes[i])
-      _shape[axes[i]] //= size
+      for k in range(len(_shape)):
+        if _shape[k] % size == 0:
+          _shape[k] //= size
+          break
+        elif _shape[k] > 1:
+          raise f"Tensor of shape {_shape} cannot be performed by reduce_scatter divided into {size} pieces."
       out[i] = tf.reshape(out[i], _shape)
   elif comm_type.startswith('all_gather:'):
     out = communicate_library.nccl2_allgather(data, node_size=size)
+    dim = int(comm_type[comm_type.index(':') + 1:])
     for i in range(len(data)):
       _shape = [int(x) for x in data[i].shape]
-      _shape[axes[i]] *= size
+      _shape[dim] *= size
       out[i] = tf.reshape(out[i], _shape)
   else:
     raise Exception(f"Unrecognized communication type: {comm_type}")
@@ -232,3 +239,12 @@ def communicate(comm_type, data, axes=[], names=[]):
       out[i] = tf.identity(out[i], name=names[i])
     out = tuple(out)
   return out
+
+def session():
+  rank, size, local_rank = init_communicate_config()
+  tf_config = tf.ConfigProto()
+  tf_config.gpu_options.allow_growth = True
+  tf_config.gpu_options.visible_device_list = str(local_rank)
+  sess = tf.Session(config=tf_config)
+  sess.run(tf.global_variables_initializer())
+  return sess
