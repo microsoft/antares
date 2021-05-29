@@ -366,9 +366,9 @@ def emit_antares_ir(ast, primal=False):
 
   explicit_axes = [x for x in ast['props']['data_axes'] + ast['props']['reduce_axes'] if x['name'] not in dummy_range]
   if len(explicit_axes) > 0:
-    return '%s %s %s where %s;' % (lval, comp_type, body, ', '.join(['%s in %d' % (x['name'], x['range']) for x in explicit_axes]))
+    return '%s %s %s where %s' % (lval, comp_type, body, ', '.join(['%s in %d' % (x['name'], x['range']) for x in explicit_axes]))
   else:
-    return '%s %s %s;' % (lval, comp_type, body)
+    return '%s %s %s' % (lval, comp_type, body)
 
 def emit_tvm_body(node, props):
   if node._op == 'const':
