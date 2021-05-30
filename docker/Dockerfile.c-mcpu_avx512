@@ -20,3 +20,6 @@ ADD ./engine /antares/engine
 RUN /antares/engine/install_antares_host.sh && rm -rf /var/lib/apt/lists/* ~/.cache
 RUN ln -s clang++-10 /usr/bin/clang++ || true
 RUN python3 -m pip install mpi4py
+RUN mv /usr/bin/mpiexec /usr/bin/mpiexec.real && \
+    echo 'exec mpiexec.real --allow-run-as-root "$@"' > /usr/bin/mpiexec && \
+    chmod a+x /usr/bin/mpiexec

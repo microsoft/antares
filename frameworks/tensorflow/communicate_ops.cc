@@ -258,9 +258,42 @@ REGISTER_OP("Collective")
     });
 
 /////////////////////////////////////////////////////////////////////////////////////
+template <typename Device>
+class SynchronizeOpKernel: public AsyncOpKernel {
+ public:
+  explicit SynchronizeOpKernel(OpKernelConstruction* c)
+      : AsyncOpKernel(c) {
+  }
+
+  ~SynchronizeOpKernel() {
+  }
+
+  void ComputeAsync(OpKernelContext* c, DoneCallback done) override {
+#if defined(ANTARES_CUDA) || defined(ANTARES_ROCM)
+    cudaStream_t cu_stream = *CHECK_NOTNULL(reinterpret_cast<const cudaStream_t*>(c->op_device_context()->stream()->implementation()->GpuStreamMemberHack()));
+    CHECK_EQ(cudaSuccess, cudaStreamSynchronize(cu_stream));
+#endif
+    done();
+  }
+
+ private:
+  TF_DISALLOW_COPY_AND_ASSIGN(SynchronizeOpKernel);
+};
 
 #if defined(ANTARES_CUDA) || defined(ANTARES_ROCM)
+REGISTER_KERNEL_BUILDER(Name("Synchronize").Device(DEVICE_GPU), SynchronizeOpKernel<Eigen::GpuDevice>);
+#else
+REGISTER_KERNEL_BUILDER(Name("Synchronize").Device(DEVICE_CPU), SynchronizeOpKernel<Eigen::ThreadPoolDevice>);
+#endif
 
+REGISTER_OP("Synchronize")
+    .Input("tensor: N * T")
+    .Attr("T: {float64, float32, float16, int32, int16, int8}")
+    .Attr("N: int >= 1")
+    .SetIsStateful();
+
+
+/////////////////////////////////////////////////////////////////////////////////////
 template <typename Device>
 class MetricOpKernel: public AsyncOpKernel {
  public:
@@ -269,6 +302,7 @@ class MetricOpKernel: public AsyncOpKernel {
   }
 
   void ComputeAsync(OpKernelContext* c, DoneCallback done) override {
+#if defined(ANTARES_CUDA) || defined(ANTARES_ROCM)
     cudaStream_t cu_stream = *CHECK_NOTNULL(reinterpret_cast<const cudaStream_t*>(c->op_device_context()->stream()->implementation()->GpuStreamMemberHack()));
 
     static cudaEvent_t lastMetricEvent = NULL;
@@ -310,26 +344,7 @@ class MetricOpKernel: public AsyncOpKernel {
       lastMetricEvent = currMetricEvent;
     }
     pthread_mutex_unlock(&__g_lock);
-
-    done();
-  }
-
- private:
-  TF_DISALLOW_COPY_AND_ASSIGN(MetricOpKernel);
-};
-
-REGISTER_KERNEL_BUILDER(Name("Metric").Device(DEVICE_GPU), MetricOpKernel<Eigen::GpuDevice>);
-
 #else
-
-template <typename Device>
-class MetricOpKernel: public AsyncOpKernel {
- public:
-  explicit MetricOpKernel(OpKernelConstruction* c)
-      : AsyncOpKernel(c) {
-  }
-
-  void ComputeAsync(OpKernelContext* c, DoneCallback done) override {
     static std::chrono::time_point<std::chrono::system_clock> lastMetricEvent;
     static bool hasLastEvent = false;
 
@@ -361,7 +376,7 @@ class MetricOpKernel: public AsyncOpKernel {
       hasLastEvent = true;
     }
     pthread_mutex_unlock(&__g_lock);
-
+#endif
     done();
   }
 
@@ -369,6 +384,9 @@ class MetricOpKernel: public AsyncOpKernel {
   TF_DISALLOW_COPY_AND_ASSIGN(MetricOpKernel);
 };
 
+#if defined(ANTARES_CUDA) || defined(ANTARES_ROCM)
+REGISTER_KERNEL_BUILDER(Name("Metric").Device(DEVICE_GPU), MetricOpKernel<Eigen::GpuDevice>);
+#else
 REGISTER_KERNEL_BUILDER(Name("Metric").Device(DEVICE_CPU), MetricOpKernel<Eigen::ThreadPoolDevice>);
 #endif
 
