@@ -186,16 +186,12 @@ def init_library():
 def init_communicate_config(expect_nodes=None):
   communicate_library = init_library()
   if not hasattr(communicate_library, 'comm_config'):
-    try:
-      from mpi4py import MPI
-      comm = MPI.COMM_WORLD
-      local = comm.Split_type(MPI.COMM_TYPE_SHARED)
-      rank, size, local_rank = comm.Get_rank(), comm.Get_size(), local.Get_rank()
-      MPI.COMM_WORLD.Barrier()
-      communicate_library.comm_config = rank, size, local_rank
-    except:
-      print('[WARN] Failed to load mpi4py config, fallback to single-node mode.')
-      communicate_library.comm_config = 0, 1, 0
+    from mpi4py import MPI
+    comm = MPI.COMM_WORLD
+    local = comm.Split_type(MPI.COMM_TYPE_SHARED)
+    rank, size, local_rank = comm.Get_rank(), comm.Get_size(), local.Get_rank()
+    MPI.COMM_WORLD.Barrier()
+    communicate_library.comm_config = rank, size, local_rank
   if expect_nodes is not None and expect_nodes != communicate_library.comm_config[1]:
     raise Exception(f"The program is designed to use {expect_nodes} nodes, while the environment only detects {communicate_library.comm_config[1]} nodes.")
   return communicate_library.comm_config
@@ -207,13 +203,11 @@ def metric(data):
 
 def communicate(comm_type, data, names=[]):
   rank, size, local_rank = init_communicate_config()
-
+  out = communicate_library.collective(data, op_type=comm_type)
   if comm_type.startswith('all_reduce:'):
-    ops = comm_type[comm_type.index(':') + 1:]
-    out = communicate_library.nccl2_allreduce(data, reduce_type=ops)
+    for i in range(len(data)):
+      out[i] = tf.reshape(out[i], data[i].shape)
   elif comm_type.startswith('reduce_scatter:'):
-    ops = comm_type[comm_type.index(':') + 1:]
-    out = communicate_library.nccl2_reducescatter(data, reduce_type=ops, node_size=size)
     for i in range(len(data)):
       _shape = [int(x) for x in data[i].shape]
       for k in range(len(_shape)):
@@ -221,13 +215,14 @@ def communicate(comm_type, data, names=[]):
           _shape[k] //= size
           break
         elif _shape[k] > 1:
-          raise f"Tensor of shape {_shape} cannot be performed by reduce_scatter divided into {size} pieces."
+          raise f"Tensor of shape {_shape} cannot be performed by reduce_scatter which is divided into {size} pieces."
       out[i] = tf.reshape(out[i], _shape)
   elif comm_type.startswith('all_gather:'):
-    out = communicate_library.nccl2_allgather(data, node_size=size)
     dim = int(comm_type[comm_type.index(':') + 1:])
     for i in range(len(data)):
       _shape = [int(x) for x in data[i].shape]
+      for k in range(min(len(_shape), dim)):
+        assert _shape[k] == 1, f"Tensor of shape {_shape} cannot be performed by all_gather which is aggregated from {size} pieces."
       _shape[dim] *= size
       out[i] = tf.reshape(out[i], _shape)
   else:
@@ -239,12 +234,3 @@ def communicate(comm_type, data, names=[]):
       out[i] = tf.identity(out[i], name=names[i])
     out = tuple(out)
   return out
-
-def session():
-  rank, size, local_rank = init_communicate_config()
-  tf_config = tf.ConfigProto()
-  tf_config.gpu_options.allow_growth = True
-  tf_config.gpu_options.visible_device_list = str(local_rank)
-  sess = tf.Session(config=tf_config)
-  sess.run(tf.global_variables_initializer())
-  return sess
