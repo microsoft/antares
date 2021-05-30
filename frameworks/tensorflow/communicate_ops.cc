@@ -140,11 +140,11 @@ class CollectiveOpKernel: public AsyncOpKernel {
         op_describe = (void*)(long)ncclMin;
 #else
       if (*op_extra == '+')
-        op_describe = MPI_SUM;
+        op_describe = (void*)(long)MPI_SUM;
       else if (*op_extra == '>')
-        op_describe = MPI_MAX;
+        op_describe = (void*)(long)MPI_MAX;
       else if (*op_extra == '<')
-        op_describe = MPI_MIN;
+        op_describe = (void*)(long)MPI_MIN;
 #endif
       else
         op_describe = (void*)std::atol(op_extra);
@@ -217,8 +217,8 @@ class CollectiveOpKernel: public AsyncOpKernel {
       auto native_dtype = dtypeToNative(output->dtype());
 
       switch (op_base) {
-        case 0: MPI_Iallreduce((const void*)c->input(i).tensor_data().data(), (void*)output->tensor_data().data(), c->input(i).NumElements(), native_dtype, (MPI_Op)op_describe, MPI_COMM_WORLD, &requests[i]); break;
-        case 1: MPI_Ireduce_scatter((const void*)c->input(i).tensor_data().data(), (void*)output->tensor_data().data(), std::vector<int>(divide, num_result).data(), native_dtype, (MPI_Op)op_describe, MPI_COMM_WORLD, &requests[i]); break;
+        case 0: MPI_Iallreduce((const void*)c->input(i).tensor_data().data(), (void*)output->tensor_data().data(), c->input(i).NumElements(), native_dtype, *(MPI_Op*)&op_describe, MPI_COMM_WORLD, &requests[i]); break;
+        case 1: MPI_Ireduce_scatter((const void*)c->input(i).tensor_data().data(), (void*)output->tensor_data().data(), std::vector<int>(divide, num_result).data(), native_dtype, *(MPI_Op*)&op_describe, MPI_COMM_WORLD, &requests[i]); break;
         case 2: MPI_Iallgather((const void*)c->input(i).tensor_data().data(), c->input(i).NumElements(), native_dtype, (void*)output->tensor_data().data(), c->input(i).NumElements(), native_dtype, MPI_COMM_WORLD, &requests[i]); break;
         default:
           throw std::runtime_error(("Unrecognized collective op_base: " + std::to_string(op_base)).c_str());

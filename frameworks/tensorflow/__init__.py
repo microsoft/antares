@@ -52,9 +52,9 @@ def get_tensorflow_antares_component(tf_module_path, op_name, compiler):
       with_cuda += ' -lmpi_cxx -lnccl'
   elif backend in ('c-sycl_intel',):
     with_cuda = f'-DANTARES_SYCL -D__BACKEND__=\\"{backend}\\" -ldl -lpthread -Wno-string-compare -Wno-unused-value'
-    compiler = 'dpcpp'
     if compiler == 'mpicc':
-      with_cuda += ' -lmpi_cxx'
+      with_cuda += ' -lmpicxx'
+    compiler = 'dpcpp'
   else:
     with_cuda = f'-DANTARES_MCPU -D__BACKEND__=\\"{backend}\\" -Wno-string-compare -Wno-unused-value'
     if compiler == 'mpicc':
