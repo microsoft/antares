@@ -201,6 +201,11 @@ def metric(data):
   results = communicate_library.metric(data)
   return results
 
+def synchronize(data):
+  communicate_library = init_library()
+  results = communicate_library.synchronize(data)
+  return results
+
 def communicate(comm_type, data, names=[]):
   rank, size, local_rank = init_communicate_config()
   out = communicate_library.collective(data, op_type=comm_type)
