@@ -8,7 +8,7 @@ if tf.version.VERSION.startswith('2.'):
   tf = tf.compat.v1
   tf.disable_eager_execution()
 
-rank, size, local_rank = antares.init_communicate_config(expect_nodes=2)
+rank, size, local_rank = antares.init_communicate_config()
 count = int(os.environ.get('N', '4096'))
 op = os.environ.get('OP', 'all_reduce:+')
 repeat = int(os.environ.get('RP', '1'))
