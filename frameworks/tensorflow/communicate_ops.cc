@@ -34,7 +34,6 @@
 #elif defined(ANTARES_CUDA)
 #include <cuda_runtime_api.h>
 #include <nccl.h>
-
 #elif defined(ANTARES_MCPU) || defined(ANTARES_SYCL)
 #else
 #error "Cannot detect which tensorflow platform is using: ANTARES_CUDA/ANTARES_ROCM/ANTARES_MCPU/ANTARES_SYCL."
@@ -48,7 +47,6 @@
 #include <mpi.h>
 #include <pthread.h>
 #include <sys/stat.h>
-
 #include <chrono>
 #include <memory>
 #include <queue>
@@ -64,313 +62,204 @@ using namespace std;
 
 static pthread_mutex_t __g_lock = PTHREAD_MUTEX_INITIALIZER;
 
-#if defined(ANTARES_CUDA) || defined(ANTARES_ROCM)
-
-class Nccl2Handle {
+class PeerHandle {
  public:
-  Nccl2Handle() {
+  PeerHandle() {
     CHECK_EQ(MPI_SUCCESS, MPI_Comm_size(MPI_COMM_WORLD, &mpi_size));
     CHECK_EQ(MPI_SUCCESS, MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank));
+    LOG(INFO) << "PeerHandle Initialize: device-rank = " << mpi_rank;
 
-    LOG(INFO) << "Nccl2Handle Initialize: device-rank = " << mpi_rank;
+#if defined(ANTARES_CUDA) || defined(ANTARES_ROCM)
     ncclUniqueId id;
     if (mpi_rank == 0)
       CHECK_EQ(ncclSuccess, ncclGetUniqueId(&id));
     CHECK_EQ(MPI_SUCCESS, MPI_Bcast((void *)&id, sizeof(id), MPI_BYTE, 0, MPI_COMM_WORLD));
 
     CHECK_EQ(ncclSuccess, ncclGroupStart());
-    CHECK_EQ(ncclSuccess, ncclCommInitRank(&comm, mpi_size, id, mpi_rank));
+    CHECK_EQ(ncclSuccess, ncclCommInitRank((ncclComm_t*)&comm, mpi_size, id, mpi_rank));
     CHECK_EQ(ncclSuccess, ncclGroupEnd());
    }
 
-  ncclComm_t getHandle() const {
+  void* getHandle() const {
     return comm;
   }
 
-  ~Nccl2Handle() {
-    LOG(INFO) << "Nccl2Handle Destroy inter-session communication: device-rank = " << mpi_rank;
-    CHECK_EQ(ncclSuccess, ncclCommDestroy(comm));
+  ~PeerHandle() {
+    CHECK_EQ(ncclSuccess, ncclCommDestroy((ncclComm_t)comm));
+#else
+  }
+
+  ~PeerHandle() {
+#endif
+    LOG(INFO) << "PeerHandle Destroy inter-session communication: device-rank = " << mpi_rank;
   }
 
   int mpi_size, mpi_rank;
-  ncclComm_t comm;
+  void* comm;
 };
 
-static shared_ptr<Nccl2Handle> __ncclComm;
+static shared_ptr<PeerHandle> __peerComm;
 
-static shared_ptr<Nccl2Handle> initializeNccl2() {
+static shared_ptr<PeerHandle> initializePeers() {
   pthread_mutex_lock(&__g_lock);
-  if (__ncclComm == nullptr)
-    __ncclComm = make_shared<Nccl2Handle>();
+  if (__peerComm == nullptr)
+    __peerComm = make_shared<PeerHandle>();
   pthread_mutex_unlock(&__g_lock);
-  return __ncclComm;
+  return __peerComm;
 }
 
-static void finalizeNccl2() {
+static void finalizePeers() {
   pthread_mutex_lock(&__g_lock);
-  if (__ncclComm.use_count() <= 1)
-    __ncclComm = nullptr;
+  if (__peerComm.use_count() <= 1)
+    __peerComm = nullptr;
   pthread_mutex_unlock(&__g_lock);
 }
 
-inline void loadTypeConfig(OpKernelConstruction* c, ncclRedOp_t &reduce_type) {
-  std::string _reduce_type;
-  OP_REQUIRES_OK(c, c->GetAttr("reduce_type", &_reduce_type));
-
-  if (_reduce_type == "")
-    reduce_type = (ncclRedOp_t)-1;
-  else if (_reduce_type == "+")
-    reduce_type = ncclSum;
-  else if (_reduce_type == ">")
-    reduce_type = ncclMax;
-  else if (_reduce_type == "<")
-    reduce_type = ncclMin;
-  else
-    throw std::runtime_error(("Unhandled reduce_type for communication: " + _reduce_type).c_str());
-}
-
-inline ncclDataType_t get_nccl_type(DataType dtype) {
-  if (dtype == DT_FLOAT)
-    return ncclFloat32;
-  else if (dtype == DT_DOUBLE)
-    return ncclFloat64;
-  else if (dtype == DT_INT32)
-    return ncclInt32;
-  else
-    throw std::runtime_error(("Unhandled TF-DataType for communication: " + std::to_string((int)dtype)).c_str());
-}
 
 /////////////////////////////////////////////////////////////////////////////////////
 template <typename Device>
-class Nccl2AllreduceOpKernel: public AsyncOpKernel {
+class CollectiveOpKernel: public AsyncOpKernel {
  public:
-  explicit Nccl2AllreduceOpKernel(OpKernelConstruction* c)
-      : AsyncOpKernel(c), ncclComm(initializeNccl2()) {
-    loadTypeConfig(c, reduce_type);
-    LOG(INFO) << "Antares Nccl2AllreduceOpKernel Appended.";
+  explicit CollectiveOpKernel(OpKernelConstruction* c)
+      : AsyncOpKernel(c), peerComm(initializePeers()) {
+    std::string op_type;
+    OP_REQUIRES_OK(c, c->GetAttr("op_type", &op_type));
+    LOG(INFO) << "[" << peerComm->mpi_rank << "/" << peerComm->mpi_size << "] Antares CollectiveOpKernel[" << op_type << "] Initialized.";
+    int delim = op_type.find(':');
+    CHECK_EQ(true, delim >= 0);
+
+    op_describe = ([](OpKernelConstruction* c, const char *op_extra) -> void* {
+      void* op_describe;
+
+#if defined(ANTARES_CUDA) || defined(ANTARES_ROCM)
+      if (*op_extra == '+')
+        op_describe = (void*)(long)ncclSum;
+      else if (*op_extra == '>')
+        op_describe = (void*)(long)ncclMax;
+      else if (*op_extra == '<')
+        op_describe = (void*)(long)ncclMin;
+#else
+      if (*op_extra == '+')
+        op_describe = (void*)(long)MPI_SUM;
+      else if (*op_extra == '>')
+        op_describe = (void*)(long)MPI_MAX;
+      else if (*op_extra == '<')
+        op_describe = (void*)(long)MPI_MIN;
+#endif
+      else
+        op_describe = (void*)std::atol(op_extra);
+      return op_describe;
+    })(c, op_type.c_str() + delim + 1);
+
+    if (op_type.substr(0, delim) == "all_reduce")
+      multiple = 1, divide = 1, op_base = 0;
+    else if (op_type.substr(0, delim) == "reduce_scatter")
+      multiple = 1, divide = peerComm->mpi_size, op_base = 1;
+    else if (op_type.substr(0, delim) == "all_gather")
+      multiple = peerComm->mpi_size, divide = 1, op_base = 2;
+    else
+      throw std::runtime_error(("Unrecognized collective op_type: " + op_type).c_str());
   }
 
-  ~Nccl2AllreduceOpKernel() {
-    ncclComm = nullptr;
-    finalizeNccl2();
+  ~CollectiveOpKernel() {
+    peerComm = nullptr;
+    finalizePeers();
   }
 
   void ComputeAsync(OpKernelContext* c, DoneCallback done) override {
-    auto GetGpuStream = [](OpKernelContext* context) -> cudaStream_t {
-      const cudaStream_t* ptr = CHECK_NOTNULL(
-        reinterpret_cast<const cudaStream_t*>(context->op_device_context()
-                                                ->stream()
-                                                ->implementation()
-                                                ->GpuStreamMemberHack()));
-      return *ptr;
-    };
-    cudaStream_t cu_stream = GetGpuStream(c);
+#if defined(ANTARES_CUDA) || defined(ANTARES_ROCM)
+    cudaStream_t cu_stream = *CHECK_NOTNULL(reinterpret_cast<const cudaStream_t*>(c->op_device_context()->stream()->implementation()->GpuStreamMemberHack()));
 
-    for (int i = c->num_inputs() - 1; i >= 0; --i) {
-      Tensor* output;
-      OP_REQUIRES_OK_ASYNC(c, c->allocate_output(i, c->input(i).shape(), &output), done);
-      CHECK_EQ(ncclSuccess, ncclAllReduce((const void*)c->input(i).tensor_data().data(), (void*)output->tensor_data().data(), c->input(i).NumElements(), get_nccl_type(output->dtype()), reduce_type, ncclComm->getHandle(), cu_stream));
-    }
-    done();
-  }
-
- private:
-  ncclRedOp_t reduce_type;
-  shared_ptr<Nccl2Handle> ncclComm;
-  TF_DISALLOW_COPY_AND_ASSIGN(Nccl2AllreduceOpKernel);
-};
-
-REGISTER_KERNEL_BUILDER(Name("Nccl2Allreduce").Device(DEVICE_GPU), Nccl2AllreduceOpKernel<Eigen::GpuDevice>);
-
-REGISTER_OP("Nccl2Allreduce")
-    .Input("tensor: N * T")
-    .Output("result: N * T")
-    .Attr("T: {float64, float32, float16, int32, int16, int8}")
-    .Attr("N: int >= 1")
-    .Attr("reduce_type: string")
-    .SetIsStateful()
-    .SetShapeFn([](shape_inference::InferenceContext* c) {
-      for (int i = c->num_inputs() - 1; i >= 0; --i)
-        c->set_output(i, c->input(i));
-      return Status::OK();
-    });
-
-
-/////////////////////////////////////////////////////////////////////////////////////
-template <typename Device>
-class Nccl2ReducescatterOpKernel: public AsyncOpKernel {
- public:
-  explicit Nccl2ReducescatterOpKernel(OpKernelConstruction* c)
-      : AsyncOpKernel(c), ncclComm(initializeNccl2()) {
-    loadTypeConfig(c, reduce_type);
-    OP_REQUIRES_OK(c, c->GetAttr("node_size", &node_size));
-    LOG(INFO) << "Antares Nccl2ReducescatterOpKernel Appended.";
-  }
-
-  ~Nccl2ReducescatterOpKernel() {
-    ncclComm = nullptr;
-    finalizeNccl2();
-  }
-
-  void ComputeAsync(OpKernelContext* c, DoneCallback done) override {
-    auto GetGpuStream = [](OpKernelContext* context) -> cudaStream_t {
-      const cudaStream_t* ptr = CHECK_NOTNULL(
-        reinterpret_cast<const cudaStream_t*>(context->op_device_context()
-                                                ->stream()
-                                                ->implementation()
-                                                ->GpuStreamMemberHack()));
-      return *ptr;
-    };
-    cudaStream_t cu_stream = GetGpuStream(c);
-
-    for (int i = c->num_inputs() - 1; i >= 0; --i) {
-      CHECK_EQ(0, c->input(i).NumElements() % node_size);
-      auto result_shape = tensorflow::TensorShape({c->input(i).NumElements() / node_size});
-
-      Tensor* output;
-      OP_REQUIRES_OK_ASYNC(c, c->allocate_output(i, result_shape, &output), done);
-      CHECK_EQ(ncclSuccess, ncclReduceScatter((const void*)c->input(i).tensor_data().data(), (void*)output->tensor_data().data(), c->input(i).NumElements() / node_size, get_nccl_type(output->dtype()), reduce_type, ncclComm->getHandle(), cu_stream));
-    }
-    done();
-  }
-
- private:
-  int node_size;
-  ncclRedOp_t reduce_type;
-  shared_ptr<Nccl2Handle> ncclComm;
-  TF_DISALLOW_COPY_AND_ASSIGN(Nccl2ReducescatterOpKernel);
-};
-
-REGISTER_KERNEL_BUILDER(Name("Nccl2Reducescatter").Device(DEVICE_GPU), Nccl2ReducescatterOpKernel<Eigen::GpuDevice>);
-
-REGISTER_OP("Nccl2Reducescatter")
-    .Input("tensor: N * T")
-    .Output("result: N * T")
-    .Attr("T: {float64, float32, float16, int32, int16, int8}")
-    .Attr("N: int >= 1")
-    .Attr("node_size: int")
-    .Attr("reduce_type: string")
-    .SetIsStateful()
-    .SetShapeFn([](shape_inference::InferenceContext* c) {
-      for (int i = c->num_inputs() - 1; i >= 0; --i)
-        c->set_output(i, c->UnknownShape());
-      return Status::OK();
-    });
-
-
-/////////////////////////////////////////////////////////////////////////////////////
-template <typename Device>
-class Nccl2AllgatherOpKernel: public AsyncOpKernel {
- public:
-  explicit Nccl2AllgatherOpKernel(OpKernelConstruction* c)
-      : AsyncOpKernel(c), ncclComm(initializeNccl2()) {
-    OP_REQUIRES_OK(c, c->GetAttr("node_size", &node_size));
-    LOG(INFO) << "Antares Nccl2AllgatherOpKernel Appended.";
-  }
-
-  ~Nccl2AllgatherOpKernel() {
-    ncclComm = nullptr;
-    finalizeNccl2();
-  }
-
-  void ComputeAsync(OpKernelContext* c, DoneCallback done) override {
-    auto GetGpuStream = [](OpKernelContext* context) -> cudaStream_t {
-      const cudaStream_t* ptr = CHECK_NOTNULL(
-        reinterpret_cast<const cudaStream_t*>(context->op_device_context()
-                                                ->stream()
-                                                ->implementation()
-                                                ->GpuStreamMemberHack()));
-      return *ptr;
-    };
-    cudaStream_t cu_stream = GetGpuStream(c);
-
-    for (int i = c->num_inputs() - 1; i >= 0; --i) {
-      auto result_shape = c->input(i).shape();
-      result_shape.set_dim(0, result_shape.dim_size(0) * node_size);
-
-      Tensor* output;
-      OP_REQUIRES_OK_ASYNC(c, c->allocate_output(i, result_shape, &output), done);
-      CHECK_EQ(ncclSuccess, ncclAllGather((const void*)c->input(i).tensor_data().data(), (void*)output->tensor_data().data(), c->input(i).NumElements(), get_nccl_type(output->dtype()), ncclComm->getHandle(), cu_stream));
-    }
-    done();
-  }
-
- private:
-  int node_size;
-  shared_ptr<Nccl2Handle> ncclComm;
-  TF_DISALLOW_COPY_AND_ASSIGN(Nccl2AllgatherOpKernel);
-};
-
-REGISTER_KERNEL_BUILDER(Name("Nccl2Allgather").Device(DEVICE_GPU), Nccl2AllgatherOpKernel<Eigen::GpuDevice>);
-
-REGISTER_OP("Nccl2Allgather")
-    .Input("tensor: N * T")
-    .Output("result: N * T")
-    .Attr("T: {float64, float32, float16, int32, int16, int8}")
-    .Attr("N: int >= 1")
-    .Attr("node_size: int")
-    .SetIsStateful()
-    .SetShapeFn([](shape_inference::InferenceContext* c) {
-      for (int i = c->num_inputs() - 1; i >= 0; --i) {
-        c->set_output(i, c->UnknownShape());
+    auto dtypeToNative = [](DataType dtype) -> ncclDataType_t {
+      switch (dtype) {
+        case DT_FLOAT: return ncclFloat32;
+        case DT_INT32: return ncclInt32;
+        case DT_DOUBLE: return ncclFloat64;
+        default:
+          throw std::runtime_error(("Unhandled TF-DataType for communication: " + std::to_string((int)dtype)).c_str());
       }
-      return Status::OK();
-    });
-
-/////////////////////////////////////////////////////////////////////////////////////
-template <typename Device>
-class Nccl2BroadcastOpKernel: public AsyncOpKernel {
- public:
-  explicit Nccl2BroadcastOpKernel(OpKernelConstruction* c)
-      : AsyncOpKernel(c), ncclComm(initializeNccl2()) {
-
-    OP_REQUIRES_OK(c, c->GetAttr("source_rank", &source_rank));
-    LOG(INFO) << "Antares Nccl2BroadcastOpKernel Appended.";
-  }
-
-  ~Nccl2BroadcastOpKernel() {
-    ncclComm = nullptr;
-    finalizeNccl2();
-  }
-
-  void ComputeAsync(OpKernelContext* c, DoneCallback done) override {
-    // se::Stream* tensor_stream = c->op_device_context()->stream();
-    // const cudaStream_t cu_stream = reinterpret_cast<const cudaStream_t>(
-    //     ((se::cuda::CUDAStream*)tensor_stream->implementation())->cuda_stream());
-    auto GetGpuStream = [](OpKernelContext* context) -> cudaStream_t {
-      const cudaStream_t* ptr = CHECK_NOTNULL(
-        reinterpret_cast<const cudaStream_t*>(context->op_device_context()
-                                                ->stream()
-                                                ->implementation()
-                                                ->GpuStreamMemberHack()));
-      return *ptr;
     };
-    cudaStream_t cu_stream = GetGpuStream(c);
 
     for (int i = c->num_inputs() - 1; i >= 0; --i) {
-      CHECK_EQ(ncclSuccess, ncclBroadcast((const void*)c->input(i).tensor_data().data(), (void*)c->input(i).tensor_data().data(), c->input(i).NumElements(), get_nccl_type(c->input(i).dtype()), source_rank, ncclComm->getHandle(), cu_stream));
+      CHECK_EQ(0, c->input(i).NumElements() % divide);
+      int num_result = c->input(i).NumElements() * multiple / divide;
+      auto result_shape = tensorflow::TensorShape({num_result});
+
+      Tensor* output;
+      OP_REQUIRES_OK_ASYNC(c, c->allocate_output(i, result_shape, &output), done);
+      switch (op_base) {
+        case 0: CHECK_EQ(ncclSuccess, ncclAllReduce    ((const void*)c->input(i).tensor_data().data(), (void*)output->tensor_data().data(), c->input(i).NumElements(), dtypeToNative(output->dtype()), *(ncclRedOp_t*)&op_describe, (ncclComm_t)peerComm->getHandle(), cu_stream)); break;
+        case 1: CHECK_EQ(ncclSuccess, ncclReduceScatter((const void*)c->input(i).tensor_data().data(), (void*)output->tensor_data().data(), num_result,                dtypeToNative(output->dtype()), *(ncclRedOp_t*)&op_describe, (ncclComm_t)peerComm->getHandle(), cu_stream)); break;
+        case 2: CHECK_EQ(ncclSuccess, ncclAllGather    ((const void*)c->input(i).tensor_data().data(), (void*)output->tensor_data().data(), c->input(i).NumElements(), dtypeToNative(output->dtype()),                           (ncclComm_t)peerComm->getHandle(), cu_stream)); break;
+        default:
+          throw std::runtime_error(("Unrecognized collective op_base: " + std::to_string(op_base)).c_str());
+      }
     }
+#else
+    auto dtypeToNative = [](DataType dtype) -> MPI_Datatype {
+      switch (dtype) {
+        case DT_FLOAT: return MPI_FLOAT;
+        case DT_INT32: return MPI_INT;
+        case DT_DOUBLE: return MPI_DOUBLE;
+        default:
+          throw std::runtime_error(("Unhandled TF-DataType for communication: " + std::to_string((int)dtype)).c_str());
+      }
+    };
+
+    std::vector<MPI_Request> requests(c->num_inputs());
+    for (int i = c->num_inputs() - 1; i >= 0; --i) {
+      CHECK_EQ(0, c->input(i).NumElements() % divide);
+      int num_result = c->input(i).NumElements() * multiple / divide;
+      auto result_shape = tensorflow::TensorShape({num_result});
+
+      Tensor* output;
+      OP_REQUIRES_OK_ASYNC(c, c->allocate_output(i, result_shape, &output), done);
+      auto native_dtype = dtypeToNative(output->dtype());
+
+      switch (op_base) {
+        case 0: MPI_Iallreduce((const void*)c->input(i).tensor_data().data(), (void*)output->tensor_data().data(), c->input(i).NumElements(), native_dtype, *(MPI_Op*)&op_describe, MPI_COMM_WORLD, &requests[i]); break;
+        case 1: MPI_Ireduce_scatter((const void*)c->input(i).tensor_data().data(), (void*)output->tensor_data().data(), std::vector<int>(divide, num_result).data(), native_dtype, *(MPI_Op*)&op_describe, MPI_COMM_WORLD, &requests[i]); break;
+        case 2: MPI_Iallgather((const void*)c->input(i).tensor_data().data(), c->input(i).NumElements(), native_dtype, (void*)output->tensor_data().data(), c->input(i).NumElements(), native_dtype, MPI_COMM_WORLD, &requests[i]); break;
+        default:
+          throw std::runtime_error(("Unrecognized collective op_base: " + std::to_string(op_base)).c_str());
+      }
+    }
+
+    for (int i = c->num_inputs() - 1; i >= 0; --i)
+      MPI_Wait(&requests[i], MPI_STATUS_IGNORE);
+#endif
     done();
   }
 
  private:
-  ncclRedOp_t reduce_type;
-
-  int source_rank;
-  shared_ptr<Nccl2Handle> ncclComm;
-  TF_DISALLOW_COPY_AND_ASSIGN(Nccl2BroadcastOpKernel);
+  int multiple, divide, op_base;
+  void* op_describe;
+  shared_ptr<PeerHandle> peerComm;
+  TF_DISALLOW_COPY_AND_ASSIGN(CollectiveOpKernel);
 };
 
-REGISTER_KERNEL_BUILDER(Name("Nccl2Broadcast").Device(DEVICE_GPU), Nccl2BroadcastOpKernel<Eigen::GpuDevice>);
+#if defined(ANTARES_CUDA) || defined(ANTARES_ROCM)
+REGISTER_KERNEL_BUILDER(Name("Collective").Device(DEVICE_GPU), CollectiveOpKernel<Eigen::GpuDevice>);
+#else
+REGISTER_KERNEL_BUILDER(Name("Collective").Device(DEVICE_CPU), CollectiveOpKernel<Eigen::ThreadPoolDevice>);
+#endif
 
-REGISTER_OP("Nccl2Broadcast")
+REGISTER_OP("Collective")
     .Input("tensor: N * T")
+    .Output("result: N * T")
     .Attr("T: {float64, float32, float16, int32, int16, int8}")
     .Attr("N: int >= 1")
-    .Attr("source_rank: int")
-    .SetIsStateful();
+    .Attr("op_type: string")
+    .SetIsStateful()
+    .SetShapeFn([](shape_inference::InferenceContext* c) {
+      for (int i = c->num_inputs() - 1; i >= 0; --i)
+        c->set_output(i, c->UnknownShape());
+      return Status::OK();
+    });
 
 /////////////////////////////////////////////////////////////////////////////////////
+
+#if defined(ANTARES_CUDA) || defined(ANTARES_ROCM)
 
 template <typename Device>
 class MetricOpKernel: public AsyncOpKernel {
@@ -380,12 +269,7 @@ class MetricOpKernel: public AsyncOpKernel {
   }
 
   void ComputeAsync(OpKernelContext* c, DoneCallback done) override {
-    auto GetGpuStream = [](OpKernelContext* context) -> cudaStream_t {
-      const cudaStream_t* ptr = CHECK_NOTNULL(
-        reinterpret_cast<const cudaStream_t*>(context->op_device_context()->stream()->implementation()->GpuStreamMemberHack()));
-      return *ptr;
-    };
-    cudaStream_t cu_stream = GetGpuStream(c);
+    cudaStream_t cu_stream = *CHECK_NOTNULL(reinterpret_cast<const cudaStream_t*>(c->op_device_context()->stream()->implementation()->GpuStreamMemberHack()));
 
     static cudaEvent_t lastMetricEvent = NULL;
     auto compute = [&]() {
@@ -411,8 +295,8 @@ class MetricOpKernel: public AsyncOpKernel {
       CHECK_EQ(0, cudaStreamSynchronize(cu_stream));
       float ms;
       CHECK_EQ(0, cudaEventElapsedTime(&ms, lastMetricEvent, currMetricEvent));
-      if (__ncclComm)
-        LOG(INFO) << "Antares Metric Record: ElapsedTime (" << __ncclComm->mpi_rank << "/" << __ncclComm->mpi_size << ") = " << ms * 1e-3 << " sec.";
+      if (__peerComm)
+        LOG(INFO) << "Antares Metric Record: ElapsedTime (" << __peerComm->mpi_rank << "/" << __peerComm->mpi_size << ") = " << ms * 1e-3 << " sec.";
       else
         LOG(INFO) << "Antares Metric Record: ElapsedTime = " << ms * 1e-3 << " sec.";
       CHECK_EQ(0, cudaEventDestroy(lastMetricEvent));
@@ -437,6 +321,7 @@ class MetricOpKernel: public AsyncOpKernel {
 REGISTER_KERNEL_BUILDER(Name("Metric").Device(DEVICE_GPU), MetricOpKernel<Eigen::GpuDevice>);
 
 #else
+
 template <typename Device>
 class MetricOpKernel: public AsyncOpKernel {
  public:
@@ -485,7 +370,6 @@ class MetricOpKernel: public AsyncOpKernel {
 };
 
 REGISTER_KERNEL_BUILDER(Name("Metric").Device(DEVICE_CPU), MetricOpKernel<Eigen::ThreadPoolDevice>);
-
 #endif
 
 
