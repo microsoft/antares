@@ -135,21 +135,21 @@ COMMIT=force STEP=5000 COMPUTE_V1='- einstein_v2(input_dict={"data": {"dtype": "
         python3 -m pip install --upgrade pip && python3 -m pip install tensorflow-gpu==1.15.4
         #   Tensorflow-1 for NVIDIA CUDA 11.0:
         python3 -m pip install --upgrade pip && python3 -m pip install https://github.com/ghostplant/tensorflow-wheel-collections/releases/download/cuda-11/tensorflow_gpu-1.15.4_cuda11+nv-cp38-cp38-linux_x86_64.whl
-        #   Tensorflow-1 for AMD ROCm 4.0:
-        python3 -m pip install tensorflow-rocm==1.15.9
+        #   Tensorflow-1 for AMD ROCm 4.2:
+        python3 -m pip install tensorflow-rocm==1.15.12
 
         #   Tensorflow-2 for NVIDIA CUDA 11.0:
         python3 -m pip install --upgrade pip && python3 -m pip install tensorflow-gpu==2.4.0
-        #   Tensorflow-2 for AMD ROCm 4.0:
-        python3 -m pip install tensorflow-rocm==2.4.0
+        #   Tensorflow-2 for AMD ROCm 4.2:
+        python3 -m pip install tensorflow-rocm==2.4.3
 
         For Pytorch 1.x: Recommended Packages (tested in Ubuntu 20.04):
         #   Pytorch for NVIDIA CUDA 10.0:
         python3 -m pip install torch==1.5.0 torchvision==0.6.0 -f https://download.pytorch.org/whl/torch_stable.html
         #   Pytorch for NVIDIA CUDA 11.0:
         python3 -m pip install torch===1.7.1+cu110 torchvision===0.8.2+cu110 torchaudio===0.7.2 -f https://download.pytorch.org/whl/torch_stable.html
-        #   Pytorch for AMD ROCm 4.0:
-        python3 -m pip install torch torchvision -f https://download.pytorch.org/whl/rocm4.0.1/torch_stable.html
+        #   Pytorch for AMD ROCm 4.2:
+        python3 -m pip install torch torchvision -f https://download.pytorch.org/whl/nightly/rocm4.2/torch_nightly.html
 
 - Step-4: Install JIT Plugin Client and Run Examples
 
