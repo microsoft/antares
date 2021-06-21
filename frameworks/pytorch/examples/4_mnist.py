@@ -27,9 +27,11 @@ b2 = create_param('dense_b2', [10])
 
 custom_op = CustomOp(ir='''
   data_0[N, M] +=!  data[N, K] * weight_0[K, M];
-  data_1[N, K] =   (data_0[N, K] + bias_0[K]).call(`max`, [0.0]);
+  data_0_bias[N, K] = data_0[N, K] + bias_0[K];
+  data_1[N, K] =   data_0_bias[N, K].call(`max`, [0.0]);
   data_2[N, M] +=!  data_1[N, K] * weight_1[K, M];
-  data_3[N, K] =   (data_2[N, K] + bias_1[K]).call(`max`, [0.0]);
+  data_2_bias[N, K] = data_2[N, K] + bias_1[K];
+  data_3[N, K] =   data_2_bias[N, K].call(`max`, [0.0]);
   data_4[N, M] +=!  data_3[N, K] * weight_2[K, M];
   data_5[N, K] =   (data_4[N, K] + bias_2[K]);
 ''', feed_dict={'data': x, 'weight_0': w0, 'weight_1': w1, 'weight_2': w2, 'bias_0': b0, 'bias_1': b1, 'bias_2': b2}).to(device, dtype).tune(step=100, use_cache=True, timeout=600).emit()
