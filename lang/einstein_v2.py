@@ -309,7 +309,7 @@ def warp_axis(ax_name):
   assert(ax_name[0].isupper() or ax_name == '_id')
   return ax_name
 
-def emit_antares_ir(ast, primal=False):
+def emit_antares_ir(ast, primal=False, tensor_remap=dict()):
   primal_ids = {"axis_id": 0, "tensor_id": 0}
   axis_dict, tensor_dict = {}, {}
   dummy_range = set()
@@ -333,6 +333,7 @@ def emit_antares_ir(ast, primal=False):
       raise
     elif node._op == 'get_item':
       _value = node._value['tensor']._value
+      _value = tensor_remap.get(_value, _value)
       if primal:
         if _value not in tensor_dict:
           tensor_dict[_value] = '$i%d' % primal_ids['tensor_id']
@@ -358,7 +359,11 @@ def emit_antares_ir(ast, primal=False):
       return '(%s).cast(`%s`)' % (_emit(node._value['inputs'][0]), node._dtype)
     else:
       raise Exception("Emit Antares IR: Unhanled reverse-emit op type: %s" % node._op)
-  output_name = '$o0' if primal else ast['props']['output_name']
+
+  _value = ast['props']['output_name']
+  _value = tensor_remap.get(_value, _value)
+
+  output_name = '$o0' if primal else _value
   lval = '%s[%s]' % (output_name, ', '.join([x['name'] for x in ast['props']['data_axes']]))
 
   body = _emit(ast['root'])
