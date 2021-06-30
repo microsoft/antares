@@ -239,3 +239,22 @@ def communicate(comm_type, data, names=[]):
       out[i] = tf.identity(out[i], name=names[i])
     out = tuple(out)
   return out
+
+def communicate_ex(comm_type, data, names=[]):
+  if comm_type.startswith('fwd_all_reduce:'):
+    @tf.custom_gradient
+    def compute(t):
+      [t] = communicate(comm_type[4:], [t])
+      def grad(dy):
+        return dy
+      return t, grad
+    return compute(data)
+  if comm_type.startswith('bwd_all_reduce:'):
+    @tf.custom_gradient
+    def compute(t):
+      def grad(dy):
+        [dy] = communicate(comm_type[4:], [dy])
+        return dy
+      return t, grad
+    return compute(data)
+  raise Exception(f"Unrecognized communication type: {comm_type}")
