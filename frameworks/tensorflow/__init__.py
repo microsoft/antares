@@ -257,4 +257,26 @@ def communicate_ex(comm_type, data, names=[]):
         return dy
       return t, grad
     return compute(data)
+  if comm_type.startswith('fwd_reduce_scatter:'):
+    @tf.custom_gradient
+    def compute(t):
+      [t2] = communicate(comm_type[4:], [t])
+      for dim in range(len(t.shape)):
+        if t.shape[dim] != t2.shape[dim]:
+          break
+      def grad(dy):
+        [dy] = communicate(f'all_gather:{dim}', [dy])
+        return dy
+      return t2, grad
+    return compute(data)
+  if comm_type.startswith('fwd_all_gather:'):
+    @tf.custom_gradient
+    def compute(t):
+      [t2] = communicate(comm_type[4:], [t])
+      def grad(dy):
+        [dy] = communicate(f'reduce_scatter:+', [dy])
+        return dy
+      return t2, grad
+    return compute(data)
+
   raise Exception(f"Unrecognized communication type: {comm_type}")
