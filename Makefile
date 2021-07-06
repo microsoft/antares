@@ -29,7 +29,7 @@ HTTP_NAME ?= $(HTTP_PREF)$(BACKEND)
 HTTP_EXEC ?= $(PARAMS) -d --name=$(HTTP_NAME) -p $(HTTP_PORT):$(HTTP_PORT) antares
 
 eval:
-	@if [ "x$(HOST_MODE)" = "x0" ] && [ "x$(shell whoami)" = "xroot" ] && pgrep dockerd >/dev/null 2>&1 && $(MAKE) install_docker; then $(PARAMS) -it --rm antares $(INNER_CMD) || true; else $(INNER_CMD) || true; fi
+	@if [ "x$(HOST_MODE)" = "x0" ] && [ "x$(shell whoami)" = "xroot" ] && pgrep dockerd >/dev/null 2>&1 && [ -e docker/Dockerfile.$(BACKEND) ] && $(MAKE) install_docker; then $(PARAMS) -it --rm antares $(INNER_CMD) || true; else $(INNER_CMD) || true; fi
 
 shell: install_docker
 	$(PARAMS) -it --rm --network=host antares bash || true
