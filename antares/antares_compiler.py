@@ -539,9 +539,10 @@ def rest_service():
           code = '[Async Task Has Been Put in Background ..]'
         else:
           code = codehub_db(compute_exp)
+          duplicate_items = [(s, c) for s, c in task_lists if c == compute_exp]
+
           if code is None:
             clear_environ(compute_exp, 0)
-            duplicate_items = [(s, c) for s, c in task_lists if c == compute_exp]
             try:
               code = main_compute(code_only=True)
               if duplicate_items:
@@ -549,6 +550,8 @@ def rest_service():
             except:
               print('>> Kernel code failed to generate.')
               code = '[ERROR] ' + traceback.format_exc()
+          elif '// Antares Tuning Completed in' not in code and not duplicate_items:
+              code = code[:code.rindex('\n// Saved Perf')]
         self.write(code)
         self.flush()
         print(">> Finish subprocess.")
