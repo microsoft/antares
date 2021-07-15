@@ -27,7 +27,7 @@ def _schedule_single(attrs, output, op_name, have_tail):
     from .algo_tiling import schedule_branch
     return schedule_branch(attrs, output, f"T{op_name}:")
 
-  if not have_tail and len(output.op.reduce_axis) > 0:
+  if not have_tail and len(output.op.reduce_axis) > 0 and not attrs.backend.startswith('c-hlsl_'):
     from .algo_reduce import schedule_branch
     return schedule_branch(attrs, output, f"R{op_name}:")
 
