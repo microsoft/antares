@@ -132,6 +132,7 @@ float pow_ex(float x, float y) {
 
 {lds}
 {registers}{kwargs['attrs'].blend}
+[RootSignature("DescriptorTable(SRV(t0, numDescriptors={len(in_args)}), UAV(u0, numDescriptors={len(out_args)}))")]
 [numthreads({get_extent('threadIdx.x')}, {get_extent('threadIdx.y')}, {get_extent('threadIdx.z')})]
 void CSMain(uint3 threadIdx: SV_GroupThreadID, uint3 blockIdx: SV_GroupID, uint3 dispatchIdx: SV_DispatchThreadID) {{
   {body}

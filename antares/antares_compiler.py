@@ -69,7 +69,7 @@ def verify_body(kernel_name, body):
     if ll.startswith(shared_symbol):
       assert ll.endswith('];');
       ctype, _, count = ll[len(shared_symbol):-2].replace('[', ' ').split()
-      if ctype in ('double', 'long'):
+      if ctype in ('double', 'long', 'int64_t'):
         shared_mem_in_bytes += int(count) * 8
       elif ctype in ('float', 'int'):
         shared_mem_in_bytes += int(count) * 4
