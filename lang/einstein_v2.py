@@ -38,6 +38,10 @@ class OpTensor:
     def dtype(self):
         return self._dtype
 
+    def val(self):
+        assert self._op == 'axis', "Only axis op can support value fetch for its range."
+        return OpTensor('axis_range', self._value, 'int32')
+
     def __init__(self, _op, _value, _dtype):
         self._op = _op
         self._value = _value
@@ -226,6 +230,7 @@ def parse_to_ast(expr):
             break
       if ax_name not in explicit_range:
         explicit_range[ax_name] = None
+
   exec("_id = OpTensor('axis', '_id', 'int32')")
   for k in explicit_range:
     exec("%s = OpTensor('axis', k, 'int32')" % k)
@@ -378,6 +383,8 @@ def emit_antares_ir(ast, primal=False, tensor_remap=dict()):
 def emit_tvm_body(node, props):
   if node._op == 'const':
     return 'tir.const(%s, dtype="%s")' % (node._value, node._dtype)
+  elif node._op == 'axis_range':
+    return 'tir.const(%s, dtype="%s")' % (explicit_range[node._value], node._dtype)
   elif node._op == 'get_item':
     tensor = node._value['tensor']
     index = node._value['index']
@@ -443,7 +450,7 @@ def walk_in_ast(parent, attr_id, func, args):
         _walk(ch, node._value['if'], i)
       _walk(node._value['true'], node._value, 'true')
       _walk(node._value['false'], node._value, 'false')
-    elif node._op in ['axis', 'const']:
+    elif node._op in ['axis', 'const', 'axis_range']:
       pass
     else:
       raise Exception('Unhandled node type in walk_in_ast(): %s' % node._op)
