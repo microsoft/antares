@@ -52,6 +52,12 @@ def get_type_size(dtype):
       return bits // 8
   raise Exception("Unrecognized data size for data type: %s" % dtype)
 
+def parse_defination(code, key, defs):
+  import re
+  if re.search(f'\\b{key}\\b', code):
+    return [defs]
+  return []
+
 class AutoConfig(object):
 
   def __init__(self):
