@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 //; eval_flags(c-sycl_intel): [dpcpp] -ldl -lpthread
-//; eval_flags(c-sycl_cuda): [/usr/local/dpcpp-cuda/bin/clang++] -O3 -ldl -I/usr/local/dpcpp-cuda/include/sycl -L/usr/local/dpcpp-cuda/lib -lsycl -fsycl -fsycl-targets=nvptx64-nvidia-cuda-sycldevice -fsycl-unnamed-lambda -lpthread
+//; eval_flags(c-sycl_cuda): [/usr/local/dpcpp-cuda/bin/clang++] -O3 -ldl -I/usr/local/dpcpp-cuda/include/sycl -L/usr/local/dpcpp-cuda/lib -lsycl -fsycl -fsycl-targets=nvptx64-nvidia-cuda-sycldevice -fsycl-unnamed-lambda -lpthread -Xsycl-target-backend=nvptx64-nvidia-cuda --cuda-gpu-arch=sm_75
 
 #include <CL/sycl.hpp>
 #include <dlfcn.h>
@@ -57,7 +57,7 @@ namespace ab {
     if (__BACKEND__ == "c-sycl_intel")
       ab_utils::Process({"dpcpp", path, "-std=c++17", "-lpthread", "-fPIC", "-shared", "-Wno-pass-failed", "-O3", "-ffast-math", "-march=skylake-avx512", "-o", path + ".out"}, 10);
     else
-      ab_utils::Process({"/usr/local/dpcpp-cuda/bin/clang++", path, "-std=c++17", "-ldl", "-fPIC", "-shared", "-O2", "-I/usr/local/dpcpp-cuda/include/sycl", "-L/usr/local/dpcpp-cuda/lib", "-lsycl", "-fsycl", "-fsycl-targets=nvptx64-nvidia-cuda-sycldevice", "-fsycl-unnamed-lambda", "-Wno-unknown-cuda-version", "-o", path + ".out"}, 20);
+      ab_utils::Process({"/usr/local/dpcpp-cuda/bin/clang++", path, "-std=c++17", "-ldl", "-fPIC", "-shared", "-O2", "-I/usr/local/dpcpp-cuda/include/sycl", "-L/usr/local/dpcpp-cuda/lib", "-lsycl", "-fsycl", "-fsycl-targets=nvptx64-nvidia-cuda-sycldevice", "-fsycl-unnamed-lambda", "-Wno-unknown-cuda-version", "-Xsycl-target-backend=nvptx64-nvidia-cuda --cuda-gpu-arch=sm_75", "-o", path + ".out"}, 20);
 
     path = (path[0] == '/' ? path : "./" + path) + ".out";
     void* hmod = dlopen(path.c_str(), RTLD_NOW | RTLD_GLOBAL);
