@@ -177,7 +177,15 @@ def codehub_db(compute_key, source_code=None, erase=False):
     return code_path
 
 def get_target_source(best_config, dir_sid=None):
-  # Note: Not thread-safe due to multiple ordered updates for config spaces
+  # Note: Not thread safe due to multiple invokes of target codegen
+
+  def pack_device_source(device_source):
+    kernel_path = local_get_dir_file('my_kernel.cc', dir_sid=dir_sid)
+    with open(kernel_path, 'w') as fp:
+      fp.write(device_source)
+    return device_source, kernel_path
+
+  # ast_seq, input_dict, output_dict = AntaresGlobal.compute_graph
 
   with open(local_get_dir_file('my_kernel.time', dir_sid=dir_sid), 'w') as fp:
     fp.write('%s' % time.time())
@@ -220,10 +228,7 @@ def get_target_source(best_config, dir_sid=None):
 
   assert(len(func.imported_modules) == 1)
   device_source = translate_code(func.imported_modules[0].get_source(), best_config)
-  kernel_path = local_get_dir_file('my_kernel.cc', dir_sid=dir_sid)
-  with open(kernel_path, 'w') as fp:
-    fp.write(device_source)
-  return device_source, kernel_path
+  return pack_device_source(device_source)
 
 def code_suffix(tpr=-1.0, step_prod=0, step_plan=-1):
   return '\n// Saved Perf = %.6e sec / run; Step Produced = %d; Planned Steps = %d;' % (tpr, step_prod, step_plan)
