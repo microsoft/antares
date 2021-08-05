@@ -503,6 +503,9 @@ def ir_graph_parser(exprss, input_dict, extra_outputs):
       pass_stage = importlib.import_module('lang.pass.%s' % pas[:-3])
       pass_stage.run_pass_v2(ast_seq, input_dict, output_dict)
 
+  from antares.common import AntaresGlobal
+  AntaresGlobal.compute_graph = ast_seq, input_dict, output_dict
+
   # Generate LL_IR body for ast_seq
   def emit_input_body(input_dict):
     input_body = '_id = input("_id", [1], dtype="int32")[0]; '
