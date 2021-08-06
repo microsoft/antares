@@ -5,7 +5,11 @@ import subprocess, os
 from common import backend
 
 def get_execution_parallism():
-  return 1
+  if backend == 'c-sycl_intel':
+    return 1
+  num_gpus = len(subprocess.getoutput('ls /dev/nvidia[0-9]* 2>/dev/null').split())
+  num_gpus = num_gpus if num_gpus > 0 else 1
+  return num_gpus
 
 def do_native_translation_v2(codeset, **kwargs):
   kernel_name, in_args, out_args, body = codeset

@@ -16,7 +16,25 @@ namespace ab {
 
   void init(int dev) {
     try {
-       _sycl_queue = std::move(sycl::queue(sycl::default_selector{}));
+      if (__BACKEND__ == "c-sycl_intel")
+        _sycl_queue = std::move(sycl::queue(sycl::default_selector{}));
+      else {
+        // for SYCL CUDA, select the i-th GPU device
+        int current_dev_id = 0;
+        auto platforms = sycl::platform::get_platforms();
+        for (auto &p: platforms) {
+          auto devices = p.get_devices();
+          for (auto &d: devices)
+            if (d.is_gpu() && dev == current_dev_id) {
+              _sycl_queue = std::move(sycl::queue(d));
+              current_dev_id = -1;
+              break;
+            } else
+              current_dev_id++;
+          if (current_dev_id < 0)
+            break;
+        }
+      }
     } catch (sycl::exception const &e) {
       std::terminate();
     }
