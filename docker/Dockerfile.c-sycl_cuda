@@ -1,4 +1,4 @@
-FROM mehdigoli/dpcpp-workshop:latest
+FROM mehdigoli/dpcpp-workshop@sha256:4c278e57e7304a85b0b33632a59142292c035a6770c4ebb62650c3bc93e0e86c
 
 ENV DEBIAN_FRONTEND noninteractive
 ENV PYTHONDONTWRITEBYTECODE 1
