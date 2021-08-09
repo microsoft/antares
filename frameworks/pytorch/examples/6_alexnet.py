@@ -13,10 +13,18 @@ kwargs = {'dtype': dtype,
           'device': device,
           'requires_grad': False}
 
-input_tensor = torch.ones([64, 3, 227, 227], **kwargs)
-
 def create_param(name, shape):
   return (torch.rand(shape, **kwargs) - 0.5) * 0.001
+
+input_tensor = torch.ones([64, 3, 227, 227], **kwargs)
+const_0_ = create_param('const_0_', [11, 11, 3, 64])
+const_1_ = create_param('const_1_', [5, 5, 64, 192])
+const_2_ = create_param('const_2_', [3, 3, 192, 384])
+const_3_ = create_param('const_3_', [3, 3, 384, 256])
+const_4_ = create_param('const_4_', [3, 3, 256, 256])
+const_5_ = create_param('const_5_', [9216, 4096])
+const_6_ = create_param('const_6_', [4096, 4096])
+const_7_ = create_param('const_7_', [4096, 1000])
 
 output_logits = CustomOp(ir=f'''
   conv_0[N, F, HO, WO] +=! input_tensor[N, C, HO * 4 + KH, WO * 4 + KW] * const_0_[KH, KW, C, F] where HO in 55, WO in 55;
@@ -35,18 +43,18 @@ output_logits = CustomOp(ir=f'''
   dense_1[N, M] +=! dense_0_relu[N, K] * const_6_[K, M];
   dense_1_relu[N, M] = dense_1[N, M].call(`max`, [0.0]);
   dense_2[N, M] +=! dense_1_relu[N, K] * const_7_[K, M];
-''', feed_dict={
+''', input_orders={
   'input_tensor': input_tensor,
-  'const_0_': create_param('const_0_', [11, 11, 3, 64]),
-  'const_1_': create_param('const_1_', [5, 5, 64, 192]),
-  'const_2_': create_param('const_2_', [3, 3, 192, 384]),
-  'const_3_': create_param('const_3_', [3, 3, 384, 256]),
-  'const_4_': create_param('const_4_', [3, 3, 256, 256]),
-  'const_5_': create_param('const_5_', [9216, 4096]),
-  'const_6_': create_param('const_6_', [4096, 4096]),
-  'const_7_': create_param('const_7_', [4096, 1000]),
+  'const_0_': const_0_,
+  'const_1_': const_1_,
+  'const_2_': const_2_,
+  'const_3_': const_3_,
+  'const_4_': const_4_,
+  'const_5_': const_5_,
+  'const_6_': const_6_,
+  'const_7_': const_7_,
 }).to(device, dtype).emit()
 
-result = output_logits()
-print('The result of tensor `%s` is:\n%s' % (result.id, result))
+result = output_logits(input_tensor, const_0_, const_1_, const_2_, const_3_, const_4_, const_5_, const_6_, const_7_)
+print('The result of tensor `%s` is:\n%s' % (output_logits.output_names[0], result))
 
