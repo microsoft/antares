@@ -9,10 +9,6 @@ from setuptools import setup
 if len(sys.argv) <= 1:
   sys.argv += ['install']
 
-import torch
-from torch.utils.cpp_extension import BuildExtension, CppExtension, CUDAExtension, IS_HIP_EXTENSION
-
-dist_path = os.path.join(torch.__path__[0], 'contrib/antares')
 root_path = os.path.dirname(sys.argv[0])
 
 if not root_path:
@@ -23,6 +19,11 @@ for tree in ('antares_custom_op.egg-info', 'build', 'dist'):
     shutil.rmtree(f'{root_path}/{tree}')
   except:
     pass
+
+import torch
+from torch.utils.cpp_extension import BuildExtension, CppExtension, CUDAExtension, IS_HIP_EXTENSION
+
+dist_path = os.path.join(torch.__path__[0], 'contrib/antares')
 
 os.chdir(root_path)
 root_path = '.'

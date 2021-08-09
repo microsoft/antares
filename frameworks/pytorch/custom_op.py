@@ -41,12 +41,15 @@ def get_antares_cmd(expression, step=0):
 class CustomOp(torch.nn.Module):
   __custom_op_dict__ = dict()
 
-  def __init__(self, ir, feed_dict, extra_outputs=[]):
+  def __init__(self, ir, input_orders, extra_outputs=[]):
     super(CustomOp, self).__init__()
     ir = ir.replace('"', '`').replace('\n', ' ').strip()
-    self.expr = generate_antares_expression(ir, feed_dict, extra_outputs)
-    feed_dict = sorted([(k, feed_dict[k]) for k in feed_dict], key=lambda x: x[0])
-    self.values = [v for (k, v) in feed_dict]
+    self.expr = generate_antares_expression(ir, input_orders, extra_outputs)
+    self.input_orders = sorted([(k, i, input_orders[k].shape, input_orders[k].dtype) for i, k in enumerate(input_orders)], key=lambda x: x[0])
+    if not hasattr(CustomOp, '__CUSTOM_KEY__'):
+      CustomOp.__CUSTOM_KEY__ = 0
+    self.custom_key = CustomOp.__CUSTOM_KEY__
+    CustomOp.__CUSTOM_KEY__ += 1
 
   def request_code(self):
     expression = self.expr
@@ -84,7 +87,7 @@ class CustomOp(torch.nn.Module):
       return name, dtype, [int(x) for x in shapes.split(', ')]
 
     output_names = [parse_tensor(x)[0] for x in meta_outputs]
-    return output_names, (source, source_path, expr_hash, meta_inputs, meta_outputs)
+    return output_names, source
 
   def tune(self, step=100, use_cache=False, timeout=-1):
     if use_cache and self.request_code().find('// Saved Perf =') >= 0 or step <= 0:
@@ -99,17 +102,24 @@ class CustomOp(torch.nn.Module):
     expr_hash = hashlib.sha256(self.expr.encode()).hexdigest()
     __custom_op_dict__ = CustomOp.__custom_op_dict__
     if expr_hash in __custom_op_dict__:
-      output_names, attributes = __custom_op_dict__[expr_hash]
+      output_names, kernel_sources = __custom_op_dict__[expr_hash]
     else:
-      output_names, attributes = self.fetch_and_compile_antares_kernel(expr_hash)
-      __custom_op_dict__[expr_hash] = output_names, attributes
-    self.attributes = attributes
+      output_names, kernel_sources = self.fetch_and_compile_antares_kernel(expr_hash)
+      __custom_op_dict__[expr_hash] = output_names, kernel_sources
+    self.kernel_sources = kernel_sources
     self.output_names = output_names
+
+    antares_custom_op.forward([], self.custom_key, self.kernel_sources)
     return self
 
-  def forward(self):
-    outputs = antares_custom_op.forward(self.values, *self.attributes)
-    for i in range(len(outputs)):
-      outputs[i].id = self.output_names[i]
+  def forward(self, *inputs):
+    ordered_inputs = []
+    for i in range(len(inputs)):
+      inp = inputs[self.input_orders[i][1]]
+      if self.input_orders[i][3] != inp.dtype or self.input_orders[i][2] != inp.shape:
+        raise Exception(f"The order of planned inputs ({str(self.input_orders[i][3])}{list(self.input_orders[i][2])}) and given inputs ({str(inp.dtype)}{list(inp.shape)}) doesn't match.")
+      ordered_inputs.append(inp)
+
+    outputs = antares_custom_op.forward(ordered_inputs, self.custom_key, '')
     outputs = outputs[0] if len(outputs) == 1 else tuple(outputs)
     return outputs

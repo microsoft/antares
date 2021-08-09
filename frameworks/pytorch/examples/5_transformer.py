@@ -15,10 +15,18 @@ kwargs = {'dtype': dtype,
 
 B, S, N, H, I = 6, 128, 12, 48, 1024
 
-input_tensor = torch.ones([B, S, N, H], **kwargs)
-
 def create_param(name, shape):
   return (torch.rand(shape, **kwargs) - 0.5) * 0.001
+
+input_tensor = torch.ones([B, S, N, H], **kwargs)
+qkv_weight = create_param('qkv_weight', [3, N, H, N, H])
+qkv_bias = create_param('qkv_bias', [3, N, H])
+attention_weight = create_param('attention_weight', [N, H, N, H])
+attention_bias = create_param('attention_bias', [N, H])
+intermediate_weight = create_param('intermediate_weight', [N, H, I])
+intermediate_bias = create_param('intermediate_bias', [I])
+output_weight = create_param('output_weight', [I, N, H])
+output_bias = create_param('output_bias', [N, H])
 
 layer_output_norm = CustomOp(ir=f'''
   merged_layer_local[R, B, S1, N1, H1] +=! input_tensor[B, S1, N, H] * qkv_weight[R, N, H, N1, H1];
@@ -43,18 +51,18 @@ layer_output_norm = CustomOp(ir=f'''
     layer_norm_2_temp0[B, S1] += layer_norm_2_src[B, S1, N2, H2];
     layer_norm_2_temp1[B, S1] += layer_norm_2_src[B, S1, N2, H2] * layer_norm_2_src[B, S1, N2, H2];
   layer_output_norm[B, S1, N2, H2] = (layer_norm_2_src[B, S1, N2, H2] * {N * H} - layer_norm_2_temp0[B, S1]) * (layer_norm_2_temp0[B, S1] * {N * H} - layer_norm_2_temp1[B, S1] * layer_norm_2_temp1[B, S1]).call(`max`, [1e-8]).call(`rsqrt`);
-''', feed_dict={
+''', input_orders={
   'input_tensor': input_tensor,
-  'qkv_weight': create_param('qkv_weight', [3, N, H, N, H]),
-  'qkv_bias': create_param('qkv_bias', [3, N, H]),
-  'attention_weight': create_param('attention_weight', [N, H, N, H]),
-  'attention_bias': create_param('attention_bias', [N, H]),
-  'intermediate_weight': create_param('intermediate_weight', [N, H, I]),
-  'intermediate_bias': create_param('intermediate_bias', [I]),
-  'output_weight': create_param('output_weight', [I, N, H]),
-  'output_bias': create_param('output_bias', [N, H]),
+  'qkv_weight': qkv_weight,
+  'qkv_bias': qkv_bias,
+  'attention_weight': attention_weight,
+  'attention_bias': attention_bias,
+  'intermediate_weight': intermediate_weight,
+  'intermediate_bias': intermediate_bias,
+  'output_weight': output_weight,
+  'output_bias': output_bias,
 }).to(device, dtype).emit()
 
-result = layer_output_norm()
-print('The result of tensor `%s` is:\n%s' % (result.id, result))
+result = layer_output_norm(input_tensor, qkv_weight, qkv_bias, attention_weight, attention_bias, intermediate_weight, intermediate_bias, output_weight, output_bias)
+print('The result of tensor `%s` is:\n%s' % (layer_output_norm.output_names[0], result))
 

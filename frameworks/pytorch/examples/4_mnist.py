@@ -34,8 +34,8 @@ custom_op = CustomOp(ir='''
   data_3[N, K] =   data_2_bias[N, K].call(`max`, [0.0]);
   data_4[N, M] +=!  data_3[N, K] * weight_2[K, M];
   data_5[N, K] =   (data_4[N, K] + bias_2[K]);
-''', feed_dict={'data': x, 'weight_0': w0, 'weight_1': w1, 'weight_2': w2, 'bias_0': b0, 'bias_1': b1, 'bias_2': b2}).to(device, dtype).tune(step=100, use_cache=True, timeout=600).emit()
+''', input_orders={'data': x, 'weight_0': w0, 'weight_1': w1, 'weight_2': w2, 'bias_0': b0, 'bias_1': b1, 'bias_2': b2}).to(device, dtype).tune(step=100, use_cache=True, timeout=600).emit()
 
-result = custom_op()
-print('The result of tensor `%s` is:\n%s' % (result.id, result))
+result = custom_op(x, w0, w1, w2, b0, b1, b2)
+print('The result of tensor `%s` is:\n%s' % (custom_op.output_names[0], result))
 

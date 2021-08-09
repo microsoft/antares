@@ -4,21 +4,23 @@
 #include <torch/extension.h>
 #include <vector>
 #include <string>
-#include <map>
 
 #include "execute_module.hpp"
 
-static std::map<std::string, std::shared_ptr<ExecutionModule>> module_manager;
+struct ModuleConfig {
+	std::vector<std::vector<int64_t>> output_shapes;
+    std::vector<std::decay_t<decltype(torch::kFloat32)>> output_dtypes;
+    std::unique_ptr<ExecutionModule> module;
+};
 
-std::vector<torch::Tensor> custom_op_forward(std::vector<torch::Tensor> inputs,
-                                             const std::string& source,
-                                             const std::string& source_path,
-                                             const std::string& hash,
-                                             const std::vector<std::string>& meta_inputs,
-                                             const std::vector<std::string>& meta_outputs)
+static std::vector<ModuleConfig> module_manager;
+
+std::vector<torch::Tensor> custom_op_forward(std::vector<torch::Tensor> inputs, int custom_key, const std::string& source)
 {
-  auto it = module_manager.find(hash);
-  if (it == module_manager.end())
+  if (module_manager.size() <= custom_key)
+    module_manager.resize(custom_key + 1);
+
+  if (module_manager[custom_key].module == nullptr)
   {
     int ord = 0;
 #if defined(ANTARES_CUDA)
@@ -27,45 +29,55 @@ std::vector<torch::Tensor> custom_op_forward(std::vector<torch::Tensor> inputs,
     hipGetDevice(&ord);
 #endif
     ab::init(ord);
-    module_manager[hash] = std::make_shared<ExecutionModule>(source);
-    it = module_manager.find(hash);
-  }
-  auto gm = it->second;
+    module_manager[custom_key] = {{}, {}, std::make_unique<ExecutionModule>(source)};
 
-  std::vector<void*> args;
-  args.resize(meta_inputs.size() + meta_outputs.size());
-
-  std::vector<std::vector<int64_t>> output_shapes;
-  for (auto &meta_output: meta_outputs) {
-    int idx = meta_output.find('[');
-    CHECK_EQ(true, idx > 0);
-    std::vector<int64_t> shape_builder;
-    for (int i = idx + 1, j = i + 1; j <= meta_output.size(); ++j) {
-      if (j == meta_output.size() || meta_output[j] == ',')
-        shape_builder.push_back(std::atoi(meta_output.c_str() + i)), i = j + 2, ++j;
+    for (auto &output: module_manager[custom_key].module->global_outputs) {
+      std::vector<int64_t> shape;
+      for (auto &it: output.shape)
+        shape.push_back(it);
+      std::decay_t<decltype(torch::kFloat32)> dtype = torch::kInt32;
+      if (output.dtype == "float32")
+        dtype = torch::kFloat32;
+      else if (output.dtype == "float16")
+        dtype = torch::kFloat16;
+      else if (output.dtype == "float64")
+        dtype = torch::kFloat64;
+      else if (output.dtype == "int64")
+        dtype = torch::kInt64;
+      else if (output.dtype == "int16")
+        dtype = torch::kInt16;
+      else if (output.dtype == "int8")
+        dtype = torch::kInt8;
+      else
+        CHECK_EQ(dtype, torch::kInt32);
+      module_manager[custom_key].output_shapes.push_back(std::move(shape));
+      module_manager[custom_key].output_dtypes.push_back(dtype);
     }
-    output_shapes.push_back(std::move(shape_builder));
+    return {};
   }
 
-  std::vector<torch::Tensor> outputs;
-  outputs.resize(meta_outputs.size());
-  auto options =
-    torch::TensorOptions()
-      .dtype(inputs[0].dtype())
-      .device(inputs[0].device().type(), inputs[0].device().index())
-      .layout(torch::kStrided)
-      .requires_grad(true);
+  auto &gm = module_manager[custom_key];
+  const auto input_size = gm.module->global_inputs.size();
+  const auto output_size = gm.module->global_outputs.size();
+  CHECK_EQ(input_size, inputs.size());
 
-  for (int i = 0; i < outputs.size(); ++i)
-    outputs[i] = torch::zeros(output_shapes[i], options);
-
-  for (int i = 0; i < inputs.size(); ++i)
+  std::vector<void*> args(input_size + output_size);
+  for (int i = 0; i < input_size; ++i)
     args[i] = (void*)inputs[i].data_ptr();
 
-  for (int i = 0; i < meta_outputs.size(); ++i)
-    args[meta_inputs.size() + i] = (void*)outputs[i].data_ptr();
+  std::vector<torch::Tensor> outputs;
+  for (int i = 0; i < output_size; ++i) {
+    outputs.push_back(torch::empty(gm.output_shapes[i],
+      torch::TensorOptions()
+        .dtype(gm.output_dtypes[i])
+        .device(inputs[0].device().type(), inputs[0].device().index())
+        .layout(torch::kStrided)
+        .requires_grad(false)
+    ));
+    args[input_size + i] = (void*)outputs[i].data_ptr();
+  }
 
-  gm->compute(args.data());
+  gm.module->compute(args.data());
 #if !defined(ANTARES_CUDA) && !defined(ANTARES_ROCM)
   ab::synchronize(0);
 #endif
