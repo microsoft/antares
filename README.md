@@ -66,8 +66,8 @@ result_2 = sess.run(tf.add(op, op))
 print('The custom result_2 is:\n%s' % result_2)  
 
 # Pytorch Example:
-custom_op = CustomOp(ir='dot_0[N, M] +=! data[N, K] * weight[K, M]', feed_dict={'data': x, 'weight': y}).to(device, dtype).emit()
-result = custom_op()
+custom_op = CustomOp(ir='dot_0[N, M] +=! data[N, K] * weight[K, M]', input_orders={'data': x, 'weight': y}).to(device, dtype).emit()
+result = custom_op(x, y)
 print('The custom result is:', result)
 ```
 For complete programs, please follow examples here: [Antares Examples for Pytorch](frameworks/pytorch/examples) and [Antares Examples for TF/TF2](frameworks/tensorflow/examples)
@@ -263,7 +263,7 @@ Before running `make` command in antares root directory, you need to ensure the 
 
 |       | HIP-C(c-rocm/c-rocm_win64) | CUDA(c-cuda/c-cuda_win64) | CPU(c-mcpu/c-scpu) | DirectX12(c-hlsl_win64) | Graphcore(c-ipu) | Intel OneAPI(c-sycl_intel) | Codeplay DPCPP (c-sycl_cuda) |
 |---|---|---|---|---|---|---|---|
-| Deploy Environment | Linux/WSL1 | Linux | Linux | WSL1 | Linux | Linux |   |
+| Deploy Environment | Linux/WSL1/WSL2 | Linux | Linux | WSL1/WSL2 | Linux | Linux |   |
 | Target Device | AMDGPU | NVGPU | Generic CPU | Generic Graphic Card | IPU Device | Intel CPU/HD Graphic/FPGA |  NVGPU |
 | Global schedules  | Y | Y | Y | Y | Y | Y | Y |
 | Local schedules   | Y | Y | Y | Y |   | Y | Y |

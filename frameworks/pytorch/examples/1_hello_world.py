@@ -16,7 +16,7 @@ kwargs = {'dtype': dtype,
 x = torch.ones(128, 1024, **kwargs)
 y = torch.ones(1024, 1024, **kwargs)
 
-custom_op = CustomOp(ir='dot_0[N, M] +=! data[N, K] * weight[K, M]', feed_dict={'data': x, 'weight': y}).to(device, dtype).tune(step=100, use_cache=True, timeout=600).emit()
+custom_op = CustomOp(ir='dot_0[N, M] +=! data[N, K] * channels[K, M]', input_orders={'data': x, 'channels': y}).to(device, dtype).tune(step=100, use_cache=True, timeout=600).emit()
 
-result = custom_op()
-print('The result of tensor `%s` is:\n%s' % (result.id, result))
+result = custom_op(x, y)
+print('The result of tensor `%s` is:\n%s' % (custom_op.output_names[0], result))
