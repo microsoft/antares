@@ -7,7 +7,7 @@ if [[ "$BACKEND" == "" ]]; then
     BACKEND=c-cuda
   elif [ -e /dev/kfd ]; then
     BACKEND=c-rocm
-  elif grep Microsoft /proc/sys/kernel/osrelease >/dev/null; then
+  elif grep Microsoft /proc/sys/kernel/osrelease >/dev/null || grep WSL2 /proc/sys/kernel/osrelease >/dev/null; then
     BACKEND=c-hlsl_win64
   fi
 fi

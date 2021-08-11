@@ -7,7 +7,7 @@ VERSION_TAG=v0.2dev8
 
 REQUIRED_CMDS="git python3 g++ make"
 
-if grep Microsoft /proc/sys/kernel/osrelease >/dev/null; then
+if grep Microsoft /proc/sys/kernel/osrelease >/dev/null || grep WSL2 /proc/sys/kernel/osrelease >/dev/null; then
   REQUIRED_CMDS="${REQUIRED_CMDS} x86_64-w64-mingw32-c++"
 fi
 

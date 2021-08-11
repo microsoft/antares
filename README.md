@@ -263,7 +263,7 @@ Before running `make` command in antares root directory, you need to ensure the 
 
 |       | HIP-C(c-rocm/c-rocm_win64) | CUDA(c-cuda/c-cuda_win64) | CPU(c-mcpu/c-scpu) | DirectX12(c-hlsl_win64) | Graphcore(c-ipu) | Intel OneAPI(c-sycl_intel) | Codeplay DPCPP (c-sycl_cuda) |
 |---|---|---|---|---|---|---|---|
-| Deploy Environment | Linux/WSL1 | Linux | Linux | WSL1 | Linux | Linux |   |
+| Deploy Environment | Linux/WSL1/WSL2 | Linux | Linux | WSL1/WSL2 | Linux | Linux |   |
 | Target Device | AMDGPU | NVGPU | Generic CPU | Generic Graphic Card | IPU Device | Intel CPU/HD Graphic/FPGA |  NVGPU |
 | Global schedules  | Y | Y | Y | Y | Y | Y | Y |
 | Local schedules   | Y | Y | Y | Y |   | Y | Y |

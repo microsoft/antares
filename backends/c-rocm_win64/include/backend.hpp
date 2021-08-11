@@ -60,7 +60,7 @@ namespace ab {
 
     void *hModule;
     LOAD_ONCE(hipModuleLoad, int (*)(void*, const char*));
-    CHECK(0 == hipModuleLoad(&hModule, (path + ".out").c_str()), "Failed to compiler sources with command `/opt/rocm/bin/hipcc` from WSL environment and load target AMD GPU.");
+    CHECK(0 == hipModuleLoad(&hModule, (path + ".out").c_str()), "Command `/opt/rocm/bin/hipcc` in WSL is not found, please install latest `rocm-dev` package in WSL environment for C-code compilation to AMD's HSACO.");
     return hModule;
   }
 

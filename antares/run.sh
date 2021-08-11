@@ -10,7 +10,7 @@ if [[ "$@" == "clean" ]]; then
   exit 0
 fi
 
-if grep Microsoft /proc/sys/kernel/osrelease >/dev/null; then
+if grep Microsoft /proc/sys/kernel/osrelease >/dev/null || grep WSL2 /proc/sys/kernel/osrelease >/dev/null; then
   export IS_WSL=1
 else
   export IS_WSL=0
