@@ -8,6 +8,9 @@
 #include <dlfcn.h>
 #include <pthread.h>
 #include <malloc.h>
+#ifdef SYCL_CUDA
+#include "cuda.h"
+#endif
 
 namespace ab {
 
@@ -77,7 +80,6 @@ namespace ab {
     else {
     std::string gpu_arch = "50"; // Corresponds to the back-end default.
 #ifdef SYCL_CUDA
-#include "cuda.h"
     int major, minor;
     CHECK_OK(0 == cuDeviceGetAttribute(&major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, 0));
     CHECK_OK(0 == cuDeviceGetAttribute(&minor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, 0));
