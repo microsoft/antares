@@ -22,4 +22,5 @@ for i in range(4):
     x = custom_op(x, y)
     print(f'STEP-{i}: {x.view(-1)}')
 
+result = x
 print('The result of tensor `%s` is:\n%s' % (custom_op.output_names[0], result))
