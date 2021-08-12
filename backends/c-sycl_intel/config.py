@@ -14,15 +14,10 @@ def get_execution_parallism():
 def do_native_translation_v2(codeset, **kwargs):
   kernel_name, in_args, out_args, body = codeset
 
-  if backend == 'c-sycl_intel':  # Issue: Data over SYCL Buffer & Accessor is very slow on Intel CPU
-    expand_ins = [f'const auto* {x[1]} = ({x[0]}* __restrict)__args[{i}];' for i, x in enumerate(in_args)]
-    expand_outs = [f'auto* {x[1]} = ({x[0]}* __restrict)__args[{i + len(in_args)}];' for i, x in enumerate(out_args)]
-    expand_args = ' '.join(expand_ins + expand_outs)
-    expand_accs = expand_ptrs = ''
-  else:                          # Using standard SYCL Buffer & Accessor
-    expand_args = '\n  '.join([f'auto &__args_{i} = *((cl::sycl::buffer<{x[0]}>*)__args[{i}]);' for i, x in enumerate(in_args + out_args)])
-    expand_accs = '\n    '.join([f'auto __accs_{i} = __args_{i}.get_access<cl::sycl::access::mode::{"read" if i < len(in_args) else "discard_write"}>(cgh);' for i, x in enumerate(in_args + out_args)]) + '\n'
-    expand_ptrs = '\n      '.join([f'{x[0]}* {x[1]} = ({x[0]}*)__accs_{i}.get_pointer();' for i, x in enumerate(in_args + out_args)]) + '\n'
+  expand_ins = [f'const auto* {x[1]} = ({x[0]}* __restrict)__args[{i}];' for i, x in enumerate(in_args)]
+  expand_outs = [f'auto* {x[1]} = ({x[0]}* __restrict)__args[{i + len(in_args)}];' for i, x in enumerate(out_args)]
+  expand_args = ' '.join(expand_ins + expand_outs)
+  expand_accs = expand_ptrs = ''
 
   def get_extent(key, defval=1):
     str_pat = f'// [thread_extent] {key} = '
