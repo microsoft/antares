@@ -2,12 +2,15 @@
 // Licensed under the MIT License.
 
 //; eval_flags(c-sycl_intel): [dpcpp] -ldl -lpthread
-//; eval_flags(c-sycl_cuda): [/usr/local/dpcpp-cuda/bin/clang++] -ldl -I/usr/local/dpcpp-cuda/include/sycl -L/usr/local/dpcpp-cuda/lib -lsycl -fsycl -fsycl-targets=nvptx64-nvidia-cuda-sycldevice -fsycl-unnamed-lambda -lpthread
+//; eval_flags(c-sycl_cuda): [/usr/local/dpcpp-cuda/bin/clang++] -ldl -I/usr/local/dpcpp-cuda/include/sycl -L/usr/local/dpcpp-cuda/lib -lsycl -fsycl -fsycl-targets=nvptx64-nvidia-cuda-sycldevice -fsycl-unnamed-lambda -lpthread -iquote/usr/local/cuda/include -L/usr/local/cuda/lib64 -lcuda -DSYCL_CUDA
 
 #include <CL/sycl.hpp>
 #include <dlfcn.h>
 #include <pthread.h>
 #include <malloc.h>
+#ifdef SYCL_CUDA
+#include "cuda.h"
+#endif
 
 namespace ab {
 
@@ -60,10 +63,7 @@ namespace ab {
     }
     if (__BACKEND__ == "c-sycl_intel")
       return memalign(sysconf(_SC_PAGESIZE), byteSize);
-
-    // FIXME: Only handle dtype = float32 in this version (SYCL buffer is bind to datatype at compile time?)
-    CHECK_OK(dtype == "float32" && byteSize % sizeof(float) == 0);
-    return new cl::sycl::buffer<float>((float*)malloc(byteSize), cl::sycl::range<1>(byteSize / sizeof(float)), cl::sycl::property::buffer::context_bound(_sycl_queue.get_context()));
+    return sycl::malloc_device(byteSize, _sycl_queue);
   }
 
   void release(void *dptr, size_t byteSize) {
@@ -77,9 +77,16 @@ namespace ab {
 
     if (__BACKEND__ == "c-sycl_intel")
       ab_utils::Process({"dpcpp", path, "-std=c++17", "-lpthread", "-fPIC", "-shared", "-Wno-pass-failed", "-O3", "-ffast-math", "-march=skylake-avx512", "-o", path + ".out"}, 10);
-    else
-      ab_utils::Process({"/usr/local/dpcpp-cuda/bin/clang++", path, "-std=c++17", "-ldl", "-fPIC", "-shared", "-O2", "-I/usr/local/dpcpp-cuda/include/sycl", "-L/usr/local/dpcpp-cuda/lib", "-lsycl", "-fsycl", "-fsycl-targets=nvptx64-nvidia-cuda-sycldevice", "-fsycl-unnamed-lambda", "-Wno-unknown-cuda-version", "-o", path + ".out"}, 20);
-
+    else {
+      std::string gpu_arch = "50"; // Corresponds to the back-end default.
+#ifdef SYCL_CUDA
+      int major, minor;
+      CHECK_OK(0 == cuDeviceGetAttribute(&major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, 0));
+      CHECK_OK(0 == cuDeviceGetAttribute(&minor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, 0));
+      gpu_arch = std::to_string(major * 10 + minor);
+#endif
+      ab_utils::Process({"/usr/local/dpcpp-cuda/bin/clang++", path, "-std=c++17", "-ldl", "-fPIC", "-shared", "-O2", "-I/usr/local/dpcpp-cuda/include/sycl", "-L/usr/local/dpcpp-cuda/lib", "-lsycl", "-fsycl", "-fsycl-targets=nvptx64-nvidia-cuda-sycldevice", "-fsycl-unnamed-lambda", "-Wno-unknown-cuda-version", "-Xsycl-target-backend=nvptx64-nvidia-cuda --cuda-gpu-arch=sm_" + gpu_arch, "-o", path + ".out"}, 20);
+    }
     path = (path[0] == '/' ? path : "./" + path) + ".out";
     void* hmod = dlopen(path.c_str(), RTLD_NOW | RTLD_GLOBAL);
     CHECK_OK(hmod != nullptr);
@@ -92,8 +99,7 @@ namespace ab {
 
   void launchKernel(const std::vector<void*> &hFunction, const std::vector<void*> &krnl_args, void *stream) {
     ((void(*)(void*, void* const*))hFunction[0])(&_sycl_queue, krnl_args.data());
-    if (__BACKEND__ == "c-sycl_intel")
-      _sycl_queue.wait();
+    _sycl_queue.wait();
   }
 
   void synchronize(void *stream) {
@@ -101,33 +107,15 @@ namespace ab {
   }
 
   void memcpyHtoD(void *dptr, void *hptr, size_t byteSize, void *stream) {
-    if (__BACKEND__ == "c-sycl_intel") {
-      ab::synchronize(stream);
-      memcpy(dptr, hptr, byteSize);
-      return;
-    }
-
-    auto &buff = *((cl::sycl::buffer<float>*)dptr);
-    _sycl_queue.submit([&](cl::sycl::handler& cgh) {
-      auto d_data = buff.get_access<cl::sycl::access::mode::discard_write>(cgh);
-      cgh.copy(hptr, d_data);
-    });
     ab::synchronize(stream);
+    _sycl_queue.memcpy(dptr, hptr, byteSize);
+    return;
   }
 
   void memcpyDtoH(void *hptr, void *dptr, size_t byteSize, void *stream) {
-    if (__BACKEND__ == "c-sycl_intel") {
-      ab::synchronize(stream);
-      memcpy(hptr, dptr, byteSize);
-      return;
-    }
-
-    auto &buff = *((cl::sycl::buffer<float>*)dptr);
-    _sycl_queue.submit([&](cl::sycl::handler& cgh) {
-      auto d_data = buff.get_access<cl::sycl::access::mode::read>(cgh);
-      cgh.copy(d_data, hptr);
-    });
     ab::synchronize(stream);
+    _sycl_queue.memcpy(hptr, dptr, byteSize);
+    return;
   }
 
   void* recordTime(void *stream) {
