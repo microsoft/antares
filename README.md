@@ -151,7 +151,7 @@ COMMIT=force STEP=5000 COMPUTE_V1='- einstein_v2(input_dict={"data": {"dtype": "
         #   Pytorch for AMD ROCm 4.2:
         python3 -m pip install --pre torch torchvision -f https://download.pytorch.org/whl/nightly/rocm4.2/torch_nightly.html
 
-- Step-4: Install JIT Plugin Client and Run Examples
+- Step-3: Install JIT Plugin Client and Run Examples
 
     ```sh
     # If using Pytorch, set up JIT Plugin for Pytorch:
