@@ -66,7 +66,7 @@ result_2 = sess.run(tf.add(op, op))
 print('The custom result_2 is:\n%s' % result_2)  
 
 # Pytorch Example:
-custom_op = CustomOp(ir='dot_0[N, M] +=! data[N, K] * weight[K, M]', input_orders={'data': x, 'weight': y}).to(device, dtype).emit()
+custom_op = CustomOp(ir='dot_0[N, M] +=! data[N, K] * weight[K, M]', input_orders={'data': x, 'weight': y}).to(device).emit()
 result = custom_op(x, y)
 print('The custom result is:', result)
 ```

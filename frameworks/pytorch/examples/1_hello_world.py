@@ -16,11 +16,10 @@ kwargs = {'dtype': dtype,
 x = torch.ones(2, 32, **kwargs)
 y = torch.ones(32, 32, **kwargs)
 
-custom_op = CustomOp(ir='dot_0[N, M] +=! data[N, K] * channels[K, M]', input_orders={'data': x, 'channels': y}).to(device, dtype).tune(step=100, use_cache=True, timeout=600).emit()
+custom_op = CustomOp(ir='dot_0[N, M] +=! data[N, K] * channels[K, M]', input_orders={'data': x, 'channels': y}).to(device).tune(step=100, use_cache=True, timeout=600).emit()
 
 for i in range(4):
-    x = custom_op(x, y)
-    print(f'STEP-{i}: {x.view(-1)}')
-
-result = x
-print('The result of tensor `%s` is:\n%s' % (custom_op.output_names[0], result))
+    A = torch.randn(2, 32, **kwargs)
+    B = torch.randn(32, 32, **kwargs)
+    C = custom_op(A, B)
+    print(f'LOOP-{i}: {C.view(-1)}')
