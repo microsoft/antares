@@ -3,9 +3,11 @@
 cd $(dirname $0)/..
 ANTARES_ROOT=$(pwd)
 
-VERSION_TAG=v0.2dev8
+VERSION_TAG=v0.2dev9
 
 REQUIRED_CMDS="git python3 g++ make"
+
+python3 -c 'import sys; assert sys.version >= "3.6", "Python Error: Antares depends on Python >= 3.6"'
 
 if grep Microsoft /proc/sys/kernel/osrelease >/dev/null || grep WSL2 /proc/sys/kernel/osrelease >/dev/null; then
   REQUIRED_CMDS="${REQUIRED_CMDS} x86_64-w64-mingw32-c++"
@@ -48,6 +50,6 @@ sed -i 's/LLVM OFF/LLVM OFF/g' config.cmake && sed -i 's~CUDA OFF~CUDA '"${TVM_H
 PATH="${HOME}/.local/bin:${PATH}" cmake ..
 make -j$(nproc)
 
-python3 -m pip install --user --upgrade tornado psutil xgboost==1.2.1 numpy decorator attrs pytest typed_ast cloudpickle
+python3 -m pip install --user --upgrade tornado psutil xgboost==1.2.1 numpy decorator attrs pytest typed_ast cloudpickle scipy
 
 echo "$VERSION_TAG" > $TVM_HOME/VERSION_TAG

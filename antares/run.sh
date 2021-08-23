@@ -3,6 +3,8 @@
 cd $(dirname $0)/..
 ANTARES_ROOT=$(pwd)
 
+python3 -c 'import sys; assert sys.version >= "3.6", "Python Error: Antares depends on Python >= 3.6"'
+
 export ANTARES_DRIVER_PATH=${ANTARES_ROOT}/.libAntares
 
 if [[ "$@" == "clean" ]]; then
@@ -40,7 +42,7 @@ if [[ "$BACKEND" == "c-rocm" ]]; then
   /opt/rocm/bin/hipcc engine/cuda_properties.cc -o ${ANTARES_DRIVER_PATH}/device_properties >/dev/null 2>&1 || true
   ${ANTARES_DRIVER_PATH}/device_properties > ${ANTARES_DRIVER_PATH}/device_properties.cfg 2>/dev/null || rm -f ${ANTARES_DRIVER_PATH}/device_properties.cfg
 elif [[ "$BACKEND" == "c-cuda" ]]; then
-  g++ engine/cuda_properties.cc -lcuda -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -o ${ANTARES_DRIVER_PATH}/device_properties >/dev/null 2>&1 || true
+  g++ engine/cuda_properties.cc -lcuda -I/usr/local/cuda/include -L/usr/local/cuda/lib64/stubs -L/usr/local/cuda/lib64 -o ${ANTARES_DRIVER_PATH}/device_properties >/dev/null 2>&1 || true
   ${ANTARES_DRIVER_PATH}/device_properties > ${ANTARES_DRIVER_PATH}/device_properties.cfg 2>/dev/null || rm -f ${ANTARES_DRIVER_PATH}/device_properties.cfg
 else
   rm -f ${ANTARES_DRIVER_PATH}/device_properties.cfg
