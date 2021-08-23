@@ -7,7 +7,7 @@ import shutil, os, sys
 from setuptools import setup
 
 if len(sys.argv) <= 1:
-  sys.argv += ['install']
+  sys.argv += ['install', '--user']
 
 root_path = os.path.dirname(sys.argv[0])
 
@@ -37,7 +37,7 @@ except FileExistsError:
 shutil.copyfile(root_path + '/custom_op.py', dist_path + '/custom_op.py')
 shutil.copyfile(root_path + '/../../graph_evaluator/execute_module.hpp', dist_path + '/execute_module.hpp')
 
-cpp_flags = [f'-I{dist_path}', '-Wno-sign-compare', '-Wno-address', '-Wno-unused-value']
+cpp_flags = [f'-I{dist_path}', '-Wno-sign-compare', '-Wno-address', '-Wno-unused-value', '-Wno-strict-aliasing']
 
 try:
   if torch.cuda.is_available():
@@ -47,7 +47,7 @@ try:
     ext = CUDAExtension(
             'antares_custom_op',
             ['main_ops.cc'],
-            libraries=['cuda'] if not IS_HIP_EXTENSION else [],
+            libraries=[':libcuda.so.1'] if not IS_HIP_EXTENSION else [],
             extra_compile_args={'cxx': cpp_flags, 'nvcc': cpp_flags},
         )
   else:

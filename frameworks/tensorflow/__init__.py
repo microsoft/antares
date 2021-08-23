@@ -47,7 +47,7 @@ def get_tensorflow_antares_component(tf_module_path, op_name, compiler):
     if compiler == 'mpicc':
       with_cuda += ' -lmpi_cxx -lrccl'
   elif tf.test.is_built_with_cuda():
-    with_cuda = "-DANTARES_CUDA -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -lcudart -lcuda"
+    with_cuda = "-DANTARES_CUDA -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -L/usr/local/cuda/lib64/stubs -lcudart -lcuda"
     if compiler == 'mpicc':
       with_cuda += ' -lmpi_cxx -lnccl'
   elif backend in ('c-sycl_intel',):
