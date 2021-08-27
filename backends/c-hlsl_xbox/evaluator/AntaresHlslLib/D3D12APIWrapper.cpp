@@ -182,7 +182,7 @@ int dxInit(int flags)
         // flags = -1: enable descriptor heap, with logging
 
         if (flags == -1)
-            fprintf(stderr, "[INFO] D3D12: Descriptor heap is disabled.\n\n"), flags = 1;
+            fprintf(stderr, "[INFO] D3D12: Descriptor heap is to be enabled.\n\n"), flags = 1;
         _USE_DESCRIPTOR_HEAP_ = flags;
 
         device->Init();
