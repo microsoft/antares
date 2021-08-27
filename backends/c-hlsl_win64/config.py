@@ -111,6 +111,8 @@ float pow_ex(float x, float y) {
     lds = '\n'.join(lds)
     registers = ''.join(registers)
 
+    require_srv = f'SRV(t0, numDescriptors={len(in_args)}), ' if len(in_args) > 0 else ''
+
     full_body = f'''
 #ifndef __HLSL_COMMON_MACRO__
 #define __HLSL_COMMON_MACRO__
@@ -132,7 +134,7 @@ float pow_ex(float x, float y) {
 
 {lds}
 {registers}{kwargs['attrs'].blend}
-[RootSignature("DescriptorTable(SRV(t0, numDescriptors={len(in_args)}), UAV(u0, numDescriptors={len(out_args)}))")]
+[RootSignature("DescriptorTable({require_srv}UAV(u0, numDescriptors={len(out_args)}))")]
 [numthreads({get_extent('threadIdx.x')}, {get_extent('threadIdx.y')}, {get_extent('threadIdx.z')})]
 void CSMain(uint3 threadIdx: SV_GroupThreadID, uint3 blockIdx: SV_GroupID, uint3 dispatchIdx: SV_DispatchThreadID) {{
   {body}
