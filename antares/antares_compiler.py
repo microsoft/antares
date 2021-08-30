@@ -185,7 +185,9 @@ def get_target_source(best_config, dir_sid=None):
       fp.write(device_source)
     return device_source, kernel_path
 
-  # ast_seq, input_dict, output_dict = AntaresGlobal.compute_graph
+  if getattr(AntaresGlobal, 'mode', None) == 'antares':
+    source = backend_config.codegen(AntaresGlobal.compute_graph, json.loads(best_config))
+    return pack_device_source(source)
 
   with open(local_get_dir_file('my_kernel.time', dir_sid=dir_sid), 'w') as fp:
     fp.write('%s' % time.time())
@@ -379,7 +381,10 @@ def main_compute(code_only=False):
       os.environ.pop('COMMIT')
 
     try:
-      task.search_space_v2 = AntaresGlobal.attrs.auto_config.get_config_space()
+      if getattr(AntaresGlobal, 'mode', None) == 'antares':
+        task.search_space_v2 = backend_config.search_space()
+      else:
+        task.search_space_v2 = AntaresGlobal.attrs.auto_config.get_config_space()
       task.n_parallel = batch_size
       tuner = importlib.import_module('tuner.%s.main' % tuner_type)
       tuner = tuner.MainTuner(task)
@@ -430,6 +435,7 @@ def main_compute(code_only=False):
           tuner.task.best.timecost, compute_gflops(tuner.task.flop, tuner.task.best.timecost),
           compute_mem_ratio(tuner.task.best.timecost),
           tuner.task.best.occur)
+
         print('\n\033[93m%s\033[0m' % ('=' * min(120, len(stage_logs))))
         print(stage_logs)
         print('\033[93m%s\033[0m\n' % ('=' * min(120, len(stage_logs))))
@@ -462,6 +468,7 @@ def main_compute(code_only=False):
           tuner.load_history(autotvm.record.load_from_file(history_log_for_transfer_learning))
 
       tuner.tune(n_trial=num_trials, callbacks=callbacks, measure_option=None)
+
       if math.isinf(tuner.task.best.timecost):
         print(f'[Error] No valid config found in the whole tuning. (Try other tuner types other than `TUNER={tuner_type}`?)')
         cleanup_on_exit(0, None)

@@ -248,7 +248,7 @@ def parse_to_ast(expr):
 
   at_index = expr.find('=')
   if expr[at_index - 1] != ' ':
-    if expr[at_index - 1] in ('<', '>', '+'):
+    if expr[at_index - 1] in ('<', '>', '+', ':', '_'):
       props['reduce_type'] = expr[at_index - 1]
       lval = expr[:at_index - 1].strip()
     else:
@@ -313,6 +313,10 @@ def const(other):
 def warp_axis(ax_name):
   assert(ax_name[0].isupper() or ax_name == '_id')
   return ax_name
+
+def f_op(func, *args):
+  assert len(args) > 0
+  return args[0].call(func, list(args[1:]))
 
 def emit_antares_ir(ast, primal=False, tensor_remap=dict()):
   primal_ids = {"axis_id": 0, "tensor_id": 0}
@@ -496,12 +500,14 @@ def ir_graph_parser(exprss, input_dict, extra_outputs):
   AntaresGlobal.global_arg_pros = arg_props
 
   import importlib
-  passes = os.listdir('lang/pass')
+  passes = [(x[:-3], 'lang.pass') for x in os.listdir('lang/pass') if x.endswith('.py')]
+  backend_pass_dir = 'backends/%s/pass' % os.environ['BACKEND']
+  if os.path.isdir(backend_pass_dir):
+    passes += [(x[:-3], backend_pass_dir.replace('/', '.')) for x in os.listdir(backend_pass_dir) if x.endswith('.py')]
   passes.sort()
   for pas in passes:
-    if pas.endswith('.py'):
-      pass_stage = importlib.import_module('lang.pass.%s' % pas[:-3])
-      pass_stage.run_pass_v2(ast_seq, input_dict, output_dict)
+    pass_stage = importlib.import_module('%s.%s' % (pas[1], pas[0]))
+    pass_stage.run_pass_v2(ast_seq, input_dict, output_dict)
 
   from antares.common import AntaresGlobal
   AntaresGlobal.compute_graph = ast_seq, input_dict, output_dict
