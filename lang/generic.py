@@ -125,7 +125,6 @@ def do_native_scheduling(attrs):
   def select_plan(plan_name):
     if plan_name.find('.') < 0:
       plan_name = 'standard.' + plan_name
-    import importlib
     schedule_lib = importlib.import_module('backends.%s.schedule.%s' % (attrs.backend, plan_name), __loader__.name)
     schedule_lib.schedule(attrs)
 
@@ -145,7 +144,11 @@ def do_native_scheduling(attrs):
         break
   if plan is None:
     raise Exception("No available plan configured for backend: %s" % attrs.backend)
-  return select_plan(plan)
+  try:
+    return select_plan(plan)
+  except ModuleNotFoundError:
+    setattr(AntaresGlobal, 'mode', 'antares')
+    return None
 
 
 intermediate_output = 'MultipleOutputsTempVar'
