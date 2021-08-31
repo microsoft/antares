@@ -94,20 +94,15 @@ def scan_items(root, ancestor, ast, range_book):
         current_range[i] = [0, None, 0, ast['props']['data_axes'][i]['range'] - 1]
   range_book[tensor_name] = current_range
 
-def run_pass_v2(ast_seq, global_input_dict, global_output_dict):
+def update_ast(config, ast_seq, global_input_dict, global_output_dict):
   if len(ast_seq) > 1:
     raise Exception("TODO: Graphcore backend not handling multiple IR statements.")
   ast = ast_seq[0]
 
-  steps = int(os.environ.get('STEP', '0'))
-  pieces = os.environ.get('CONFIG', '').strip()
-
   data_axes = ast['props']['data_axes']
-  if not pieces and steps > 0:
-    return
 
   try:
-    pieces = json.loads(pieces)
+    pieces = config
     pieces = [(pieces['tile_%d' % i][1] * pieces['tile_%d' % i][2]) for i in range(len(data_axes))]
   except:
     pieces = [1] * len(data_axes)
