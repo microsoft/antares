@@ -87,24 +87,6 @@ def verify_body(kernel_name, body):
 def translate_code(code, config):
   global_arg_props = get_global_arg_props()
 
-  def get_kernel_metadata():
-    inp_args, outp_args = [], []
-
-    for buf in global_arg_props['_in']:
-      if buf['name'].startswith('_'):
-        # Just for Auto Shard
-        assert(buf['dtype'] == 'int32' and buf['shape'] == [1])
-        continue
-      inp_args.append('%s:%s%s' % (buf['name'], buf['dtype'], buf['shape']))
-    for buf in global_arg_props['_out']:
-      outp_args.append('%s:%s%s' % (buf['name'], buf['dtype'], buf['shape']))
-
-    device_code = os.environ.get('DEVICE_NAME', '')
-    device_code = device_code if device_code else 'default'
-    header_meta = '// GLOBALS: ' + ', '.join(inp_args) + ' -> ' + ', '.join(outp_args) + '\n// BACKEND: %s (%s)\n' % (backend, device_code)
-    properties = "// CONFIG: %s\n// COMPUTE_V1: %s\n" % (config.strip() if isinstance(config, str) else '', os.environ['COMPUTE_V1'])
-    return header_meta + properties
-
   def decode_name(encoded_name):
     return encoded_name[2:] if encoded_name.startswith('__') else encoded_name
 
@@ -124,27 +106,8 @@ def translate_code(code, config):
     verify_body(kernel_name, body)
     args = [(x.split('*')[0].strip(), x.split()[-1], mediate_tensors[decode_name(x.split()[-1])]) for x in kernel[idy+1:idx].split(',')]
     kernel_slices.append((kernel_id, kernel_name, args, body))
+  return kernel_slices
 
-  def tensor_display(encoded_name, prop):
-    return f'{encoded_name}:{prop["dtype"]}{str(prop["shape"])}'
-
-  kernel_slices.sort()
-  code = ['']
-  for i, (kernel_id, kernel_name, args, body) in enumerate(kernel_slices):
-    num_outputs = len(global_arg_props['_out']) if i + 1 == len(kernel_slices) else 1
-    display_inputs = ', '.join([tensor_display(x, prop) for _, x, prop in args[:-num_outputs]])
-    display_outputs = ', '.join([tensor_display(x, prop) for _, x, prop in args[-num_outputs:]])
-    kernel = backend_config.do_native_translation_v2((kernel_name, args[:-num_outputs], args[-num_outputs:], body), attrs=AntaresGlobal.attrs).strip()
-    code.append(f'// LOCAL: {kernel_name} -- {display_inputs} -> {display_outputs}\n\n{kernel}\n')
-
-  del kernel_slices
-  code = '\n// ---------------------------------------------------------------------------\n'.join(code)
-
-  try:
-    defs = backend_config.get_intrisic_defs() + '\n'
-  except:
-    defs = ''
-  return '%s\n%s%s' % (get_kernel_metadata(), defs, code)
 
 def compute_gflops(flop, t):
   try:
@@ -179,15 +142,54 @@ def codehub_db(compute_key, source_code=None, erase=False):
 def get_target_source(best_config, dir_sid=None):
   # Note: Not thread safe due to multiple invokes of target codegen
 
-  def pack_device_source(device_source):
+  global_arg_props = get_global_arg_props()
+  def get_kernel_metadata(config):
+    inp_args, outp_args = [], []
+
+    for buf in global_arg_props['_in']:
+      if buf['name'].startswith('_'):
+        # Just for Auto Shard
+        assert(buf['dtype'] == 'int32' and buf['shape'] == [1])
+        continue
+      inp_args.append('%s:%s%s' % (buf['name'], buf['dtype'], buf['shape']))
+    for buf in global_arg_props['_out']:
+      outp_args.append('%s:%s%s' % (buf['name'], buf['dtype'], buf['shape']))
+
+    device_code = os.environ.get('DEVICE_NAME', '')
+    device_code = device_code if device_code else 'default'
+    header_meta = '// GLOBALS: ' + ', '.join(inp_args) + ' -> ' + ', '.join(outp_args) + '\n// BACKEND: %s (%s)\n' % (backend, device_code)
+    properties = "// CONFIG: %s\n// COMPUTE_V1: %s\n" % (config.strip() if isinstance(config, str) else '', os.environ['COMPUTE_V1'])
+    return header_meta + properties
+
+  def slices_to_code(kernel_slices):
+    def tensor_display(encoded_name, prop):
+      return f'{encoded_name}:{prop["dtype"]}{str(prop["shape"])}'
+
+    kernel_slices.sort()
+    code = ['']
+    for i, (kernel_id, kernel_name, args, body) in enumerate(kernel_slices):
+      num_outputs = len(global_arg_props['_out']) if i + 1 == len(kernel_slices) else 1
+      display_inputs = ', '.join([tensor_display(x, prop) for _, x, prop in args[:-num_outputs]])
+      display_outputs = ', '.join([tensor_display(x, prop) for _, x, prop in args[-num_outputs:]])
+      kernel = backend_config.do_native_translation_v2((kernel_name, args[:-num_outputs], args[-num_outputs:], body), attrs=AntaresGlobal.attrs).strip()
+      code.append(f'// LOCAL: {kernel_name} -- {display_inputs} -> {display_outputs}\n\n{kernel}\n')
+
+    del kernel_slices
+    code = '\n// ---------------------------------------------------------------------------\n'.join(code)
+    return code
+
+  def pack_device_source(kernel_slices):
+    device_source = slices_to_code(kernel_slices)
+    device_source = '%s\n%s' % (get_kernel_metadata(best_config), device_source)
     kernel_path = local_get_dir_file('my_kernel.cc', dir_sid=dir_sid)
     with open(kernel_path, 'w') as fp:
       fp.write(device_source)
     return device_source, kernel_path
 
   if getattr(AntaresGlobal, 'mode', None) == 'antares':
-    source = backend_config.codegen(AntaresGlobal.compute_graph, json.loads(best_config))
-    return pack_device_source(source)
+    json_config = json.loads(best_config)
+    kernel_slices = backend_config.to_kernel_slices(AntaresGlobal.compute_graph, json_config if json_config is not None else {})
+    return pack_device_source(kernel_slices)
 
   with open(local_get_dir_file('my_kernel.time', dir_sid=dir_sid), 'w') as fp:
     fp.write('%s' % time.time())
@@ -229,8 +231,8 @@ def get_target_source(best_config, dir_sid=None):
       func = build_template()
 
   assert(len(func.imported_modules) == 1)
-  device_source = translate_code(func.imported_modules[0].get_source(), best_config)
-  return pack_device_source(device_source)
+  kernel_slices = translate_code(func.imported_modules[0].get_source(), best_config)
+  return pack_device_source(kernel_slices)
 
 def code_suffix(tpr=-1.0, step_prod=0, step_plan=-1):
   return '\n// Saved Perf = %.6e sec / run; Step Produced = %d; Planned Steps = %d;' % (tpr, step_prod, step_plan)
