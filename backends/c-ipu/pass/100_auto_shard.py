@@ -95,9 +95,6 @@ def scan_items(root, ancestor, ast, range_book):
   range_book[tensor_name] = current_range
 
 def run_pass_v2(ast_seq, global_input_dict, global_output_dict):
-  if backend not in ('c-ipu',):
-    return
-
   if len(ast_seq) > 1:
     raise Exception("TODO: Graphcore backend not handling multiple IR statements.")
   ast = ast_seq[0]

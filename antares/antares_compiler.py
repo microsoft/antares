@@ -382,7 +382,7 @@ def main_compute(code_only=False):
 
     try:
       if getattr(AntaresGlobal, 'mode', None) == 'antares':
-        task.search_space_v2 = backend_config.search_space()
+        task.search_space_v2 = backend_config.search_space(AntaresGlobal.compute_graph)
       else:
         task.search_space_v2 = AntaresGlobal.attrs.auto_config.get_config_space()
       task.n_parallel = batch_size
