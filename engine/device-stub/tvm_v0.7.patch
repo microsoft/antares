@@ -115,7 +115,7 @@ index 5eaf1e890..79ca9ea12 100644
        }
      }
 diff --git a/src/target/source/codegen_cuda.cc b/src/target/source/codegen_cuda.cc
-index e54acd222..49c6e2f9b 100644
+index cd02dcc7a..49c6e2f9b 100644
 --- a/src/target/source/codegen_cuda.cc
 +++ b/src/target/source/codegen_cuda.cc
 @@ -22,7 +22,7 @@
@@ -212,6 +212,29 @@ index 9cd29357f..e65c61149 100644
                         IntImm(DataType::UInt(8), dtype.code()) &&
                     TVMArrayGet(DataType::UInt(8), handle, builtin::kArrTypeBits) ==
                         IntImm(DataType::UInt(8), dtype.bits()) &&
+diff --git a/src/tir/transforms/lower_thread_allreduce.cc b/src/tir/transforms/lower_thread_allreduce.cc
+index f6cb09672..fae978d03 100644
+--- a/src/tir/transforms/lower_thread_allreduce.cc
++++ b/src/tir/transforms/lower_thread_allreduce.cc
+@@ -34,13 +34,17 @@
+ #include "../../runtime/thread_storage_scope.h"
+ #include "ir_utils.h"
+ 
++#include <cuda.h>
++
+ namespace tvm {
+ namespace tir {
+ 
+ class ThreadAllreduceBuilder final : public StmtExprMutator {
+  public:
+   explicit ThreadAllreduceBuilder(const TargetNode* target)
+-      : target_(target), warp_size_(target->GetAttr<Integer>("thread_warp_size", 1).value()) {}
++      : target_(target), warp_size_(target->GetAttr<Integer>("thread_warp_size", 1).value()) {
++        cudaDeviceGetAttribute(&warp_size_, cudaDevAttrWarpSize, 0);
++      }
+ 
+   Stmt VisitStmt_(const AttrStmtNode* op) final {
+     if (op->attr_key == attr::thread_extent) {
 diff --git a/src/tir/transforms/split_host_device.cc b/src/tir/transforms/split_host_device.cc
 index 921c7ad79..d96f871de 100644
 --- a/src/tir/transforms/split_host_device.cc
