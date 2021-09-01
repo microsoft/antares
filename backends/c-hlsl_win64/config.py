@@ -110,24 +110,7 @@ float pow_ex(float x, float y) {
     require_srv = f'SRV(t0, numDescriptors={len(in_args)}), ' if len(in_args) > 0 else ''
 
     full_body = f'''
-#ifndef __HLSL_COMMON_MACRO__
-#define __HLSL_COMMON_MACRO__
-
-#define __ITEM_0_OF__(v) (v).x
-#define __ITEM_1_OF__(v) (v).y
-#define __ITEM_2_OF__(v) (v).z
-#define __ITEM_3_OF__(v) (v).w
-
-#define __STORE_ITEM_0__(t, out, ido, in, idi)  out[(ido) + 0] = in[(idi) + 0]
-#define __STORE_ITEM_1__(t, out, ido, in, idi)  out[(ido) + 1] = in[(idi) + 1]
-#define __STORE_ITEM_2__(t, out, ido, in, idi)  out[(ido) + 2] = in[(idi) + 2]
-#define __STORE_ITEM_3__(t, out, ido, in, idi)  out[(ido) + 3] = in[(idi) + 3]
-
-#define make_int2(x, y) ((int2)(x, y))
-#define make_int4(x, y, z, w) ((int4)(x, y, z, w))
 {pre_defines}
-#endif
-
 {lds}
 {registers}{kwargs['attrs'].blend}
 [RootSignature("DescriptorTable({require_srv}UAV(u0, numDescriptors={len(out_args)}))")]
