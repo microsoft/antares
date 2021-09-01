@@ -8,13 +8,18 @@ import urllib.request
 
 
 def init(**kwargs):
+    if os.system('popc --version | grep "version 2" >/dev/null') == 0:
+        ipu_version = 2
+    else:
+        ipu_version = 1
+
     evaluator_path = '%s/evaluator.c-ipu' % os.environ['ANTARES_DRIVER_PATH']
     evaluator_dir = os.path.dirname(evaluator_path)
     try:
         os.makedirs(evaluator_dir)
     except FileExistsError:
         pass
-    assert 0 == os.system(f'g++ {os.path.dirname(__file__)}/run_graph.cpp -std=c++14 -lpoplar -lpoplin -lpopnn -lpopops -lpoputil -o {evaluator_path}'), "Poplar SDK is not found, please setup the graphcore environment."
+    assert 0 == os.system(f'g++ {os.path.dirname(__file__)}/run_graph.cpp -D__IPU_ARCH_VERSION__={ipu_version} -std=c++14 -lpoplar -lpoplin -lpopnn -lpopops -lpoputil -o {evaluator_path}'), "Poplar SDK is not found, please setup the graphcore environment."
 
 def eval(kernel_path, **kwargs):
     evaluator_path = '%s/evaluator.c-ipu' % os.environ['ANTARES_DRIVER_PATH']

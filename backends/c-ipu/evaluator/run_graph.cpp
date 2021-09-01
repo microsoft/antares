@@ -46,7 +46,11 @@ poplar::Device device;
 std::vector<poplar::ComputeSet> compsets;
 poplar::program::Sequence prog;
 
+#if __IPU_ARCH_VERSION__ == 2
+const int NUM_TILES = 1472;
+#else
 const int NUM_TILES = 1216;
+#endif
 
 namespace
 {
@@ -279,7 +283,11 @@ int main(int argc, char** argv)
     // fprintf(stderr, "[POP_DEBUG] Tile Mapping Information:\n");
     for (int it = 0; it < parts.size(); ++it) {
         poplar::VertexRef v = g.addVertex(compset, function_name);
+#if __IPU_ARCH_VERSION__ == 2
+        if (g.getTarget().getTargetType() == poplar::TargetType::IPU_MODEL) g.setPerfEstimate(v, 10);
+#else
         if (g.getTarget().getTargetType() == poplar::TargetType::IPU_MODEL) g.setCycleEstimate(v, 10);
+#endif
         auto lo = get_output_offset(parts[it], local_shape, 0), ro = get_output_offset(parts[it], local_shape, 1);
         int tile_node = it % NUM_TILES;
         // fprintf(stderr, "\n[POP_DEBUG] <Tile Numer = %d>:\n", it);
