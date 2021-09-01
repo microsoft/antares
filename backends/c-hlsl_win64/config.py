@@ -14,11 +14,7 @@ if not os.path.exists(f'{local_dll_path}/dxcompiler.dll'):
     os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.2.0/dxcompiler.dll -o {local_dll_path}/dxcompiler.dll')
 
 def get_execution_parallism():
-    if backend in ('c-hlsl_win64',):
-      return 1
-    batch_size = os.environ.get('BATCH', '')
-    batch_size = 16 if not batch_size else int(batch_size)
-    return batch_size
+    return 1
 
 def do_native_translation_v2(codeset, **kwargs):
     kernel_name, in_args, out_args, body = codeset
