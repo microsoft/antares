@@ -11,8 +11,6 @@ def schedule_branch(attrs, output, prefix):
     sizes = cfg.define_split(f"{prefix}R{i}", attrs.get_extent(ax), num_outputs=2)
     if rax == i:
       r_range = max(2, sizes[1])
-      if not attrs.backend.startswith('c-cuda'):
-        r_range = r_range if r_range != 32 else 16
       ko, ki = s[output].split(ax, factor=r_range)
       BF = s.rfactor(output, ki)
 

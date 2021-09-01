@@ -3,7 +3,7 @@
 cd $(dirname $0)/..
 ANTARES_ROOT=$(pwd)
 
-VERSION_TAG=v0.2dev10
+VERSION_TAG=v0.2dev11
 
 REQUIRED_CMDS="git python3 g++ make"
 
