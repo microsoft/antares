@@ -23,13 +23,13 @@ def _schedule_single(attrs, output, op_name, have_tail):
   num_inputs = len(s[output].op.input_tensors)
 
   # Rough classification of computing features
+  if not have_tail and len(output.op.reduce_axis) > 0 and (num_inputs <= 1 or len(output.shape) <= 1):
+    from .algo_reduce import schedule_branch
+    return schedule_branch(attrs, output, f"R{op_name}:")
+
   if num_inputs > 1 and len(output.op.reduce_axis) > 0:
     from .algo_tiling import schedule_branch
     return schedule_branch(attrs, output, f"T{op_name}:")
-
-  if not have_tail and len(output.op.reduce_axis) > 0:
-    from .algo_reduce import schedule_branch
-    return schedule_branch(attrs, output, f"R{op_name}:")
 
   from .algo_format import schedule_branch
   return schedule_branch(attrs, output, f"F{op_name}:")
