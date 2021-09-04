@@ -37,7 +37,7 @@ int main(int argc, char** argv)
       size_t size = it.element_size();
       if (it.dtype == "int32") {
         for (size_t x = 0; x < size; ++x)
-          ((int*)hptr.data())[x] = (x + i + 1) % 71;
+          ((int*)hptr.data())[x] = 0;
       } else if (it.dtype == "float32") {
         for (size_t x = 0; x < size; ++x)
           ((float*)hptr.data())[x] = (x + i + 1) % 71;
@@ -57,6 +57,10 @@ int main(int argc, char** argv)
     for (auto &it: gm.global_outputs) {
       void *dptr = allocate_tensor(it);
       global_args.push_back(dptr);
+
+      std::vector<char> hptr(it.mem_size(), 0);
+      ab::memcpyHtoD(dptr, hptr.data(), hptr.size(), nullptr);
+      ab::synchronize(nullptr);
     }
 
     gm.compute(global_args.data());

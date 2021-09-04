@@ -16,7 +16,7 @@ import collections
 import tvm
 
 from antares.common import *
-from lang.generic import custom_dtypes, refactor_multiple_names
+from lang.generic import custom_dtypes, refactor_special_names
 from graph_evaluator import client as eval_client
 
 compiler_path = os.path.dirname(os.path.abspath(__file__))
@@ -87,11 +87,8 @@ def verify_body(kernel_name, body):
 def translate_code(code, config):
   global_arg_props = get_global_arg_props()
 
-  def decode_name(encoded_name):
-    return encoded_name[2:] if encoded_name.startswith('__') else encoded_name
-
-  code = refactor_multiple_names(code, global_arg_props)
-  mediate_tensors = json.loads(os.environ.get('MEDIATE_TENSORS', ''))
+  code = refactor_special_names(code, global_arg_props)
+  tensors_pool = json.loads(os.environ.get('TENSORS_POOL', '{}'))
   kernel_slices = []
   for kernel in ('\n' + code).split('\nextern ')[1:]:
     kernel = 'extern %s\n' % kernel[:kernel.index('\n}') + 2]
@@ -104,8 +101,21 @@ def translate_code(code, config):
     idx = kernel.index(') {', idy)
     body = kernel[idx+3:kernel.index('\n}', idx)].strip()
     verify_body(kernel_name, body)
-    args = [(x.split('*')[0].strip(), x.split()[-1], mediate_tensors[decode_name(x.split()[-1])]) for x in kernel[idy+1:idx].split(',')]
-    kernel_slices.append((kernel_id, kernel_name, args, body))
+
+    arg_line = kernel[idy+1:idx]
+    args, outputs_ex = [], []
+    for x in arg_line.split(','):
+      c_type = x.split('*')[0].strip()
+      v_name = x.split()[-1]
+      if v_name.startswith('___'):
+        continue
+      v_name_in_pool = v_name[2:] if re.match(r'^__[a-z]+', v_name) else v_name
+      v_props = tensors_pool[v_name_in_pool]
+      if re.search(r'\b___%s\b' % v_name, arg_line) is not None:
+        outputs_ex.append((c_type, v_name, v_props))
+      else:
+        args.append((c_type, v_name, v_props))
+    kernel_slices.append((kernel_id, kernel_name, args + outputs_ex, body))
   return kernel_slices
 
 
