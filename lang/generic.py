@@ -153,14 +153,43 @@ def do_native_scheduling(attrs):
 
 intermediate_output = 'MultipleOutputsTempVar'
 
-def refactor_multiple_names(code, global_arg_props):
+
+def refactor_builtins(code):
+  result_lines = []
+  for line in code.split('\n'):
+    at = re.search(r'\b__builtin_set\(', line)
+    while at is not None:
+      arg_list = []
+      start, stop, cnt = at.start(), at.end(), 0
+      for i in range(stop, len(line)):
+        if line[i] in ('(', '['):
+          cnt += 1
+        elif line[i] in (')', ']'):
+          cnt -= 1
+        if cnt <= 0 and line[i] in (',', ')'):
+          arg_list.append(line[stop:i].strip())
+          stop = i + 1
+          if line[i] == ')':
+            line = line[:start] + f'(({arg_list[0]}) = ({arg_list[1]}))' + line[stop:]
+            break
+      at = re.search(r'\b__builtin_set\(', line)
+    result_lines.append(line)
+  return '\n'.join(result_lines)
+
+
+def refactor_special_names(code, global_arg_props):
   code = code.replace('(int* __restrict__ _id, ', '(').replace('_id[(0)]', '_id')
+  for i in range(len(global_arg_props['_out'])):
+    std_name = global_arg_props['_out'][i]['name']
+    code = re.sub(fr'\b___{std_name}\[.*\] = \b', '', code)
+
+  code = refactor_builtins(code)
   if len(global_arg_props['_out']) <= 1:
     return code
   for i in range(len(global_arg_props['_out'])):
     std_name = global_arg_props['_out'][i]['name']
-    code = re.sub(r'\b%s\b' % std_name, '__%s' % std_name, code)
-    code = re.sub(r'\b%s_v%d\b' % (intermediate_output, i), std_name, code)
+    code = re.sub(fr'\b{std_name}\b', f'__{std_name}', code)
+    code = re.sub(fr'\b{intermediate_output}_v{i}\b', std_name, code)
   return code
 
 @autotvm.template("template_op")

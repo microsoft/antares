@@ -197,15 +197,20 @@ class OpTensor:
           assert cond._dtype == 'int8', 'Each condition in when statement must be boolean(int8) type, get: %s' % cond._dtype
         return OpTensor('when', {"if": conditions, "true": self, "false": other, "merge_op": merge_op}, self._dtype)
 
-def parse_to_ast(expr):
-  global full_tensor_dict
-  expr = expr.strip().replace('`', '"').replace('\'', '"')
-  if re.search('\[ *\]', expr):
-    expr = re.sub('\[ *\]', '[0]', expr)
-    if expr.rfind('where') == -1:
-      expr += ' where Scaler in 1'
-    else:
-      expr += ', Scaler in 1'
+def get_valid_axis(expr):
+  valid_axis = set()
+  for i, section in enumerate(expr.split('"')):
+    if i % 2 == 1:
+      continue
+    word = re.search(r'\b[A-Z][a-zA-Z0-9]*', section)
+    while word is not None:
+      valid_axis.add(section[word.start():word.end()])
+      section = section[word.end():]
+      word = re.search(r'\b[A-Z][a-zA-Z0-9]*', section)
+  return valid_axis
+
+
+def detach_where_clause(expr):
   at_index = expr.rfind(' where ')
   if at_index != -1:
     range_desc = expr[at_index + len(' where '):]
@@ -213,39 +218,57 @@ def parse_to_ast(expr):
   else:
     range_desc = ''
 
-  # Parse compute axes & init axis nodes
-  global explicit_range
-  explicit_range = {}
-  brac_st = False
-  for i in range(len(expr)):
-    if expr[i] == '"':
-      brac_st = not brac_st
-      continue
-    if i < 1 or brac_st:
-      continue
-    if expr[i].isupper() and (not expr[i - 1].isalpha()) and (not expr[i - 1].isdigit()) and (expr[i - 1] != '_'):
-      for j in range(i, len(expr) + 1):
-        if j == len(expr) or (not expr[j].isalpha() and not expr[j].isdigit()):
-            ax_name = expr[i:j]
-            break
-      if ax_name not in explicit_range:
-        explicit_range[ax_name] = None
-
-  exec("_id = OpTensor('axis', '_id', 'int32')")
-  for k in explicit_range:
-    exec("%s = OpTensor('axis', k, 'int32')" % k)
-
-  # Parse where clause
+  range_items = dict()
   for x in range_desc.split(','):
     x = x.strip()
     if not x:
       continue
     k, v = x.split(' in ')
-    explicit_range[k.strip()] = int(v.strip())
+    range_items[k.strip()] = int(v.strip())
+  return expr, range_items
 
-  # Parse compute set-op, get lval & rval
+
+def parse_to_ast(expr):
+  expr = expr.strip().replace('`', '"').replace('\'', '"').replace('=!', '=')
+
+  # Construct explicit_range
+  global explicit_range
+  expr, explicit_range = detach_where_clause(expr)
+
+  valid_axis = get_valid_axis(expr)
+  for ax_name in valid_axis:
+    if ax_name not in explicit_range:
+      explicit_range[ax_name] = None
+
+  # Enable special syntax
+  set_index = expr.find('=.')
+  if set_index >= 1:
+    end_index = set_index + 2
+    start_index = set_index - 1 if expr[set_index - 1] in ('+',)  else set_index
+    set_op, symbolic_output = expr[start_index:end_index], expr[:expr.index('[')].strip()
+    if set_op == '=.':
+      set_op = '__builtin_set'
+    else:
+      raise Exception(f'Unimplemented set_op: `{set_op}`')
+    expr = f'___{symbolic_output}[{", ".join(valid_axis)}] = {expr[:start_index].strip()}.call("{set_op}", [{expr[end_index:].strip()},])'
+
+  # Handle scaler tensor
+  if re.search('\[ *\]', expr):
+    expr = re.sub('\[ *\]', '[0]', expr)
+    i = 0
+    while f'I{i}' in explicit_range:
+      i += 1
+    scale_ax_name = f'I{i}'
+    explicit_range[scale_ax_name] = 1
+
+  # Init axis nodes
+  exec("_id = OpTensor('axis', '_id', 'int32')")
+  for k in explicit_range:
+    exec("%s = OpTensor('axis', k, 'int32')" % k)
+
   props = {'data_axes': [], 'reduce_axes': [], 'input_dict': None, 'output_name': None, 'reduce_type': None}
 
+  # Parse formal set-op, l-val and r-val
   at_index = expr.find('=')
   if expr[at_index - 1] != ' ':
     if expr[at_index - 1] in ('<', '>', '+', ':', '_'):
@@ -258,22 +281,17 @@ def parse_to_ast(expr):
       lval = expr[:blank_index].strip()
   else:
     lval = expr[:at_index].strip()
-  if expr[at_index + 1] == '!':
-    assert(props['reduce_type'] is not None)
-    rval = expr[at_index + 2:].strip()
-  else:
-    rval = expr[at_index + 1:].strip()
+  rval = expr[at_index + 1:].strip()
 
-  # Distinguish data/reduce axes according to lval
+  # Distinguish data/reduce axes according to l-val
   for x in lval[lval.index('[') + 1:lval.rindex(']')].split(','):
     x = x.strip()
-    if x == '0':
-      x = 'Scaler'
-    props['data_axes'].append(x)
+    props['data_axes'].append(scale_ax_name if x == '0' else x)
   for x in explicit_range:
     if x not in props['data_axes']:
       props['reduce_axes'].append(x)
 
+  global full_tensor_dict
   for input_name in full_tensor_dict:
     if not input_name[0].islower():
       raise Exception("Tensor variable name must start with lower case letter: %s" % input_name)
@@ -285,7 +303,7 @@ def parse_to_ast(expr):
     if explicit_range[x] is None:
       raise Exception("The range of axis `%s` is undeterminzed, please use `where` clause to set the range explicitly." % x)
 
-  # Collect output inferences
+  # Collect output shape inferences
   props['data_axes'] = [{'name': x, 'range': explicit_range[x]} for x in props['data_axes']]
   props['reduce_axes'] = [{'name': x, 'range': explicit_range[x]} for x in props['reduce_axes']]
 
@@ -376,7 +394,7 @@ def emit_antares_ir(ast, primal=False, tensor_remap=dict()):
   lval = '%s[%s]' % (output_name, ', '.join([x['name'] for x in ast['props']['data_axes']]))
 
   body = _emit(ast['root'])
-  comp_type = '%s=%s' % (ast['props']['reduce_type'] if ast['props']['reduce_type'] else '', '!' if ast['props']['reduce_type'] else '')
+  comp_type = (ast['props']['reduce_type'] if ast['props']['reduce_type'] else '') + '='
 
   explicit_axes = [x for x in ast['props']['data_axes'] + ast['props']['reduce_axes'] if x['name'] not in dummy_range]
   if len(explicit_axes) > 0:
@@ -477,27 +495,32 @@ def ir_graph_parser(exprss, input_dict, extra_outputs):
     if k in extra_outputs:
       output_dict[k] = ast_outputs_dict[k]
     ast_seq.append(ast)
-  os.environ['MEDIATE_TENSORS'] = json.dumps(full_tensor_dict)
+  os.environ['TENSORS_POOL'] = json.dumps(full_tensor_dict)
 
   # Also include the last output
   if k not in extra_outputs:
     output_dict[k] = ast_outputs_dict[k]
 
   # Registry Global Argument Properties
-  arg_props = {'_in': [], '_out': []}
+  global_arg_pros = {'_in': [], '_out': []}
   for k in input_dict:
     prop = copy.deepcopy(input_dict[k])
     prop['name'] = k
-    arg_props['_in'].append(prop)
+    if f'___{k}' in output_dict:
+      global_arg_pros['_out'].append(prop)
+    else:
+      global_arg_pros['_in'].append(prop)
   for k in output_dict:
+    if k.startswith('___'):
+      continue
     prop = copy.deepcopy(output_dict[k])
     prop['name'] = k
-    arg_props['_out'].append(prop)
-  arg_props['_in'].sort(key=lambda x: x['name'])
-  arg_props['_out'].sort(key=lambda x: x['name'])
+    global_arg_pros['_out'].append(prop)
+  global_arg_pros['_in'].sort(key=lambda x: x['name'])
+  global_arg_pros['_out'].sort(key=lambda x: x['name'])
 
   from antares.common import AntaresGlobal
-  AntaresGlobal.global_arg_pros = arg_props
+  AntaresGlobal.global_arg_pros = global_arg_pros
 
   import importlib
   passes = [(x[:-3], 'lang.pass') for x in os.listdir('lang/pass') if x.endswith('.py')]
