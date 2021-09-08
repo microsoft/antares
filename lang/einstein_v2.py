@@ -106,8 +106,7 @@ class OpTensor:
             if other._value == 1:
                 return OpTensor.parse(0, self._dtype)
             if self._op == 'axis':
-                assert self._value in explicit_range and explicit_range[self._value] is not None
-                if explicit_range[self._value] <= other._value:
+                if (explicit_range.get(self._value) or other._value + 1) <= other._value:
                     return self
         return OpTensor('op', {"name": "%", "inputs": [self, other]}, self._dtype)
 
