@@ -5,6 +5,11 @@ from tvm import te
 import os
 
 def plan_threads(attrs, axes):
+  num_step = os.getenv('STEP', '')
+  num_step = int(num_step) if num_step else 0
+  if not num_step:
+    return [1] * len(axes), [1] * len(axes)
+
   num_threads, init_threads, shape = 256, [1] * len(axes), [attrs.get_extent(ax) for ax in axes]
   for th in range(2, num_threads + 1):
     while num_threads > 1:
