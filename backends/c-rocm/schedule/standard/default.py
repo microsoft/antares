@@ -27,7 +27,7 @@ def _schedule_single(attrs, output, op_name, have_tail):
     from .algo_reduce import schedule_branch
     return schedule_branch(attrs, output, f"R{op_name}:")
 
-  if num_inputs > 1 and len(output.op.reduce_axis) > 0:
+  if len(output.op.reduce_axis) > 0:
     from .algo_tiling import schedule_branch
     return schedule_branch(attrs, output, f"T{op_name}:")
 
@@ -41,11 +41,11 @@ def schedule(attrs):
   tail_op, explicit_ops = None, [x for x in attrs.explicit_ops]
 
   if (len(explicit_ops) > 1 and
-      not explicit_ops[-1].output(0).op.reduce_axis and
-      len(explicit_ops[-1].output(0).op.input_tensors) > 1):
+      not explicit_ops[-1].output(0).op.reduce_axis):
     fuse_tail = attrs.auto_config.define_knob(f"FU", [False, True])
     if fuse_tail:
       tail_op, explicit_ops = explicit_ops[-1], explicit_ops[:-1]
 
   for rank, op in enumerate(reversed(explicit_ops)):
     _schedule_single(attrs, op.output(0), op.name, tail_op is not None and rank == 0)
+
