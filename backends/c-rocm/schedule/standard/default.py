@@ -8,11 +8,11 @@ import sys, time, subprocess
 import json
 import os
 
-def _schedule_single(attrs, output, op_name, have_tail):
+def _schedule_single(attrs, output, op_name, tail_op):
   s = attrs.scheduler
 
   def cache_local(output):
-    if not have_tail:
+    if not tail_op:
       OL = s.cache_write(output, 'local')
     else:
       s[output].set_scope('local')
@@ -23,9 +23,9 @@ def _schedule_single(attrs, output, op_name, have_tail):
   num_inputs = len(s[output].op.input_tensors)
 
   # Rough classification of computing features
-  if not have_tail and len(output.op.reduce_axis) > 0 and (num_inputs <= 1 or len(output.shape) <= 1):
+  if len(output.op.reduce_axis) > 0 and (num_inputs <= 1 or len(output.shape) <= 1):
     from .algo_reduce import schedule_branch
-    return schedule_branch(attrs, output, f"R{op_name}:")
+    return schedule_branch(attrs, output, f"R{op_name}:", tail_op)
 
   if len(output.op.reduce_axis) > 0:
     from .algo_tiling import schedule_branch
@@ -47,5 +47,5 @@ def schedule(attrs):
       tail_op, explicit_ops = explicit_ops[-1], explicit_ops[:-1]
 
   for rank, op in enumerate(reversed(explicit_ops)):
-    _schedule_single(attrs, op.output(0), op.name, tail_op is not None and rank == 0)
+    _schedule_single(attrs, op.output(0), op.name, tail_op if rank == 0 else None)
 
