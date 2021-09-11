@@ -195,7 +195,7 @@ COMPUTE_V1='- einstein_v2("output0[N] = (input0[N] / input1[N]).when([input1[N] 
 COMPUTE_V1='- einstein_v2("output0[N, C, HO, WO] >=! input0[N, C, HO * 2 + KH, WO * 2 + KW] where HO in 6, WO in 6, KW in 2, KH in 2", input_dict={"input0": {"dtype": "float32", "shape": [32, 3, 12, 12]}})' make
 
 # AvgPool
-COMPUTE_V1='- einstein_v2("temp0[NC, HO, WO] +=! input0[NC, HO * 3 + KH, WO * 3 + KW] where HO in 85, WO in 85, KW in 3, KH in 3; output0[NC, HO, WO] = temp0[NC, HO, WO] * 0.111111", input_dict={"input0": {"dtype": "float32", "shape": [1024, 255, 255]}})' make
+COMPUTE_V1='- einstein_v2("temp0[NC, HO, WO] +=! input0[NC, HO * 3 + KH, WO * 3 + KW] where HO in 85, WO in 85, KW in 3, KH in 3; output0[NC, HO, WO] = temp0[NC, HO, WO] / 9.0", input_dict={"input0": {"dtype": "float32", "shape": [1024, 255, 255]}})' make
 
 # Tile
 COMPUTE_V1='- einstein_v2("output0[ON, OC] = input0[ON % 2, OC % 16] where ON in 1024, OC in 4096", input_dict={"input0": {"dtype": "float32", "shape": [2, 16]}})' make

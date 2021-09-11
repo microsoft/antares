@@ -3,34 +3,38 @@
 
 from tvm import te
 
-def schedule_branch(attrs, output, prefix):
+def schedule_branch(attrs, output, prefix, tail_op):
   cfg, s = attrs.auto_config, attrs.scheduler
 
   rax = cfg.define_knob(f"{prefix}S", [x for x in range(len(s[output].op.reduce_axis))])
   for i, ax in enumerate(s[output].op.reduce_axis):
-    sizes = cfg.define_split(f"{prefix}R{i}", attrs.get_extent(ax), num_outputs=2)
+    sizes = cfg.define_split(f"{prefix}R{i}", attrs.get_extent(ax), num_outputs=2, init_vals=[[-1, attrs.device_props.warp_size]])
     if rax == i:
-      r_range = max(2, sizes[1])
+      use_wrap_reduce = cfg.define_knob(f"{prefix}W", [True, False])
+      r_range = attrs.device_props.warp_size if use_wrap_reduce else sizes[1]
+      r_range = max(r_range, 2)
       ko, ki = s[output].split(ax, factor=r_range)
-      BF = s.rfactor(output, ki)
+      s[output].bind(ki, te.thread_axis("threadIdx.x"))
 
-  data_slices = []
-  for i, ax in enumerate(s[output].op.axis):
-    sizes = cfg.define_split(f"{prefix}D{i}", attrs.get_extent(ax), num_outputs=2)
-    data_slices.append(list(cfg.apply_split(s, output, ax, sizes)))
+  if len(attrs.explicit_ops[-1].output(0).op.reduce_axis) == 0:
+    split_name = str(s[output].op.reduce_axis[rax].var.name)
+    match_list = [i for i, x in enumerate(attrs.explicit_ops[-1].output(0).op.axis) if str(x.var.name) == split_name]
+    if not match_list:
+      tax = len(s[output].op.axis) - len(s[output].op.reduce_axis) + rax
+    else:
+      tax = match_list[0]
 
-  first, second = [x[0] for x in data_slices], [x[1] for x in data_slices]
-  s[output].reorder(*(first + second))
+  if not tail_op:
+    s[output].reorder(*s[output].op.axis)
+    outer_ax = s[output].fuse(*s[output].op.axis)
+    s[output].bind(outer_ax, te.thread_axis("blockIdx.x"))
+    return
 
-  fused_b = s[output].fuse(*first)
-  fused_t = s[output].fuse(*second)
+  axes, extra = s[tail_op].op.axis[:tax] + s[tail_op].op.axis[tax+1:], s[tail_op].op.axis[tax]
+  s[tail_op].reorder(*axes)
+  outer_ax = s[tail_op].fuse(*axes)
+  s[tail_op].bind(outer_ax, te.thread_axis("blockIdx.x"))
 
-  s[output].bind(fused_b, te.thread_axis("blockIdx.x"))
-  s[output].bind(fused_t, te.thread_axis("threadIdx.y"))
-
-  rax = min(rax, len(s[output].op.reduce_axis) - 1)
-  reduce_ax = s[output].op.reduce_axis[rax]
-  tx = te.thread_axis("threadIdx.x")
-  s[output].bind(reduce_ax, tx)
-  s[BF].compute_at(s[output], reduce_ax)
-  s[output].set_store_predicate(tx.var.equal(0))
+  outer_o, outer_i = s[tail_op].split(extra, factor=r_range)
+  s[tail_op].bind(outer_i, te.thread_axis("threadIdx.x"))
+  s[output].compute_at(s[tail_op], outer_ax)
