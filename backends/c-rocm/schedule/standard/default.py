@@ -43,8 +43,11 @@ def schedule(attrs):
   if (len(explicit_ops) > 1 and
       not explicit_ops[-1].output(0).op.reduce_axis):
     fuse_tail = attrs.auto_config.define_knob(f"FU", [False, True])
+    tail_op = explicit_ops[-1]
     if fuse_tail:
-      tail_op, explicit_ops = explicit_ops[-1], explicit_ops[:-1]
+      tail_op.is_fused, explicit_ops = True, explicit_ops[:-1]
+    else:
+      tail_op.is_fused = False
 
   for rank, op in enumerate(reversed(explicit_ops)):
     _schedule_single(attrs, op.output(0), op.name, tail_op if rank == 0 else None)
