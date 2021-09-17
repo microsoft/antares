@@ -38,6 +38,12 @@ int main(int argc, char** argv)
       if (it.dtype == "int32") {
         for (size_t x = 0; x < size; ++x)
           ((int*)hptr.data())[x] = 0;
+      } else if (it.dtype == "int16") {
+        for (size_t x = 0; x < size; ++x)
+          ((short*)hptr.data())[x] = 0;
+      } else if (it.dtype == "int64") {
+        for (size_t x = 0; x < size; ++x)
+          ((long*)hptr.data())[x] = 0;
       } else if (it.dtype == "float32") {
         for (size_t x = 0; x < size; ++x)
           ((float*)hptr.data())[x] = (x + i + 1) % 71;
