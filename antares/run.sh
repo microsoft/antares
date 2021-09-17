@@ -3,7 +3,7 @@
 cd $(dirname $0)/..
 ANTARES_ROOT=$(pwd)
 
-python3 -c 'import sys; assert sys.version >= "3.6", "Python Error: Antares depends on Python >= 3.6"'
+bash -e ./engine/check_environ.sh
 
 export ANTARES_DRIVER_PATH=${ANTARES_ROOT}/.libAntares
 

@@ -3,11 +3,11 @@
 cd $(dirname $0)/..
 ANTARES_ROOT=$(pwd)
 
-VERSION_TAG=v0.2dev11
+bash -e ./engine/check_environ.sh
+
+VERSION_TAG=v0.2dev12
 
 REQUIRED_CMDS="git python3 g++ make"
-
-python3 -c 'import sys; assert sys.version >= "3.6", "Python Error: Antares depends on Python >= 3.6"'
 
 if grep Microsoft /proc/sys/kernel/osrelease >/dev/null || grep WSL2 /proc/sys/kernel/osrelease >/dev/null; then
   REQUIRED_CMDS="${REQUIRED_CMDS} x86_64-w64-mingw32-c++"
