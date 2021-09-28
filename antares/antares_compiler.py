@@ -259,6 +259,8 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
         result['TPR'] = None
 
     t = result.get('TPR', None)
+    if 'K/0' in result and t is None:
+      t = result['TPR'] = float('inf')
     if t is None:
       print("\n[Antares] Incorrect compute kernel from evaluator.")
     else:

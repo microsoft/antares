@@ -71,6 +71,9 @@ int main(int argc, char** argv)
 
     gm.compute(global_args.data());
 
+    FILE *fp = fopen("stdout.log", "wb");
+    CHECK_OK(fp != nullptr);
+
     for (int i = 0; i < gm.global_outputs.size(); ++i) {
       auto &it = gm.global_outputs[i];
       void *dptr = global_args[gm.global_inputs.size() + i];
@@ -96,7 +99,8 @@ int main(int argc, char** argv)
         for (size_t x = byte_size - byte_size % sizeof(int); x < byte_size; x++)
           digest += ((char*)hptr.data())[x];
       }
-      printf("\n- K/%d: %.10e\n", i, digest);
+      printf("\n- K/%d: %.10e\n", i, digest), fflush(stdout);
+      fprintf(fp, "\n- K/%d: %.10e\n", i, digest), fflush(fp);
     }
 
     do {
@@ -107,7 +111,8 @@ int main(int argc, char** argv)
 
       double tpr = ab::convertToElapsedTime(x, y);
       if ((expected_timeout > 0 && tpr > expected_timeout) || tpr > 2) {
-        printf("\n- TPR: %g\n", tpr);
+        printf("\n- TPR: %g\n", tpr), fflush(stdout);
+        fprintf(fp, "\n- TPR: %g\n", tpr), fflush(fp);
         break;
       }
 
@@ -118,9 +123,11 @@ int main(int argc, char** argv)
         gm.compute(global_args.data());
       y = ab::recordTime(nullptr);
       tpr = ab::convertToElapsedTime(x, y) / num_runs;
-      printf("\n- TPR: %g\n", tpr);
+      printf("\n- TPR: %g\n", tpr), fflush(stdout);
+      fprintf(fp, "\n- TPR: %g\n", tpr), fflush(fp);
     } while (0);
 
+    fclose(fp);
     ab::finalize();
     return 0;
 }
