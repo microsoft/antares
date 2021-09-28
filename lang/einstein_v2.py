@@ -184,6 +184,10 @@ class OpTensor:
           others = []
         for i in range(len(others)):
           others[i] = OpTensor.parse(others[i])
+        if func_name == 'remainder' and len(others) == 0:
+          return self - self.cast('int32')
+        if func_name in ('floor', 'ceil') and len(others) == 0:
+          return OpTensor('call', {"name": func_name, "inputs": [self] + others}, self._dtype).cast('int64' if self._dtype == 'float64' else 'int32')
         if output_dtype is None:
           output_dtype = self._dtype
         return OpTensor('call', {"name": func_name, "inputs": [self] + others}, output_dtype)

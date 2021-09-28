@@ -87,6 +87,20 @@ Einstein Expression Parsing:
 | int16 | short |
 | int8 | char |
 
+### Antares Built-in Functions:
+| Function Name | Proto | Explanation |
+|---|---|---|
+| max | T max(T, T) | The max value of two inputs |
+| min | T min(T, T) | The min value of two inputs |
+| log | T log(T) | The log value of input |
+| exp | T exp(T) | The exponentiation of input |
+| sqrt | T sqrt(T) | The square root of input |
+| pow | T pow(T, T) | The power value of inputs: a ^ b |
+| floor | int32/int64 floor(float32/float64) | The floor integer of input |
+| ceil | int32/int64 ceil(float32/float64) | The ceil integer of input |
+| remainder | float32/float64 remainder(float32/float64) | The remainder float of input |
+
+
 ### Detailed Examples:
 ```sh
 # Broadcast
