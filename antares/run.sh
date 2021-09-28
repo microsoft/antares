@@ -57,6 +57,9 @@ if [ ! -e ${ANTARES_DRIVER_PATH}/device_properties.cfg ]; then
     echo "  >> Using ${BACKEND} default device properties."
   else
     echo -e "\n  >> Unsupported Backend: No device properties found for backend type: ${BACKEND}.\n"
+    echo -e   "  >> Valid Backend Types include:\n"
+    echo -e   "        " $(ls ./backends -1 | grep "^c-*")
+    echo
     exit 1
   fi
 else
