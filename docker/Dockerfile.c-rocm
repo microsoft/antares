@@ -30,4 +30,4 @@ RUN /antares/engine/install_antares_host.sh && rm -rf /var/lib/apt/lists/* ~/.ca
 # OpenCL has been included in ROCm already
 RUN rm -rf /usr/lib/x86_64-linux-gnu/libOpenCL.so.1*
 
-RUN python3 -m pip install tensorflow-rocm==2.4.3 mpi4py  # tensorflow-rocm==1.15.12
+# RUN python3 -m pip install tensorflow-rocm==2.4.3 mpi4py  # tensorflow-rocm==1.15.12

@@ -22,4 +22,4 @@ RUN ln -sf libcudart.so /usr/local/cuda/targets/x86_64-linux/lib/libcudart_stati
 
 ADD ./engine /antares/engine
 RUN /antares/engine/install_antares_host.sh && rm -rf /var/lib/apt/lists/* ~/.cache
-RUN python3 -m pip install tensorflow-gpu==2.4.0 mpi4py
+# RUN python3 -m pip install tensorflow-gpu==2.4.0 mpi4py
