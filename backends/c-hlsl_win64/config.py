@@ -103,7 +103,7 @@ float pow_ex(float x, float y) {
 #define pow pow_ex
 '''
 
-    body = re.sub(r'\b__syncthreads\b', 'GroupMemoryBarrierWithGroupSync', body);
+    body = re.sub(r'\b__syncthreads\b', 'GroupMemoryBarrierWithGroupSync', body)
     lds = '\n'.join(lds)
     registers = ''.join(registers)
 
