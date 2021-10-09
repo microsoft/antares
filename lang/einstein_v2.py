@@ -390,6 +390,8 @@ def emit_antares_ir(ast, primal=False, tensor_remap=dict()):
       return '(%s).when([%s], %s, merge_op="%s")' % (_emit(node._value['true']), ', '.join([_emit(x) for x in node._value['if']]), _emit(node._value['false']), node._value['merge_op'])
     elif node._op == 'cast':
       return '(%s).cast(`%s`)' % (_emit(node._value['inputs'][0]), node._dtype)
+    elif node._op == 'axis_range':
+      return '%s.val()' % (node._value)
     else:
       raise Exception("Emit Antares IR: Unhanled reverse-emit op type: %s" % node._op)
 
