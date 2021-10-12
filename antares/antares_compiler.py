@@ -592,7 +592,10 @@ def rest_service():
   app.port = int(os.environ.get('HTTP_PORT', '8880'))
 
   print("* Antares service for backend = `%s` is listening on ':%d'" % (backend, app.port))
-  tornado.httpserver.HTTPServer(app).listen(app.port)
+  try:
+    tornado.httpserver.HTTPServer(app).listen(app.port)
+  except Exception as ex:
+    raise Exception("Error: %s.\n\nService Failure: Is another process listening on TCP-port %d? Try setting another port with: export HTTP_PORT=<port-num>" % (ex, app.port))
 
   def scan_tasks(ioloop):
       try:
