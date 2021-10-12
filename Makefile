@@ -35,8 +35,8 @@ eval:
 shell: install_docker
 	$(PARAMS) -it --rm --network=host antares bash || true
 
-rest-server: install_docker stop-server
-	$(HTTP_EXEC) bash -c 'trap ctrl_c INT; ctrl_c() { exit 1; }; while true; do BACKEND=$(BACKEND) HTTP_SERVICE=1 HTTP_PORT=$(HTTP_PORT) $(INNER_CMD); done'
+rest-server:
+	@if [ "x$(HOST_MODE)" = "x0" ] && [ "x$(shell whoami)" = "xroot" ] && pgrep dockerd >/dev/null 2>&1 && [ -e docker/Dockerfile.$(BACKEND) ] && $(MAKE) install_docker && $(MAKE) stop-server; then $(HTTP_EXEC) bash -c 'trap ctrl_c INT; ctrl_c() { exit 1; }; while true; do BACKEND=$(BACKEND) HTTP_SERVICE=1 HTTP_PORT=$(HTTP_PORT) $(INNER_CMD); done'; else HTTP_SERVICE=1 $(INNER_CMD) || true; fi
 
 stop-server:
 	$(eval CONT_NAME := $(shell docker ps | grep $(HTTP_PREF) | awk '{print $$NF}'))
