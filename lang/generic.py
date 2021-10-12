@@ -15,6 +15,9 @@ import re
 from antares.common import Mock, AntaresGlobal, backend, AutoConfig
 
 def einstein_v2(exprss, input_dict, extra_outputs=[], **kwargs):
+  if 'comments' in kwargs:
+    os.environ['COMMENTS'] = json.dumps(kwargs['comments'])
+
   ir = os.environ.get('LL_IR', '')
   if not ir:
     for k in input_dict:
