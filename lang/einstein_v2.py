@@ -77,7 +77,7 @@ class OpTensor:
 
     def __truediv__(self, other):
         other = OpTensor.parse(other)
-        op_name = '//' if self._dtype == 'int32' and other._dtype == 'int32' else '/'
+        op_name = '//' if re.match(r'^int[0-9]+$', self._dtype) and re.match(r'^int[0-9]+$', other._dtype) else '/'
         output_dtype = OpTensor.merge_dtype(self, other)
         if other._op == 'const' and other._value == 1:
             return self.cast(output_dtype)
@@ -329,6 +329,7 @@ def parse_to_ast(expr):
   for name in input_names:
     local_input_dict[name] = full_tensor_dict[name]
   props['input_dict'] = local_input_dict
+  props['explicit_range'] = copy.deepcopy(explicit_range)
   return ast
 
 def const(other):
@@ -414,7 +415,7 @@ def emit_tvm_body(node, props):
   if node._op == 'const':
     return 'tir.const(%s, dtype="%s")' % (node._value, node._dtype)
   elif node._op == 'axis_range':
-    return 'tir.const(%s, dtype="%s")' % (explicit_range[node._value], node._dtype)
+    return 'tir.const(%s, dtype="%s")' % (props['explicit_range'][node._value], node._dtype)
   elif node._op == 'get_item':
     tensor = node._value['tensor']
     index = node._value['index']
@@ -439,6 +440,8 @@ def emit_tvm_body(node, props):
         return 'te.any(' + emit_tvm_body(node._value["inputs"][0], props) + '.astype("bool"), ' + emit_tvm_body(node._value["inputs"][1], props) + '.astype("bool"))'
       else:
         return '(' + emit_tvm_body(node._value["inputs"][0], props) + ' == 0)'
+    elif op_name == '//':
+      return 'tvm.tir.truncdiv(' + emit_tvm_body(node._value["inputs"][0], props) + ', ' + emit_tvm_body(node._value["inputs"][1], props) + ')'
     elif op_input_size == 2:
       return '(' + emit_tvm_body(node._value["inputs"][0], props) + ' ' + op_name + ' ' + emit_tvm_body(node._value["inputs"][1], props) + ')'
     elif op_input_size == 1:
@@ -487,7 +490,7 @@ def walk_in_ast(parent, attr_id, func, args):
 
   _walk(node, parent, attr_id)
 
-def ir_graph_parser(exprss, input_dict, extra_outputs):
+def ir_graph_parser(exprss, input_dict, extra_outputs, is_graph=False):
   statements = [s_.strip() for s_ in exprss.split(';')]
   global full_tensor_dict
   full_tensor_dict = copy.deepcopy(input_dict)
@@ -526,6 +529,9 @@ def ir_graph_parser(exprss, input_dict, extra_outputs):
     global_arg_pros['_out'].append(prop)
   global_arg_pros['_in'].sort(key=lambda x: x['name'])
   global_arg_pros['_out'].sort(key=lambda x: x['name'])
+
+  if is_graph:
+    return ast_seq, input_dict, output_dict
 
   from antares.common import AntaresGlobal
   AntaresGlobal.global_arg_pros = global_arg_pros
