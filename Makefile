@@ -1,6 +1,7 @@
 COMPUTE_V1 ?=
 TUNER ?=
 STEP ?= 0
+INIT_CONFIG ?=
 CONFIG ?=
 COMMIT ?=
 AGENT_URL ?=
@@ -20,8 +21,8 @@ PARAMS ?=  docker run -v $(shell pwd):/antares -w /antares --privileged -v /:/ho
 	--shm-size=1g --ulimit memlock=-1 --ulimit stack=67108864 \
 	-v $(shell dirname `find /usr/lib/ -name libnvidia-ptxjitcompiler.so` 2>/dev/null | tail -n 1)/libnvidia-ptxjitcompiler.so:/usr/local/nvidia/lib64/libnvidia-ptxjitcompiler.so \
 	-v $(shell dirname `find /usr/lib/ -name libcuda.so.1` 2>/dev/null | tail -n 1)/libcuda.so.1:/usr/local/nvidia/lib64/libcuda.so.1 \
-	-v $(shell pwd)/public/roc_prof:/usr/local/bin/rp -e CPU_THREADS=$(CPU_THREADS) -e ANTARES_ROOT=/antares -e BATCH=$(BATCH) -e AB_DEBUG=$(AB_DEBUG) \
-	-e STEP=$(STEP) -e AGENT_URL=$(value AGENT_URL) -e TUNER=$(TUNER) -e CONFIG='$(value CONFIG)' -e BACKEND=$(BACKEND) -e COMPUTE_V1='$(value COMPUTE_V1)' \
+	-v $(shell pwd)/public/roc_prof:/usr/local/bin/rp -e CPU_THREADS=$(CPU_THREADS) -e ANTARES_ROOT=/antares -e BATCH=$(BATCH) -e AB_DEBUG=$(AB_DEBUG) -e INIT_CONFIG='$(value INIT_CONFIG)' \
+	-e STEP=$(STEP) -e AGENT_URL='$(value AGENT_URL)' -e TUNER=$(TUNER) -e CONFIG='$(value CONFIG)' -e BACKEND=$(BACKEND) -e COMPUTE_V1='$(value COMPUTE_V1)' \
 	-e COMMIT=$(COMMIT) -e HARDWARE_CONFIG=$(HARDWARE_CONFIG) -e DEVICE_NAME='$(value DEVICE_NAME)' -e EXPECTED_TIMEOUT=$(EXPECTED_TIMEOUT)
 
 HTTP_PORT ?= 8880
