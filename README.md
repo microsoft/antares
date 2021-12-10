@@ -143,13 +143,13 @@ COMMIT=force STEP=5000 COMPUTE_V1='- einstein_v2(input_dict={"data": {"dtype": "
         #   Tensorflow-2 for AMD ROCm 4.2:
         python3 -m pip install tensorflow-rocm==2.4.3
 
-        For Pytorch 1.x: Recommended Packages (tested in Ubuntu 20.04):
-        #   Pytorch for NVIDIA CUDA 10.0:
-        python3 -m pip install torch==1.5.0 torchvision==0.6.0 -f https://download.pytorch.org/whl/torch_stable.html
-        #   Pytorch for NVIDIA CUDA 11.0:
-        python3 -m pip install torch===1.7.1+cu110 torchvision===0.8.2+cu110 torchaudio===0.7.2 -f https://download.pytorch.org/whl/torch_stable.html
+        For Pytorch 1.10: Recommended Packages (tested in Ubuntu 20.04):
+        #   Pytorch for NVIDIA CUDA >= 10.2:
+        python3 -m pip install --user torch==1.10.0+cu102 torchvision==0.11.1+cu102 torchaudio==0.10.0+cu102 -f https://download.pytorch.org/whl/torch_stable.html
+        #   Pytorch for NVIDIA CUDA >= 11.3:
+        python3 -m pip install --user torch==1.10.0+cu113 torchvision==0.11.1+cu113 torchaudio==0.10.0+cu113 -f https://download.pytorch.org/whl/torch_stable.html
         #   Pytorch for AMD ROCm 4.2:
-        python3 -m pip install --pre torch torchvision -f https://download.pytorch.org/whl/nightly/rocm4.2/torch_nightly.html
+        python3 -m pip install --user torch==1.10.0+rocm4.2 torchvision==0.11.1+rocm4.2 -f https://download.pytorch.org/whl/torch_stable.html
 
 - Step-3: Install JIT Plugin Client and Run Examples
 
