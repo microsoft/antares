@@ -93,6 +93,8 @@ def translate_code(code, config):
   for kernel in ('\n' + code).split('\nextern ')[1:]:
     kernel = 'extern %s\n' % kernel[:kernel.index('\n}') + 2]
     idx = kernel.index(' void ') + 6
+    if kernel[idx:].startswith('__launch_bounds__'):
+      idx = kernel.index(')', idx) + 2
     idy = kernel.index('(', idx)
     kernel_name = kernel[idx:idy]
     kernel_prefix = 'template_op_kernel'
@@ -338,6 +340,7 @@ def run_config_entity(target_source, config_str, dir_sid, expected_timecost='inf
     digest = f'\033[{91 + int(hashlib.sha256(digest.encode()).hexdigest(), 16) % 6}m{digest}\033[0m'
     result = float(results['TPR'])
   except:
+    # traceback.print_exc()
     digest = 'null'
     result = float('inf')
   if not math.isinf(result):
@@ -353,8 +356,10 @@ def main_compute(code_only=False):
   default_tune_op = importlib.import_module('lang.generic')
 
   import logging
+  import warnings
   from tvm import autotvm
 
+  warnings.simplefilter("ignore")
   logging.getLogger('autotvm').setLevel(logging.ERROR)
   logging.getLogger('autotvm').addHandler(logging.StreamHandler(sys.stdout))
   task = autotvm.task.create("template_op", args=(), target=tvm_target)
