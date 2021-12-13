@@ -71,6 +71,7 @@ _STUB(cudaEventSynchronize)
 _STUB(cudaEventElapsedTime)
 _STUB(cuLaunchKernel)
 _STUB(cuMemsetD32)
+_STUB(cudaMemGetInfo)
 
 _STUB(nvrtcCreateProgram)
 _STUB(nvrtcGetErrorString)

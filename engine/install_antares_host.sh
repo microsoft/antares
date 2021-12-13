@@ -5,7 +5,7 @@ ANTARES_ROOT=$(pwd)
 
 bash -e ./engine/check_environ.sh
 
-VERSION_TAG=v0.2dev12
+VERSION_TAG=v0.2dev14
 
 REQUIRED_CMDS="git python3 g++ make"
 
@@ -25,7 +25,7 @@ done
 set -x
 
 TVM_HOME=${HOME}/.local/antares/thirdparty/tvm
-GIT_COMMIT=0b24cbf1be
+GIT_COMMIT=v0.8.0
 
 if [ ! -e ${TVM_HOME} ] || ! sh -ce "cd ${TVM_HOME}; git fetch; git reset --hard; git checkout ${GIT_COMMIT}"; then
   rm -rf ${TVM_HOME}
@@ -42,7 +42,7 @@ rm -rf ${TVM_HOME}/device-stub
 cp -r ${ANTARES_ROOT}/engine/device-stub ${TVM_HOME}/device-stub
 touch ${TVM_HOME}/device-stub/device-stub.c && gcc ${TVM_HOME}/device-stub/device-stub.c -shared -o ${TVM_HOME}/device-stub/lib64/libcudart.so
 
-git checkout ${GIT_COMMIT} && git apply device-stub/tvm_v0.7.patch
+git checkout ${GIT_COMMIT} && git apply device-stub/tvm_v0.8.0.patch
 git submodule init && git submodule update
 mkdir -p build && cd build && cp ../cmake/config.cmake .
 
