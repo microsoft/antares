@@ -57,6 +57,7 @@ class MainTuner(object):
     self.task = task
     self.measure_ctx = auto_scheduler.LocalRPCMeasureContext(min_repeat_ms=300)
     self.auto_task = create_auto_task(task.target)
+    assert backend in ('c-cuda', 'c-rocm'), "Ansor in Antares is enabled for CUDA/ROCm only."
 
   def cleanup(self):
     del self.measure_ctx
