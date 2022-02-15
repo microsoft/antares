@@ -51,10 +51,10 @@ fi
 if [ ! -e ${ANTARES_DRIVER_PATH}/device_properties.cfg ]; then
   if [[ "${HARDWARE_CONFIG}" != "" ]]; then
     cat hardware/${HARDWARE_CONFIG}.cfg > ${ANTARES_DRIVER_PATH}/device_properties.cfg
-    echo "  >> Using specific hardware device properties."
+    # echo "  >> Using specific hardware device properties."
   elif [ -e backends/${BACKEND}/default_props.cfg ]; then
     cat backends/${BACKEND}/default_props.cfg > ${ANTARES_DRIVER_PATH}/device_properties.cfg
-    echo "  >> Using ${BACKEND} default device properties."
+    # echo "  >> Using ${BACKEND} default device properties."
   else
     echo -e "\n  >> Unsupported Backend: No device properties found for backend type: ${BACKEND}.\n"
     echo -e   "  >> Valid Backend Types include:\n"
@@ -63,7 +63,7 @@ if [ ! -e ${ANTARES_DRIVER_PATH}/device_properties.cfg ]; then
     exit 1
   fi
 else
-  echo "  >> Using ${BACKEND} runtime device properties."
+  true # echo "  >> Using ${BACKEND} runtime device properties."
 fi
 
 
@@ -71,4 +71,4 @@ ldconfig >/dev/null 2>&1 || true
 
 [[ "$USING_GDB" == "" ]] || USING_GDB="gdb --ex run --args"
 
-time STEP=${STEP:-0} ${USING_GDB} python3 ./antares/antares_compiler.py "$@"
+STEP=${STEP:-0} ${USING_GDB} python3 ./antares/antares_compiler.py "$@"
