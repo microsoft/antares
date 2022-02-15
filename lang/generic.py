@@ -27,7 +27,7 @@ def einstein_v2(exprss, input_dict, extra_outputs=[], **kwargs):
     ir = einstein_v2.ir_graph_parser(exprss, input_dict, extra_outputs)
     assert(len(ir) > 0)
     os.environ['LL_IR'] = ir
-    print('\n[LL-IR]\n%s\n' % ir[ir.find('; ') + 2:])
+    # print('\n[LL-IR]\n%s\n' % ir[ir.find('; ') + 2:])
 
   exec(ir, globals())
 

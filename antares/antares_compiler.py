@@ -12,7 +12,7 @@ import json
 import importlib
 import signal
 import collections
-
+import threading
 import tvm
 
 from antares.common import *
@@ -22,6 +22,13 @@ from graph_evaluator import client as eval_client
 compiler_path = os.path.dirname(os.path.abspath(__file__))
 
 AntaresGlobal.cleanup_funcs = []
+use_progress = int(os.environ.get('PROGRESS', 0)) == 1
+
+if use_progress:
+  def print_none(*args, **kwargs):
+    pass
+  progress_print, print = print, print_none
+
 
 def cleanup_on_exit(signum, frame):
   for func in AntaresGlobal.cleanup_funcs:
@@ -345,6 +352,16 @@ def run_config_entity(target_source, config_str, dir_sid, expected_timecost='inf
     result = float('inf')
   if not math.isinf(result):
     print("  >> [*] Param_entity on sid = %s: config = '%s', tpr = `%.6f`, digest = `%s`, mem_occupy = %d %%" % (dir_sid, config_str_short, result, digest, compute_mem_ratio(result)))
+
+  def progress(percent, width=50):
+    percent = min(percent, 100)
+    show_str = ('[%%-%ds]' % width) % (int(width * percent / 100) * "#")
+    progress_print('\r%s %d%%' % (show_str, percent), end='')
+
+  if use_progress:
+    with threading.Lock():
+      AntaresGlobal.completed_trials += 1
+      progress(AntaresGlobal.completed_trials * 1e2 / AntaresGlobal.num_trials)
   return result
 
 
@@ -415,6 +432,9 @@ def main_compute(code_only=False):
 
     if tuner is not None:
       AntaresGlobal.current_step = 0
+      AntaresGlobal.completed_trials = 0
+      AntaresGlobal.num_trials = num_trials
+
       eval_client.init(backend_root=backend_root)
 
       def measure_batch(inputs):
