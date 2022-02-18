@@ -5,10 +5,11 @@ ANTARES_ROOT=$(pwd)
 
 bash -e ./engine/check_environ.sh
 
-export ANTARES_DRIVER_PATH=${ANTARES_ROOT}/.libAntares
+export ANTARES_DRIVER_PATH=${HOME}/.cache/antares
 
 if [[ "$@" == "clean" ]]; then
-  rm -rf "${ANTARES_DRIVER_PATH}"
+  set -x
+  rm -rf "${ANTARES_DRIVER_PATH}"/* "${ANTARES_DRIVER_PATH}"/.??*
   exit 0
 fi
 
@@ -18,15 +19,19 @@ else
   export IS_WSL=0
 fi
 
+if [ -e ${ANTARES_ROOT}/3rdparty/tvm ]; then
+  export TVM_HOME=${ANTARES_ROOT}/3rdparty/tvm
+else
+  export TVM_HOME=${HOME}/.local/antares/3rdparty/tvm
+fi
 export PYTHONDONTWRITEBYTECODE=1
-export TVM_HOME=${HOME}/.local/antares/thirdparty/tvm
 export PYTHONPATH=${TVM_HOME}/python:${TVM_HOME}/topi/python:${TVM_HOME}/nnvm/python:${ANTARES_ROOT}:${PYTHONPATH}
 
 VERSION_TAG=$(cat engine/install_antares_host.sh | grep ^VERSION_TAG | head -n 1 | awk -F\= '{print $NF}')
 
 if [[ "$(cat ${TVM_HOME}/VERSION_TAG 2>/dev/null)" != "${VERSION_TAG}" ]] || [ ! -e ${TVM_HOME}/build/libtvm.so ]; then
   echo 'Antares dependencies are not up-to-date/fully installed for current Antares version. Try updating the dependencies with: `make install_host` ..'
-  make install_host
+  exit 1
 fi
 
 if [[ "$COMPUTE_V1" == "" ]]; then
