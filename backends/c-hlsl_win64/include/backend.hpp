@@ -5,6 +5,7 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <chrono>
 
 #define HLSL_LIBRARY_PATH R"(.\antares_hlsl_v0.2_x64.dll)"
 
@@ -78,14 +79,28 @@ namespace ab {
   }
 
   void* recordTime(void *stream) {
+    ab::synchronize(stream);
+
+    auto pt = new std::chrono::high_resolution_clock::time_point;
+    *pt = std::chrono::high_resolution_clock::now();
+    return pt;
+#if 0
     LOAD_ONCE(dxEventCreate, void* (*)());
     LOAD_ONCE(dxEventRecord, int (*)(void*, void*));
     void *hEvent = dxEventCreate();
     CHECK(0 == dxEventRecord(hEvent, stream), "Failed to record event to default stream.");
     return hEvent;
+#endif
   }
 
   double convertToElapsedTime(void *hStart, void *hStop) {
+    auto h1 = (std::chrono::high_resolution_clock::time_point*)hStart;
+    auto h2 = (std::chrono::high_resolution_clock::time_point*)hStop;
+
+    double et = 1e-9 * std::chrono::duration_cast<std::chrono::nanoseconds>(*h2 - *h1).count();
+    delete h1, h2;
+    return std::max(et, 1e-9);
+#if 0
     ab::synchronize(nullptr);
     LOAD_ONCE(dxEventElapsedSecond, float (*)(void*, void*));
     LOAD_ONCE(dxEventDestroy, int (*)(void*));
@@ -94,6 +109,7 @@ namespace ab {
     CHECK(0 == dxEventDestroy(hStart), "Failed to destroy released event.");
     CHECK(0 == dxEventDestroy(hStop), "Failed to destroy released event.");
     return (double)sec;
+#endif
   }
 }
 

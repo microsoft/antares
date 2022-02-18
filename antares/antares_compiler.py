@@ -407,7 +407,8 @@ def main_compute(code_only=False):
     if not tuner_type:
       explicit_ops = AntaresGlobal.attrs.explicit_ops
       tuner_type = 'OpEvo'
-    print('  >> MAKE_PARA = %d/%d, EXEC_PARA = %d, TUNER = %s\n' % (worker_size, batch_size, dev_num, tuner_type))
+    print('  >> MAKE_PARA = %d/%d, EXEC_PARA = %d, TUNER = %s' % (worker_size, batch_size, dev_num, tuner_type))
+    print('  >> COMPUTE_V1 = %s\n' % os.environ['COMPUTE_V1'])
 
     auto_commit = os.environ.get('COMMIT', '')
     if auto_commit:

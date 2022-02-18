@@ -207,7 +207,8 @@ def get_template_op(**kwargs):
 
   program = program[2:].strip()
   if program:
-    exec('import tvm; from tvm import topi; ' + program, globals())
+    exec('import tvm; ' + program, globals())
+    # exec('import tvm; from tvm import topi; ' + program, globals())
 
     inputs = sorted(list(placeholders.values()), key=lambda x: x.name)
     outputs = sorted(output_saver["outputs"], key=lambda x: x.op.name)
