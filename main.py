@@ -9,7 +9,7 @@ def main():
   dirname = pathlib.Path(__file__).resolve().parent
   os.chdir(dirname)
   cmd = './antares/run.sh'
-  os.execl(cmd, cmd)
+  os.execl(cmd, cmd, *sys.argv[1:])
 
 if __name__ == '__main__':
   main()

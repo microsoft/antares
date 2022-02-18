@@ -11,6 +11,8 @@ if [[ "$@" == "clean" ]]; then
   set -x
   rm -rf "${ANTARES_DRIVER_PATH}"/* "${ANTARES_DRIVER_PATH}"/.??*
   exit 0
+elif [[ "$@" == "rest-server" ]]; then
+  export HTTP_SERVICE=1
 fi
 
 if grep Microsoft /proc/sys/kernel/osrelease >/dev/null || grep WSL2 /proc/sys/kernel/osrelease >/dev/null; then
@@ -36,7 +38,6 @@ fi
 
 if [[ "$COMPUTE_V1" == "" ]]; then
   export COMPUTE_V1='- einstein_v2("output0[N, M] = input0[N, M] + input1[N, M]", input_dict={"input0": {"dtype": "float32", "shape": [1024, 512]}, "input1": {"dtype": "float32", "shape": [1024, 512]}})'
-  echo "  >> Using a default computing expression for testing."
 fi
 
 export BACKEND=$(./antares/get_backend.sh)

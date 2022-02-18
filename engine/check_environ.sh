@@ -1,9 +1,14 @@
 #!/bin/bash -e
 
 cd $(dirname $0)/..
+WORKDIR=$(pwd)
 
 # Check Python Version
 python3 -c 'import sys; assert sys.version >= "3.6", "Python Error: Antares depends on Python >= 3.6"'
+
+if python3 -c 'assert "-packages/antares_core" in "'${WORKDIR}'"' >/dev/null 2>&1; then
+    exit 0
+fi
 
 # Check Symlink Attributions
 if [[ -e "engine/device-stub" ]] && [[ ! -L "engine/device-stub/lib64" ]]; then
@@ -18,8 +23,8 @@ fi
 if which fc.exe >/dev/null 2>&1; then
 	if ! fc.exe README.md README.md >/dev/null 2>&1; then
 		echo
-		echo 'Error: The path of Antares ("'$(pwd)'") is put in a location that is invisible to Windows Host.'
-		echo 'Please move this folder "'$(pwd)'" to a Windows-visible path, like: D:\xxx\..'
+		echo 'Error: The path of Antares ("'${WORKDIR}'") is put in a location that is invisible to Windows Host.'
+		echo 'Please move this folder "'${WORKDIR}'" to a Windows-visible path, like: D:\xxx\..'
 		echo
 		exit 1
 	fi
