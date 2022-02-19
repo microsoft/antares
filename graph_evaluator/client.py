@@ -67,7 +67,10 @@ def eval(kernel_path, **kwargs):
       return eval_client.eval(kernel_path, **kwargs)
 
     is_wsl = 1 if (os.environ.get('IS_WSL', '0') == '1') else 0
-    if is_wsl == os.system(f'file {evaluator_path} | grep "MS Windows" >/dev/null 2>&1'):
+    with open(evaluator_path, 'rb') as fp:
+      exec_magic = fp.read(2)
+
+    if is_wsl == 0 and exec_magic == b'MZ':
       print(f"Antares should run under WSL-1/2 for this backend({backend}), otherwise, evaluation would be skipped.")
       exit(1)
 

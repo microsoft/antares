@@ -4,13 +4,16 @@
 import os
 import subprocess
 import math
-import numpy as np
+from functools import reduce
 
 class Mock(object):
   pass
 
 backend = os.environ['BACKEND']
 AntaresGlobal = Mock()
+
+def product(arrlist):
+  return reduce((lambda x, y: x * y), arrlist)
 
 def wait_for(func, timeout=None, args=[]):
   if not timeout:

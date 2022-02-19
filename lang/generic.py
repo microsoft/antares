@@ -150,7 +150,8 @@ def do_native_scheduling(attrs):
   try:
     return select_plan(plan)
   except ModuleNotFoundError:
-    setattr(AntaresGlobal, 'mode', 'antares')
+    traceback.print_exc()
+    # setattr(AntaresGlobal, 'mode', 'antares')
     return None
 
 

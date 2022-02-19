@@ -5,7 +5,6 @@ import sys, time, subprocess, os
 import random
 import hashlib
 import traceback
-import numpy as np
 import math
 import re
 import json
@@ -324,14 +323,14 @@ def compute_mem_ratio(tpr):
   global_arg_props = get_global_arg_props()
   access_bytes = 0
   for buf in global_arg_props['_in']:
-    access_bytes += np.product(buf['shape']) * get_type_size(buf['dtype'])
+    access_bytes += product(buf['shape']) * get_type_size(buf['dtype'])
   for buf in global_arg_props['_out']:
-    access_bytes += np.product(buf['shape']) * get_type_size(buf['dtype'])
+    access_bytes += product(buf['shape']) * get_type_size(buf['dtype'])
 
   access_bytes = int(access_bytes)
   if access_bytes <= 0:
     return -1
-  ratio = np.ceil(access_bytes * 1e-7 / tpr / device_properties().mem_bandwith)
+  ratio = math.ceil(access_bytes * 1e-7 / tpr / device_properties().mem_bandwith)
   return min(int(ratio), 100)
 
 def run_config_entity(target_source, config_str, dir_sid, expected_timecost='inf', dev_id=0):

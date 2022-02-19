@@ -8,13 +8,8 @@ Keywords: antares dnn
 Platform: UNKNOWN
 Requires-Dist: wheel (>=0.26) ; python_version >= "3"
 Requires-Dist: tornado ; python_version >= "3"
-Requires-Dist: psutil ; python_version >= "3"
 Requires-Dist: numpy ; python_version >= "3"
 Requires-Dist: decorator ; python_version >= "3"
-Requires-Dist: attrs ; python_version >= "3"
-Requires-Dist: pytest ; python_version >= "3"
-Requires-Dist: typed_ast ; python_version >= "3"
-Requires-Dist: cloudpickle ; python_version >= "3"
 
 Antares is an engine to automatically generate optimized kernels for multi-platform
 
