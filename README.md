@@ -5,7 +5,7 @@
 ### How to Install:
 
 ```sh
-python3 -m pip install https://github.com/microsoft/antares/releases/download/v0.3.0/antares-0.3.0-py3-none-linux_x86_64.whl
+python3 -m pip install antares
 ```
 
 ### Quick Test:
@@ -19,6 +19,9 @@ BACKEND=c-scpu antares
 ```sh
 # Quickly generate a multi-threaded CPU code:
 BACKEND=c-mcpu antares
+
+# Search an efficient multi-threaded CPU code:
+STEP=100 BACKEND=c-mcpu antares
 
 # Quickly generate a SHADER code for Windows 10/11's DirectX12:
 BACKEND=c-hlsl_win64 antares

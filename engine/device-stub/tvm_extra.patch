@@ -1,0 +1,123 @@
+diff --git a/src/runtime/dso_library.cc b/src/runtime/dso_library.cc
+index 81eb30ee1..785fb48ac 100644
+--- a/src/runtime/dso_library.cc
++++ b/src/runtime/dso_library.cc
+@@ -115,15 +115,16 @@ void DSOLibrary::Unload() {
+ #else
+
+ void DSOLibrary::Load(const std::string& name) {
++  abort(); /*
+   lib_handle_ = dlopen(name.c_str(), RTLD_LAZY | RTLD_LOCAL);
+   ICHECK(lib_handle_ != nullptr) << "Failed to load dynamic shared library " << name << " "
+-                                 << dlerror();
++                                 << dlerror(); */
+ }
+
+-void* DSOLibrary::GetSymbol_(const char* name) { return dlsym(lib_handle_, name); }
++void* DSOLibrary::GetSymbol_(const char* name) { abort(); /* return dlsym(lib_handle_, name); */ }
+
+ void DSOLibrary::Unload() {
+-  dlclose(lib_handle_);
++  abort(); // dlclose(lib_handle_);
+   lib_handle_ = nullptr;
+ }
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 7293abb60..d741ce2a2 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1,6 +1,10 @@
+ cmake_minimum_required(VERSION 3.2)
+ project(tvm C CXX)
+ 
++set(CMAKE_C_FLAGS ${CMAKE_C_FLAGS} "-static-libgcc -static-libstdc++")
++set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-static-libgcc -static-libstdc++")
++set(CMAKE_EXE_LINKER_FLAGS "-static-libgcc -static-libstdc++")
++
+ # Utility functions
+ include(cmake/utils/Utils.cmake)
+ include(cmake/utils/FindCUDA.cmake)
+@@ -50,7 +54,7 @@ tvm_option(USE_FALLBACK_STL_MAP "Use TVM's POD compatible Map" OFF)
+ tvm_option(USE_ETHOSN "Build with Arm Ethos-N" OFF)
+ tvm_option(USE_CMSISNN "Build with Arm CMSIS-NN" OFF)
+ tvm_option(INDEX_DEFAULT_I64 "Defaults the index datatype to int64" ON)
+-tvm_option(USE_LIBBACKTRACE "Build libbacktrace to supply linenumbers on stack traces" AUTO)
++# tvm_option(USE_LIBBACKTRACE "Build libbacktrace to supply linenumbers on stack traces" AUTO)
+ tvm_option(BUILD_STATIC_RUNTIME "Build static version of libtvm_runtime" OFF)
+ tvm_option(USE_PAPI "Use Performance Application Programming Interface (PAPI) to read performance counters" OFF)
+ tvm_option(USE_GTEST "Use GoogleTest for C++ sanity tests" AUTO)
+@@ -497,7 +501,7 @@ target_compile_definitions(tvm PUBLIC DMLC_USE_LOGGING_LIBRARY=<tvm/runtime/logg
+ target_compile_definitions(tvm_runtime PUBLIC DMLC_USE_LOGGING_LIBRARY=<tvm/runtime/logging.h>)
+ 
+ # logging option for libbacktrace
+-include(cmake/modules/Logging.cmake)
++# include(cmake/modules/Logging.cmake)
+ 
+ include(cmake/modules/contrib/PAPI.cmake)
+ 
+diff --git a/src/runtime/threading_backend.cc b/src/runtime/threading_backend.cc
+index 5b3093ac8..ce0d33fa1 100644
+--- a/src/runtime/threading_backend.cc
++++ b/src/runtime/threading_backend.cc
+@@ -127,7 +127,7 @@ class ThreadGroup::Impl {
+ #if defined(__ANDROID__)
+       sched_setaffinity(threads_[i].native_handle(), sizeof(cpu_set_t), &cpuset);
+ #else
+-      pthread_setaffinity_np(threads_[i].native_handle(), sizeof(cpu_set_t), &cpuset);
++      abort(); // pthread_setaffinity_np(threads_[i].native_handle(), sizeof(cpu_set_t), &cpuset);
+ #endif
+     }
+     if (exclude_worker0) {  // main thread run task
+@@ -167,7 +167,7 @@ class ThreadGroup::Impl {
+ #if defined(__ANDROID__)
+     sched_setaffinity(pthread_self(), sizeof(cpu_set_t), &cpuset);
+ #else
+-    pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
++    abort(); // pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+ #endif
+ #endif
+   }
+@@ -227,7 +227,7 @@ class ThreadGroup::Impl {
+ 
+ ThreadGroup::ThreadGroup(int num_workers, std::function<void(int)> worker_callback,
+                          bool exclude_worker0)
+-    : impl_(new ThreadGroup::Impl(num_workers, worker_callback, exclude_worker0)) {}
++    : impl_((abort(), nullptr) /* new ThreadGroup::Impl(num_workers, worker_callback, exclude_worker0) */) {}
+ ThreadGroup::~ThreadGroup() { delete impl_; }
+ void ThreadGroup::Join() { impl_->Join(); }
+ 
+diff --git a/src/support/parallel_for.cc b/src/support/parallel_for.cc
+index e90967562..e55ed2b25 100644
+--- a/src/support/parallel_for.cc
++++ b/src/support/parallel_for.cc
+@@ -49,6 +49,8 @@ std::vector<std::vector<int>> rr_partitioner(int begin, int end, int step, int n
+ 
+ void parallel_for(int begin, int end, const std::function<void(int)>& f, int step,
+                   const PartitionerFuncType partitioner) {
++  abort();
++#if 0
+   static bool GLOBAL_PARALLEL_FOR_FLAG{false};
+   static std::mutex M_GLOBAL_PARALLEL_FOR_FLAG;
+   {
+@@ -91,10 +93,13 @@ void parallel_for(int begin, int end, const std::function<void(int)>& f, int ste
+   } catch (const std::exception& e) {
+     LOG(FATAL) << "Parallel_for error with " << e.what();
+   }
++#endif
+ }
+ 
+ void parallel_for_dynamic(int begin, int end, int num_threads,
+                           const std::function<void(int thread_id, int task_id)>& f) {
++  abort();
++#if 0
+   // Step 1. Sanity checks
+   if (begin == end) {
+     return;
+@@ -138,6 +143,7 @@ void parallel_for_dynamic(int begin, int end, int num_threads,
+   } catch (const std::exception& e) {
+     LOG(FATAL) << "RuntimeError: parallel_for_dynamic error with " << e.what();
+   }
++#endif
+ }
+ 
+ }  // namespace support
