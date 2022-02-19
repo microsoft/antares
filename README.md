@@ -1,11 +1,11 @@
 ## What is Antares:
 
-**Antares** is an engine to automatically generate optimized kernels for [Multi Backends](backends). It is a framework not only for ***Software developers*** to get backend-related code, but also for ***Hardware developers*** to extend new backends/hareware quickly and easily. Antares frontend is based on [Antares IR](AntaresIR.md) that follows "One Language Syntax for All Platforms".
+**Antares** (https://github.com/microsoft/antares) is an engine to auto generate optimized kernels for [Multi Backends](backends). It is a framework not only for ***Software developers*** to get backend-related code, but also for ***Hardware developers*** to extend new backends/hareware quickly and easily. Antares frontend is based on [Antares IR](AntaresIR.md) that follows "One Language Syntax for All Platforms".
 
 ### How to Install:
 
 ```sh
-python3 -m pip install antares
+python3 -m pip install --upgrade antares
 ```
 
 ### Quick Test:
@@ -40,6 +40,9 @@ antares clean
 
 # Boot HTTP daemon for accepting searching tasks:
 antares rest-service
+
+# Help Information:
+antares help
 ```
 
 ## Contributing
