@@ -4,9 +4,9 @@ cd $(dirname $0)/..
 WORKDIR=$(pwd)
 
 # Check Python Version
-python3 -c 'import sys; assert sys.version >= "3.6", "Python Error: Antares depends on Python >= 3.6"'
+${PYTHON_EXEC:-python3} -c 'import sys; assert sys.version_info.major == 3 and sys.version_info.minor >= 6, "Python Error: Antares depends on Python >= 3.6"'
 
-if python3 -c 'assert "-packages/antares_core" in "'${WORKDIR}'"' >/dev/null 2>&1; then
+if ${PYTHON_EXEC:-python3} -c 'assert "-packages/antares_core" in "'${WORKDIR}'"' >/dev/null 2>&1; then
     exit 0
 fi
 

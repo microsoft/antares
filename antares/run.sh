@@ -13,6 +13,12 @@ if [[ "$@" == "clean" ]]; then
   exit 0
 elif [[ "$@" == "rest-server" ]]; then
   export HTTP_SERVICE=1
+elif [[ "$@" == "help" ]]; then
+  more ./README.md
+  exit 0
+elif [[ "$@" != "" ]]; then
+  echo "[ERROR] Unsupported command arguments: $@" >&2
+  exit 1
 fi
 
 if grep Microsoft /proc/sys/kernel/osrelease >/dev/null || grep WSL2 /proc/sys/kernel/osrelease >/dev/null; then
@@ -77,4 +83,4 @@ ldconfig >/dev/null 2>&1 || true
 
 [[ "$USING_GDB" == "" ]] || USING_GDB="gdb --ex run --args"
 
-STEP=${STEP:-0} ${USING_GDB} python3 ./antares/antares_compiler.py "$@"
+STEP=${STEP:-0} ${USING_GDB} ${PYTHON_EXEC:-python3} ./antares/antares_compiler.py "$@"
