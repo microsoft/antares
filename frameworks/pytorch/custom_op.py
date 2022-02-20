@@ -33,10 +33,9 @@ def generate_antares_expression(ir, feed_dict, extra_outputs):
   return expression
 
 def get_antares_cmd(expression, step=0):
-  antares_local_path = os.environ.get('ANTARES_ROOT')
-  assert antares_local_path, "User environment `ANTARES_ROOT` for antares directory is not set, please set it by: export ANTARES_ROOT=<root-path-of-antares>"
+  assert 0 == os.system('which antares >/dev/null 2>&1'), "`antares` command is not found in PATH, have you completed installing antares from pip?"
   commit = 'COMMIT=force' if step > 0 else ''
-  return f"cd '{antares_local_path}' && BACKEND={backend} STEP={step} {commit} COMPUTE_V1='{expression}' make"
+  return f"BACKEND={backend} STEP={step} {commit} COMPUTE_V1='{expression}' antares"
 
 class CustomOp(torch.nn.Module):
 
