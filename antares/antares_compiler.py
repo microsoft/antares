@@ -19,6 +19,7 @@ from lang.generic import custom_dtypes, refactor_special_names
 from graph_evaluator import client as eval_client
 
 compiler_path = os.path.dirname(os.path.abspath(__file__))
+antares_driver_path = os.environ['ANTARES_DRIVER_PATH']
 
 AntaresGlobal.cleanup_funcs = []
 use_progress = int(os.environ.get('PROGRESS', 0)) == 1
@@ -28,6 +29,23 @@ if use_progress:
     pass
   progress_print, print = print, print_none
 
+save_path = None
+if len(sys.argv) > 1:
+  if sys.argv[1] == 'save':
+    save_path = sys.argv[2]
+    if not save_path.startswith('/'):
+      work_dir = os.environ['WORKDIR']
+      if not work_dir.endswith('/'):
+        work_dir += '/'
+      save_path = work_dir + save_path
+  else:
+    raise Exception('Unsupported command arguments: %s' % ' '.join(sys.argv[1:]))
+
+def save_to_path_if_necessary(saved_code):
+  if save_path is None:
+    return
+  with open(save_path, 'w') as fp:
+    fp.write(saved_code)
 
 def cleanup_on_exit(signum, frame):
   for func in AntaresGlobal.cleanup_funcs:
@@ -136,8 +154,8 @@ def compute_gflops(flop, t):
 def codehub_db(compute_key, source_code=None, erase=False):
   compute_key = compute_key.split('##')[0].strip()
   digest = hashlib.sha256(compute_key.encode()).hexdigest()
-  os.system('mkdir -p %s/../codehub' % compiler_path)
-  code_path = '%s/../codehub/%s.%s' % (compiler_path, digest, backend)
+  os.system('mkdir -p %s/codehub' % antares_driver_path)
+  code_path = '%s/codehub/%s.%s' % (antares_driver_path, digest, backend)
   if erase:
     try:
       os.remove(code_path)
@@ -414,6 +432,7 @@ def main_compute(code_only=False):
       saved_code = codehub_db(os.environ['COMPUTE_V1'])
       if saved_code is not None and auto_commit != 'force':
         raise Exception("Saved code has existed in codehub. Please try COMMIT=force to override it.")
+      # Avoid child tasks to commit codes
       os.environ.pop('COMMIT')
 
     try:
@@ -456,12 +475,12 @@ def main_compute(code_only=False):
           dir_sid = AntaresGlobal.current_step + i + 1
           futures.append(thread_pool.submit(run_config_entity, target_sources[i], config_strs[i], dir_sid, expected_timecost, i % dev_num))
 
-        best_slot = -1
+        best_slot, best_index, best_cost = -1, -1, -1
         for i in range(len(inputs)):
           dir_sid = AntaresGlobal.current_step + i + 1
           t = futures[i].result()
           if t < tuner.task.best.timecost:
-            best_slot = dir_sid
+            best_slot, best_index, best_cost = dir_sid, i, t
             tuner.task.best.timecost = t
             tuner.task.best.config = inputs[i].config
             tuner.task.best.occur = best_slot
@@ -479,12 +498,14 @@ def main_compute(code_only=False):
         print(stage_logs)
         print('\033[93m%s\033[0m\n' % ('=' * min(120, len(stage_logs))))
 
-        if auto_commit and best_slot >= 0:
-          with open(local_get_dir_file('my_kernel.cc', best_slot), 'r') as fp:
-            device_source = fp.read()
-          with open(local_get_dir_file('result.txt', best_slot), 'r') as fp:
-            t = float(fp.read().split()[0])
-          kernel_path = codehub_db(os.environ['COMPUTE_V1'], source_code=device_source + code_suffix(tpr=t, step_prod=best_slot, step_plan=num_trials))
+        if best_index >= 0:
+          device_code = target_sources[best_index][0] + code_suffix(tpr=best_cost, step_prod=best_slot, step_plan=num_trials)
+          save_to_path_if_necessary(device_code)
+        else:
+          device_code = None
+
+        if auto_commit and device_code is not None:
+          kernel_path = codehub_db(os.environ['COMPUTE_V1'], source_code=device_code)
           print('  >> Update current code to codehub: %s' % kernel_path)
         return results
 
@@ -497,15 +518,6 @@ def main_compute(code_only=False):
       tuner.measure_batch.n_parallel = batch_size
       callbacks = []
 
-      history_log_for_transfer_learning = os.environ.get('RECORD', '')
-
-      if history_log_for_transfer_learning:
-        callbacks.append(autotvm.callback.log_to_file(history_log_for_transfer_learning))
-        # Enable Transfer Learning for Incremental Task
-        if os.path.exists(history_log_for_transfer_learning):
-          print('  >>  Loading incremental history from log file: %s ..' % history_log_for_transfer_learning)
-          tuner.load_history(autotvm.record.load_from_file(history_log_for_transfer_learning))
-
       tuner.tune(n_trial=num_trials, callbacks=callbacks, measure_option=None)
 
       if math.isinf(tuner.task.best.timecost):
@@ -515,8 +527,8 @@ def main_compute(code_only=False):
       best_config = tuner.task.best.config
 
       if auto_commit:
-          device_source = codehub_db(os.environ['COMPUTE_V1'])
-          codehub_db(os.environ['COMPUTE_V1'], source_code=device_source + '\n// Antares Tuning Completed in %d steps.' % AntaresGlobal.current_step)
+        device_source = codehub_db(os.environ['COMPUTE_V1'])
+        codehub_db(os.environ['COMPUTE_V1'], source_code=device_source + '\n// Antares Tuning Completed in %d steps.' % AntaresGlobal.current_step)
 
       print("\n[Best Config] CONFIG='%s'  ==>  Performance is up to %f Gflops, occurred at step %d / %d; time per run = %g sec." % (
         best_config,
@@ -536,6 +548,7 @@ def main_compute(code_only=False):
       print("// ---------------------------------------------------------------------------")
       print(saved_code)
       print("// ---------------------------------------------------------------------------")
+      save_to_path_if_necessary(saved_code)
       exit(0)
     best_config = ''
 
@@ -553,6 +566,7 @@ def main_compute(code_only=False):
     print(device_source)
     print("// ---------------------------------------------------------------------------")
 
+  save_to_path_if_necessary(device_source)
   eval_client.init(backend_root=backend_root)
   dev_id = int(os.environ.get('DEV_ID', '0'))
   result = evaluate_perf(kernel_path, dev_id, device_source)

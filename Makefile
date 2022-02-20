@@ -54,3 +54,7 @@ install_host:
 
 clean:
 	$(INNER_CMD) clean
+
+bdist:
+	BACKEND=c-base make install_docker
+	$(PARAMS) -it --rm -v $(shell pwd):/mnt antares sh -c 'cp /antares-*.whl /mnt' || true

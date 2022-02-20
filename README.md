@@ -23,6 +23,12 @@ BACKEND=c-mcpu antares
 # Search an efficient multi-threaded CPU code:
 STEP=100 BACKEND=c-mcpu antares
 
+# Search an efficient multi-threaded CPU code and save code to specified location:
+STEP=100 BACKEND=c-mcpu antares save ./kernel_example.cpp
+
+# Search an efficient multi-threaded CPU code showing progress bar only:
+PROGRESS=1 STEP=100 BACKEND=c-mcpu antares save ./kernel_example.cpp
+
 # Quickly generate a SHADER code for Windows 10/11's DirectX12:
 BACKEND=c-hlsl_win64 antares
 
@@ -39,7 +45,7 @@ BACKEND=c-cuda STEP=2000 COMPUTE_V1='- S = 512; einstein_v2(input_dict={"input0"
 antares clean
 
 # Boot HTTP daemon for accepting searching tasks:
-antares rest-service
+antares rest-server
 
 # Help Information:
 antares help
