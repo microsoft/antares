@@ -6,6 +6,7 @@
 int main(int argc, char** argv)
 {
     float expected_timeout = getenv("EXPECTED_TIMEOUT") ? std::atof(getenv("EXPECTED_TIMEOUT")) : -1;
+    use_progress = getenv("PROGRESS") ? std::atof(getenv("PROGRESS")) : 0;
 
 #if !defined(_WIN64) || defined(__MINGW64__)
     pthread_t p_timeout_monitor;
