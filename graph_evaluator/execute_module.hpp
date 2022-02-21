@@ -22,7 +22,9 @@
 #include <unistd.h>
 #endif
 
-#define CHECK_OK(x)  ((x) ? 1 : (fprintf(stderr, "[CheckFail] %s:%d\n", __FILE__, __LINE__), exit(1), 0))
+#define CHECK_OK(x)  ((x) ? 1 : (use_progress ? 0: (fprintf(stderr, "[CheckFail] %s:%d\n", __FILE__, __LINE__), exit(1), 0)))
+
+static int use_progress = -1;
 
 namespace ab_utils {
 
