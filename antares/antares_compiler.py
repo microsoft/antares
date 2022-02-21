@@ -499,8 +499,8 @@ def main_compute(code_only=False):
         print('\033[93m%s\033[0m\n' % ('=' * min(120, len(stage_logs))))
 
         if best_index >= 0:
-          device_code = target_sources[best_index][0] + code_suffix(tpr=best_cost, step_prod=best_slot, step_plan=num_trials)
-          save_to_path_if_necessary(device_code)
+          tuner.task.best.code = target_sources[best_index][0] + code_suffix(tpr=best_cost, step_prod=best_slot, step_plan=num_trials)
+          save_to_path_if_necessary(tuner.task.best.code)
         else:
           device_code = None
 
@@ -526,9 +526,12 @@ def main_compute(code_only=False):
 
       best_config = tuner.task.best.config
 
-      if auto_commit:
-        device_source = codehub_db(os.environ['COMPUTE_V1'])
-        codehub_db(os.environ['COMPUTE_V1'], source_code=device_source + '\n// Antares Tuning Completed in %d steps.' % AntaresGlobal.current_step)
+      if hasattr(tuner.task.best, 'code'):
+        tuner.task.best.code += '\n// Antares Tuning Completed in %d steps.' % AntaresGlobal.current_step
+        save_to_path_if_necessary(tuner.task.best.code)
+
+        if auto_commit:
+          codehub_db(os.environ['COMPUTE_V1'], source_code=tuner.task.best.code)
 
       print("\n[Best Config] CONFIG='%s'  ==>  Performance is up to %f Gflops, occurred at step %d / %d; time per run = %g sec." % (
         best_config,

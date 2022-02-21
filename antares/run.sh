@@ -13,13 +13,13 @@ if [[ "$@" == "clean" ]]; then
   exit 0
 elif [[ "$@" == "rest-server" ]]; then
   export HTTP_SERVICE=1
+  shift
 elif [[ "$@" == "help" ]]; then
   if which less >/dev/null; then
-    less ./README.md
+    exec less ./README.md
   else
-    more ./README.md
+    exec more ./README.md
   fi
-  exit 0
 fi
 
 if grep Microsoft /proc/sys/kernel/osrelease >/dev/null || grep WSL2 /proc/sys/kernel/osrelease >/dev/null; then
