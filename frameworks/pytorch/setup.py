@@ -9,7 +9,7 @@ from setuptools import setup
 if len(sys.argv) <= 1:
   sys.argv += ['install', '--user']
 
-root_path = os.path.dirname(sys.argv[0])
+root_path = os.path.dirname(__file__)
 
 if not root_path:
   root_path = '.'
