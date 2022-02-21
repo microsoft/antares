@@ -38,6 +38,14 @@ if len(sys.argv) > 1:
       if not work_dir.endswith('/'):
         work_dir += '/'
       save_path = work_dir + save_path
+  elif sys.argv[1] == 'torch-setup':
+    sys.argv = sys.argv[:1] + sys.argv[2:]
+    from frameworks.pytorch import setup
+    exit(0)
+  elif sys.argv[1] == 'tf-setup':
+    sys.argv = sys.argv[:1] + sys.argv[2:]
+    from frameworks.tensorflow import setup
+    exit(0)
   else:
     raise Exception('Unsupported command arguments: %s' % ' '.join(sys.argv[1:]))
 
