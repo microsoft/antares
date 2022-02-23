@@ -4,9 +4,8 @@
 import torch
 import os, json, hashlib, time, subprocess
 from torch.autograd import Function
-from http import client as http_client
 
-import antares_custom_op
+import antares_custom_torch as antares_custom_op
 
 if not torch.cuda.is_available():
   backend = 'c-mcpu_avx512' if os.system("grep -r '\\bavx512' /proc/cpuinfo >/dev/null") == 0 else 'c-mcpu'

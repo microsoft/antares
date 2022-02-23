@@ -509,12 +509,11 @@ def main_compute(code_only=False):
         if best_index >= 0:
           tuner.task.best.code = target_sources[best_index][0] + code_suffix(tpr=best_cost, step_prod=best_slot, step_plan=num_trials)
           save_to_path_if_necessary(tuner.task.best.code)
-        else:
-          device_code = None
 
-        if auto_commit and device_code is not None:
-          kernel_path = codehub_db(os.environ['COMPUTE_V1'], source_code=device_code)
-          print('  >> Update current code to codehub: %s' % kernel_path)
+          if auto_commit:
+            kernel_path = codehub_db(os.environ['COMPUTE_V1'], source_code=tuner.task.best.code)
+            print('  >> Update current code to codehub: %s' % kernel_path)
+
         return results
 
       tuner.task.best = Mock()
