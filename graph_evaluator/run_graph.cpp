@@ -16,7 +16,8 @@ int main(int argc, char** argv)
         return nullptr;
       int timeout_sec = 12 + expected_timeout;
       sleep(timeout_sec);
-      fprintf(stderr, "[FATAL] Time limit exceeded (>= %d sec) for this evaluation.\n", timeout_sec);
+      if (use_progress)
+        fprintf(stderr, "[FATAL] Time limit exceeded (>= %d sec) for this evaluation.\n", timeout_sec);
       exit(1);
       return nullptr;
     }, &expected_timeout);
