@@ -580,7 +580,7 @@ class MainTuner:
     def update(self, inputs, results):
         self.logger.info('Tuner.update(...)')
         for conf, perf in zip(inputs, results):
-            conf, perf = conf.config, float(np.mean(perf.costs))
+            conf, perf = conf.config, float(np.mean(perf["costs"]))
             try:
                 self.population.append(self.wait_dict[conf], self.task.flop / perf)
             except:
