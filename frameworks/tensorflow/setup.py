@@ -10,7 +10,7 @@ if tf.version.VERSION < '2.3' and not tf.version.VERSION.startswith('1.15.'):
   raise Exception("Current Antares plugin is for Tensorflow >= 1.5.x / 2.3.x only.")
 
 dist_path = tf.sysconfig.get_include() + '/../contrib/antares'
-root_path = os.path.dirname(sys.argv[0])
+root_path = os.path.dirname(__file__)
 
 if not root_path:
   root_path = '.'

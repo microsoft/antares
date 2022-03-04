@@ -428,7 +428,7 @@ class Population(object):
         children = []
 
         def pop_child(child):
-            for _ in range(offspring_size * 1024):
+            for _ in range(min(offspring_size, 2) * 1024):
                 if child in self.population or child in children:
                     child = child.mutate()
                 else:
@@ -448,8 +448,7 @@ class Population(object):
                 child = pickle.loads(pickle.dumps(self.individual.reset(), -1))
                 children.append(pop_child(child))
         else:
-            prob = np.array(self.fitness[:parents_size]) / \
-                np.sum(self.fitness[:parents_size])
+            prob = np.array(self.fitness[:parents_size]) / np.sum(self.fitness[:parents_size])
 
             self.population = self.population[:parents_size]
             self.fitness = self.fitness[:parents_size]
@@ -465,9 +464,7 @@ class Population(object):
         return children
 
 
-from tvm.autotvm.tuner import Tuner
-
-class MainTuner(Tuner):
+class MainTuner:
 
     def __init__(self,
                  task,
@@ -500,7 +497,7 @@ class MainTuner(Tuner):
           'reorder': {'_type': 'perm', '_value': 3, '_init': [[0, 1, 2], [1, 2, 0]]},
         }
         """
-        super(MainTuner, self).__init__(task)
+        self.task = task
 
         self.logger = logging.getLogger(
             self.__module__ + "." + self.__class__.__name__
@@ -583,7 +580,7 @@ class MainTuner(Tuner):
     def update(self, inputs, results):
         self.logger.info('Tuner.update(...)')
         for conf, perf in zip(inputs, results):
-            conf, perf = conf.config, float(np.mean(perf.costs))
+            conf, perf = conf.config, float(np.mean(perf["costs"]))
             try:
                 self.population.append(self.wait_dict[conf], self.task.flop / perf)
             except:
@@ -597,8 +594,23 @@ class MainTuner(Tuner):
                 )[:self.batch_size - len(self.serve_list)])
 
     def has_next(self):
-      return len(self.serve_list) > 0
+        return len(self.serve_list) > 0
 
     def load_history(self, data_set):
         pass
 
+    def tune(self, n_trial, **kwargs):
+        from antares.common import Mock
+
+        current_step = 0
+        while current_step < n_trial and self.has_next():
+            batch_size = min(self.batch_size, n_trial - current_step)
+            configs = self.next_batch(batch_size)
+            inputs = []
+            for config in configs:
+                input_format = Mock()
+                input_format.config = config
+                inputs.append(input_format)
+            results = self.measure_batch(inputs)
+            self.update(inputs, results)
+            current_step += batch_size

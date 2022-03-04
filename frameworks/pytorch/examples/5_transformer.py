@@ -4,7 +4,7 @@
 # Licensed under the MIT license.
 
 import torch
-from torch.contrib.antares.custom_op import CustomOp
+from antares_core.frameworks.pytorch.custom_op import CustomOp
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 dtype = torch.float32
@@ -61,7 +61,7 @@ layer_output_norm = CustomOp(ir=f'''
   'intermediate_bias': intermediate_bias,
   'output_weight': output_weight,
   'output_bias': output_bias,
-}).to(device, dtype).emit()
+}).to(device).emit()
 
 result = layer_output_norm(input_tensor, qkv_weight, qkv_bias, attention_weight, attention_bias, intermediate_weight, intermediate_bias, output_weight, output_bias)
 print('The result of tensor `%s` is:\n%s' % (layer_output_norm.output_names[0], result))

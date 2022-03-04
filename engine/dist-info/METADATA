@@ -1,0 +1,15 @@
+Metadata-Version: 2.1
+Name: antares
+Version: @VERSION@
+Home-page: https://github.com/microsoft/antares
+Author: Microsoft
+License: MIT
+Keywords: antares dnn
+Platform: UNKNOWN
+Requires-Dist: wheel (>=0.26) ; python_version >= "3"
+Requires-Dist: tornado ; python_version >= "3"
+Requires-Dist: numpy ; python_version >= "3"
+Requires-Dist: decorator ; python_version >= "3"
+
+Antares is an engine to automatically generate optimized kernels for multi-platform
+

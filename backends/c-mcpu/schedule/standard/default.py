@@ -3,7 +3,6 @@
 
 from tvm import te
 import numpy as np
-import psutil
 
 def schedule(attrs):
   cfg, s = attrs.auto_config, attrs.scheduler

@@ -3,7 +3,11 @@
 cd $(dirname $0)/..
 ANTARES_ROOT=$(pwd)
 
-VERSION_TAG=v0.2dev8
+VERSION_TAG=v0.3dev0
+
+if [[ "$NO_PYTHON" != "1" ]]; then
+
+bash -e ./engine/check_environ.sh
 
 REQUIRED_CMDS="git python3 g++ make"
 
@@ -20,10 +24,12 @@ for CMD in ${REQUIRED_CMDS}; do
   fi
 done
 
+fi
+
 set -x
 
-TVM_HOME=${HOME}/.local/antares/thirdparty/tvm
-GIT_COMMIT=0b24cbf1be
+TVM_HOME=${HOME}/.local/antares/3rdparty/tvm
+GIT_COMMIT=v0.8.0
 
 if [ ! -e ${TVM_HOME} ] || ! sh -ce "cd ${TVM_HOME}; git fetch; git reset --hard; git checkout ${GIT_COMMIT}"; then
   rm -rf ${TVM_HOME}
@@ -40,14 +46,21 @@ rm -rf ${TVM_HOME}/device-stub
 cp -r ${ANTARES_ROOT}/engine/device-stub ${TVM_HOME}/device-stub
 touch ${TVM_HOME}/device-stub/device-stub.c && gcc ${TVM_HOME}/device-stub/device-stub.c -shared -o ${TVM_HOME}/device-stub/lib64/libcudart.so
 
-git checkout ${GIT_COMMIT} && git apply device-stub/tvm_v0.7.patch
+git checkout ${GIT_COMMIT}
+git apply device-stub/tvm_v0.8.0.patch
+git apply device-stub/tvm_extra.patch
+
 git submodule init && git submodule update
 mkdir -p build && cd build && cp ../cmake/config.cmake .
 
 sed -i 's/LLVM OFF/LLVM OFF/g' config.cmake && sed -i 's~CUDA OFF~CUDA '"${TVM_HOME}/device-stub"'~g' config.cmake
+echo 'set(USE_THREADS OFF)' >> config.cmake
+
 PATH="${HOME}/.local/bin:${PATH}" cmake ..
 make -j$(nproc)
 
-python3 -m pip install --user --upgrade tornado psutil xgboost==1.2.1 numpy decorator attrs pytest typed_ast cloudpickle
+if [[ "$NO_PYTHON" != "1" ]]; then
+  python3 -m pip install --user --upgrade tornado psutil xgboost==1.2.1 numpy decorator attrs pytest typed_ast cloudpickle scipy
+fi
 
 echo "$VERSION_TAG" > $TVM_HOME/VERSION_TAG

@@ -2,7 +2,6 @@
 # Licensed under the MIT license.
 
 import numpy as np
-from tvm import autotvm
 from tvm import te, tir, target
 import logging
 import sys, time, subprocess
@@ -15,6 +14,9 @@ import re
 from antares.common import Mock, AntaresGlobal, backend, AutoConfig
 
 def einstein_v2(exprss, input_dict, extra_outputs=[], **kwargs):
+  if 'comments' in kwargs:
+    os.environ['COMMENTS'] = json.dumps(kwargs['comments'])
+
   ir = os.environ.get('LL_IR', '')
   if not ir:
     for k in input_dict:
@@ -24,7 +26,7 @@ def einstein_v2(exprss, input_dict, extra_outputs=[], **kwargs):
     ir = einstein_v2.ir_graph_parser(exprss, input_dict, extra_outputs)
     assert(len(ir) > 0)
     os.environ['LL_IR'] = ir
-    print('\n[LL-IR]\n%s\n' % ir[ir.find('; ') + 2:])
+    # print('\n[LL-IR]\n%s\n' % ir[ir.find('; ') + 2:])
 
   exec(ir, globals())
 
@@ -125,7 +127,6 @@ def do_native_scheduling(attrs):
   def select_plan(plan_name):
     if plan_name.find('.') < 0:
       plan_name = 'standard.' + plan_name
-    import importlib
     schedule_lib = importlib.import_module('backends.%s.schedule.%s' % (attrs.backend, plan_name), __loader__.name)
     schedule_lib.schedule(attrs)
 
@@ -145,22 +146,55 @@ def do_native_scheduling(attrs):
         break
   if plan is None:
     raise Exception("No available plan configured for backend: %s" % attrs.backend)
-  return select_plan(plan)
+  try:
+    return select_plan(plan)
+  except ModuleNotFoundError:
+    traceback.print_exc()
+    # setattr(AntaresGlobal, 'mode', 'antares')
+    return None
 
 
 intermediate_output = 'MultipleOutputsTempVar'
 
-def refactor_multiple_names(code, global_arg_props):
+
+def refactor_builtins(code):
+  result_lines = []
+  for line in code.split('\n'):
+    at = re.search(r'\b__builtin_set\(', line)
+    while at is not None:
+      arg_list = []
+      start, stop, cnt = at.start(), at.end(), 0
+      for i in range(stop, len(line)):
+        if line[i] in ('(', '['):
+          cnt += 1
+        elif line[i] in (')', ']'):
+          cnt -= 1
+        if cnt <= 0 and line[i] in (',', ')'):
+          arg_list.append(line[stop:i].strip())
+          stop = i + 1
+          if line[i] == ')':
+            line = line[:start] + f'(({arg_list[0]}) = ({arg_list[1]}))' + line[stop:]
+            break
+      at = re.search(r'\b__builtin_set\(', line)
+    result_lines.append(line)
+  return '\n'.join(result_lines)
+
+
+def refactor_special_names(code, global_arg_props):
   code = code.replace('(int* __restrict__ _id, ', '(').replace('_id[(0)]', '_id')
+  for i in range(len(global_arg_props['_out'])):
+    std_name = global_arg_props['_out'][i]['name']
+    code = re.sub(fr'\b___{std_name}\[.*\] = \b', '', code)
+
+  code = refactor_builtins(code)
   if len(global_arg_props['_out']) <= 1:
     return code
   for i in range(len(global_arg_props['_out'])):
     std_name = global_arg_props['_out'][i]['name']
-    code = re.sub(r'\b%s\b' % std_name, '__%s' % std_name, code)
-    code = re.sub(r'\b%s_v%d\b' % (intermediate_output, i), std_name, code)
+    code = re.sub(fr'\b{std_name}\b', f'__{std_name}', code)
+    code = re.sub(fr'\b{intermediate_output}_v{i}\b', std_name, code)
   return code
 
-@autotvm.template("template_op")
 def get_template_op(**kwargs):
   if 'COMPUTE_V1' not in os.environ:
     raise Exception("Environment variable `COMPUTE_V1` is not set")
@@ -172,7 +206,8 @@ def get_template_op(**kwargs):
 
   program = program[2:].strip()
   if program:
-    exec('import tvm; from tvm import topi; ' + program, globals())
+    exec('import tvm; ' + program, globals())
+    # exec('import tvm; from tvm import topi; ' + program, globals())
 
     inputs = sorted(list(placeholders.values()), key=lambda x: x.name)
     outputs = sorted(output_saver["outputs"], key=lambda x: x.op.name)

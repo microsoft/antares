@@ -3,7 +3,7 @@
 if [[ "$BACKEND" == "" ]]; then
   if [ -e $(dirname $0)/../backend.default ]; then
     BACKEND=$(cat $(dirname $0)/../backend.default)
-  elif [ -e /dev/nvidia-modeset ]; then
+  elif [ -e /dev/nvidiactl ]; then
     BACKEND=c-cuda
   elif [ -e /dev/kfd ]; then
     BACKEND=c-rocm

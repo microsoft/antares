@@ -14,11 +14,7 @@ if not os.path.exists(f'{local_dll_path}/dxcompiler.dll'):
     os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.2.0/dxcompiler.dll -o {local_dll_path}/dxcompiler.dll')
 
 def get_execution_parallism():
-    if backend in ('c-hlsl_win64',):
-      return 1
-    batch_size = os.environ.get('BATCH', '')
-    batch_size = 16 if not batch_size else int(batch_size)
-    return batch_size
+    return 1
 
 def do_native_translation_v2(codeset, **kwargs):
     kernel_name, in_args, out_args, body = codeset
@@ -107,32 +103,17 @@ float pow_ex(float x, float y) {
 #define pow pow_ex
 '''
 
-    body = re.sub(r'\b__syncthreads\b', 'GroupMemoryBarrierWithGroupSync', body);
+    body = re.sub(r'\b__syncthreads\b', 'GroupMemoryBarrierWithGroupSync', body)
     lds = '\n'.join(lds)
     registers = ''.join(registers)
 
+    require_srv = f'SRV(t0, numDescriptors={len(in_args)}), ' if len(in_args) > 0 else ''
+
     full_body = f'''
-#ifndef __HLSL_COMMON_MACRO__
-#define __HLSL_COMMON_MACRO__
-
-#define __ITEM_0_OF__(v) (v).x
-#define __ITEM_1_OF__(v) (v).y
-#define __ITEM_2_OF__(v) (v).z
-#define __ITEM_3_OF__(v) (v).w
-
-#define __STORE_ITEM_0__(t, out, ido, in, idi)  out[(ido) + 0] = in[(idi) + 0]
-#define __STORE_ITEM_1__(t, out, ido, in, idi)  out[(ido) + 1] = in[(idi) + 1]
-#define __STORE_ITEM_2__(t, out, ido, in, idi)  out[(ido) + 2] = in[(idi) + 2]
-#define __STORE_ITEM_3__(t, out, ido, in, idi)  out[(ido) + 3] = in[(idi) + 3]
-
-#define make_int2(x, y) ((int2)(x, y))
-#define make_int4(x, y, z, w) ((int4)(x, y, z, w))
 {pre_defines}
-#endif
-
 {lds}
 {registers}{kwargs['attrs'].blend}
-[RootSignature("DescriptorTable(SRV(t0, numDescriptors={len(in_args)}), UAV(u0, numDescriptors={len(out_args)}))")]
+[RootSignature("DescriptorTable({require_srv}UAV(u0, numDescriptors={len(out_args)}))")]
 [numthreads({get_extent('threadIdx.x')}, {get_extent('threadIdx.y')}, {get_extent('threadIdx.z')})]
 void CSMain(uint3 threadIdx: SV_GroupThreadID, uint3 blockIdx: SV_GroupID, uint3 dispatchIdx: SV_DispatchThreadID) {{
   {body}

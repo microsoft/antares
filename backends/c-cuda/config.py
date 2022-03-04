@@ -2,6 +2,7 @@
 # Licensed under the MIT license.
 
 import subprocess, os
+import re
 
 def get_execution_parallism():
   num_gpus = len(subprocess.getoutput('ls /dev/nvidia[0-9]* 2>/dev/null').split())
@@ -62,4 +63,6 @@ extern "C" __global__ __launch_bounds__({launch_bounds}) void {kernel_name}({exp
   {body}
 }}
 '''
+  if kwargs['attrs'].backend.endswith('_win64'):
+    full_body = re.sub(r'\bint64_t\b', '__int64', full_body)
   return full_body

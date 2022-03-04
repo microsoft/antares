@@ -27,10 +27,9 @@ else:
 print(f'[Info] \033[92mInitialize Antares for backend = {backend}\033[0m')
 
 def get_antares_cmd(expression, step=0):
-  antares_local_path = os.environ.get('ANTARES_ROOT')
-  assert antares_local_path, "User environment `ANTARES_ROOT` for antares directory is not set, please set it by: export ANTARES_ROOT=<root-path-of-antares>"
+  assert 0 == os.system('which antares >/dev/null 2>&1'), "`antares` command is not found in PATH, have you completed installing antares from pip?"
   commit = 'COMMIT=force' if step > 0 else ''
-  return f"cd '{antares_local_path}' && BACKEND={backend} STEP={step} {commit} COMPUTE_V1='{expression}' make"
+  return f"BACKEND={backend} STEP={step} {commit} COMPUTE_V1='{expression}' antares"
 
 def get_tensorflow_antares_component(tf_module_path, op_name, compiler):
   dist_path = tf.sysconfig.get_include() + '/..'
@@ -47,7 +46,7 @@ def get_tensorflow_antares_component(tf_module_path, op_name, compiler):
     if compiler == 'mpicc':
       with_cuda += ' -lmpi_cxx -lrccl'
   elif tf.test.is_built_with_cuda():
-    with_cuda = "-DANTARES_CUDA -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -lcudart -lcuda"
+    with_cuda = "-DANTARES_CUDA -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -L/usr/local/cuda/lib64/stubs -lcudart -lcuda"
     if compiler == 'mpicc':
       with_cuda += ' -lmpi_cxx -lnccl'
   elif backend in ('c-sycl_intel',):

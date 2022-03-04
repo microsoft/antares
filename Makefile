@@ -1,6 +1,7 @@
 COMPUTE_V1 ?=
 TUNER ?=
 STEP ?= 0
+INIT_CONFIG ?=
 CONFIG ?=
 COMMIT ?=
 AGENT_URL ?=
@@ -20,8 +21,9 @@ PARAMS ?=  docker run -v $(shell pwd):/antares -w /antares --privileged -v /:/ho
 	--shm-size=1g --ulimit memlock=-1 --ulimit stack=67108864 \
 	-v $(shell dirname `find /usr/lib/ -name libnvidia-ptxjitcompiler.so` 2>/dev/null | tail -n 1)/libnvidia-ptxjitcompiler.so:/usr/local/nvidia/lib64/libnvidia-ptxjitcompiler.so \
 	-v $(shell dirname `find /usr/lib/ -name libcuda.so.1` 2>/dev/null | tail -n 1)/libcuda.so.1:/usr/local/nvidia/lib64/libcuda.so.1 \
-	-v $(shell pwd)/public/roc_prof:/usr/local/bin/rp -e CPU_THREADS=$(CPU_THREADS) -e ANTARES_ROOT=/antares -e BATCH=$(BATCH) -e AB_DEBUG=$(AB_DEBUG) \
-	-e STEP=$(STEP) -e AGENT_URL=$(value AGENT_URL) -e TUNER=$(TUNER) -e CONFIG='$(value CONFIG)' -e BACKEND=$(BACKEND) -e COMPUTE_V1='$(value COMPUTE_V1)' \
+	-v $(shell pwd)/.libAntares:/root/.cache/antares \
+	-v $(shell pwd)/public/roc_prof:/usr/local/bin/rp -e CPU_THREADS=$(CPU_THREADS) -e ANTARES_ROOT=/antares -e BATCH=$(BATCH) -e AB_DEBUG=$(AB_DEBUG) -e INIT_CONFIG='$(value INIT_CONFIG)' \
+	-e STEP=$(STEP) -e AGENT_URL='$(value AGENT_URL)' -e TUNER=$(TUNER) -e CONFIG='$(value CONFIG)' -e BACKEND=$(BACKEND) -e COMPUTE_V1='$(value COMPUTE_V1)' \
 	-e COMMIT=$(COMMIT) -e HARDWARE_CONFIG=$(HARDWARE_CONFIG) -e DEVICE_NAME='$(value DEVICE_NAME)' -e EXPECTED_TIMEOUT=$(EXPECTED_TIMEOUT)
 
 HTTP_PORT ?= 8880
@@ -35,8 +37,8 @@ eval:
 shell: install_docker
 	$(PARAMS) -it --rm --network=host antares bash || true
 
-rest-server: install_docker stop-server
-	$(HTTP_EXEC) bash -c 'trap ctrl_c INT; ctrl_c() { exit 1; }; while true; do BACKEND=$(BACKEND) HTTP_SERVICE=1 HTTP_PORT=$(HTTP_PORT) $(INNER_CMD); done'
+rest-server:
+	@if [ "x$(HOST_MODE)" = "x0" ] && [ "x$(shell whoami)" = "xroot" ] && pgrep dockerd >/dev/null 2>&1 && [ -e docker/Dockerfile.$(BACKEND) ] && $(MAKE) install_docker && $(MAKE) stop-server; then $(HTTP_EXEC) bash -c 'trap ctrl_c INT; ctrl_c() { exit 1; }; while true; do BACKEND=$(BACKEND) HTTP_SERVICE=1 HTTP_PORT=$(HTTP_PORT) $(INNER_CMD); done'; else HTTP_SERVICE=1 $(INNER_CMD) || true; fi
 
 stop-server:
 	$(eval CONT_NAME := $(shell docker ps | grep $(HTTP_PREF) | awk '{print $$NF}'))
@@ -52,3 +54,7 @@ install_host:
 
 clean:
 	$(INNER_CMD) clean
+
+bdist:
+	BACKEND=c-base make install_docker
+	$(PARAMS) -it --rm -v $(shell pwd):/mnt antares sh -c 'cp /antares-*.whl /mnt' || true
