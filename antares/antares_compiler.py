@@ -46,6 +46,8 @@ if len(sys.argv) > 1:
     sys.argv = sys.argv[:1] + sys.argv[2:]
     from frameworks.tensorflow import setup
     exit(0)
+  elif sys.argv[1] == 'exec':
+    os.execl(sys.executable, sys.executable, *sys.argv[2:])
   else:
     raise Exception('Unsupported command arguments: %s' % ' '.join(sys.argv[1:]))
 
@@ -399,12 +401,17 @@ def main_compute(code_only=False):
 
   import logging
   import warnings
-  from tvm import autotvm
 
   warnings.simplefilter("ignore")
-  logging.getLogger('autotvm').setLevel(logging.ERROR)
-  logging.getLogger('autotvm').addHandler(logging.StreamHandler(sys.stdout))
-  task = autotvm.task.create("template_op", args=(), target=tvm_target)
+  task = Mock()
+  task.template_op = default_tune_op.get_template_op()
+
+  task.flop = 0
+  for ast in AntaresGlobal.compute_graph[0]:
+    local_flop = product([x['range'] for x in ast['props']['data_axes']])
+    if ast['props']['reduce_type']:
+      local_flop *= 2 * product([x['range'] for x in ast['props']['reduce_axes']])
+    task.flop += local_flop
 
   AntaresGlobal.default_tune_op = default_tune_op
   AntaresGlobal.default_task = task
@@ -428,10 +435,7 @@ def main_compute(code_only=False):
     worker_size = batch_size if batch_size < dev_num else dev_num
     thread_pool = ThreadPoolExecutor(max_workers=worker_size)
 
-    tuner_type = os.environ.get('TUNER')
-    if not tuner_type:
-      explicit_ops = AntaresGlobal.attrs.explicit_ops
-      tuner_type = 'OpEvo'
+    tuner_type = 'OpEvo'
     print('  >> MAKE_PARA = %d/%d, EXEC_PARA = %d, TUNER = %s' % (worker_size, batch_size, dev_num, tuner_type))
     print('  >> COMPUTE_V1 = %s\n' % os.environ['COMPUTE_V1'])
 
@@ -492,7 +496,7 @@ def main_compute(code_only=False):
             tuner.task.best.timecost = t
             tuner.task.best.config = inputs[i].config
             tuner.task.best.occur = best_slot
-          results.append(autotvm.measure.MeasureResult(costs=(t,), error_no=0, all_cost=i, timestamp=time.time()))
+          results.append({"costs": t, "local_id": i, "timestamp": time.time()})
         AntaresGlobal.current_step += len(results)
 
         stage_logs = 'STEP[%d / %d] Current Best Config = %s, Perf = %g sec / op (%g Gflops), MemRatio = %g %%, Occur Step = %d;' % (

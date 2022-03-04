@@ -2,7 +2,6 @@
 # Licensed under the MIT license.
 
 import numpy as np
-from tvm import autotvm
 from tvm import te, tir, target
 import logging
 import sys, time, subprocess
@@ -196,7 +195,6 @@ def refactor_special_names(code, global_arg_props):
     code = re.sub(fr'\b{intermediate_output}_v{i}\b', std_name, code)
   return code
 
-@autotvm.template("template_op")
 def get_template_op(**kwargs):
   if 'COMPUTE_V1' not in os.environ:
     raise Exception("Environment variable `COMPUTE_V1` is not set")
