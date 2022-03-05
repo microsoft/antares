@@ -1,52 +1,3 @@
-diff --git a/python/tvm/autotvm/task/task.py b/python/tvm/autotvm/task/task.py
-index ee1750896..cf1c2433c 100644
---- a/python/tvm/autotvm/task/task.py
-+++ b/python/tvm/autotvm/task/task.py
-@@ -587,7 +587,7 @@ def compute_flop(sch):
-         if isinstance(exp, expr.Call):
-             return sum([_count_flop(x) for x in exp.args])
- 
--        raise FlopCalculationError("Found unsupported operator in the compute expr")
-+        return 1
- 
-     def traverse(ops):
-         """accumulate flops"""
-@@ -597,11 +597,10 @@ def compute_flop(sch):
-                 num_element = _prod_length(op.axis)
- 
-                 body = op.body
--                if len(body) != 1:
--                    raise FlopCalculationError("Found multiple output in the compute")
--                exp = body[0]
-+                for i in range(len(body)):
-+                  exp = body[i]
-+                  ret += num_element * _count_flop(exp)
- 
--                ret += num_element * _count_flop(exp)
-                 ret += traverse([t.op for t in op.input_tensors])
- 
-             elif isinstance(op, tensor.PlaceholderOp):
-@@ -624,6 +623,7 @@ def compute_flop(sch):
-             "FLOP for this operator"
-         )
- 
-+    ret = max(ret, int(np.product([int(x) for x in sch.outputs[0].output(0).shape])))
-     if ret == 0:
-         raise RuntimeError(
-             "Cannot find float number operation in this operator. "
-diff --git a/python/tvm/autotvm/tuner/tuner.py b/python/tvm/autotvm/tuner/tuner.py
-index 8ce6b7445..99587c6ce 100644
---- a/python/tvm/autotvm/tuner/tuner.py
-+++ b/python/tvm/autotvm/tuner/tuner.py
-@@ -109,7 +109,7 @@ class Tuner(object):
-         si_prefix: str
-             One of tvm.autotvm.utils.SI_PREFIXES. The SI prefix to use when reporting FLOPS.
-         """
--        measure_batch = create_measure_batch(self.task, measure_option)
-+        measure_batch = self.measure_batch if hasattr(self, 'measure_batch') else create_measure_batch(self.task, measure_option)
-         n_parallel = getattr(measure_batch, "n_parallel", 1)
-         early_stopping = early_stopping or 1e9
-         self.n_trial = n_trial
 diff --git a/src/target/source/codegen_c.cc b/src/target/source/codegen_c.cc
 index a31111153..582904b96 100644
 --- a/src/target/source/codegen_c.cc
@@ -108,7 +59,7 @@ index a31111153..582904b96 100644
      IterVar iv = Downcast<IterVar>(op->node);
      if (iv->thread_tag.length() != 0) {
        if (!var_idmap_.count(iv->var.get())) {
-+        int nthread = static_cast<int>(op->value.as<IntImmNode>()->value);
++        int nthread = op->value.as<IntImmNode>() ? static_cast<int>(op->value.as<IntImmNode>()->value) : -1;
 +        if (std::string(iv->thread_tag).find("threadIdx.") == 0 || std::string(iv->thread_tag).find("blockIdx.") == 0)
 +          this->stream << "  // [thread_extent] " << iv->thread_tag << " = " << nthread << "\n";
          BindThreadIndex(iv);
@@ -291,3 +242,16 @@ index 409b7c262..37d0077dc 100644
      detect_inplace_ = detect_inplace;
      // plan the rewrite
      LinearAccessPatternFinder finder;
+diff --git a/src/target/stackvm/codegen_stackvm.cc b/src/target/stackvm/codegen_stackvm.cc
+index 402e329..5d419c7 100644
+--- a/src/target/stackvm/codegen_stackvm.cc
++++ b/src/target/stackvm/codegen_stackvm.cc
+@@ -271,7 +271,7 @@ void CodeGenStackVM::VisitExpr_(const CallNode* op) {
+     this->PushOp(StackVM::PUSH_I64, 0);
+     this->PushOp(StackVM::EQ_HANDLE);
+   } else {
+-    LOG(FATAL) << "unknown function call " << op->op;
++    this->PushOp(StackVM::TVM_THROW_LAST_ERROR);
+   }
+ }
+ 
