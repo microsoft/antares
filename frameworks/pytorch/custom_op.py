@@ -4,16 +4,18 @@
 import torch
 import os, json, hashlib, time, subprocess
 from torch.autograd import Function
+import importlib
 
-import antares_custom_torch as antares_custom_op
-
-if not torch.cuda.is_available():
-  backend = 'c-mcpu_avx512' if os.system("grep -r '\\bavx512' /proc/cpuinfo >/dev/null") == 0 else 'c-mcpu'
-else:
-  from torch.utils.cpp_extension import IS_HIP_EXTENSION
-  is_cuda = not IS_HIP_EXTENSION
-  backend = 'c-cuda' if is_cuda else 'c-rocm'
-print(f'[Info] \033[92mInitialize Antares for backend = {backend}\033[0m')
+def get_backend(custom_op):
+  device_name = str(custom_op.custom_device)
+  if 'cpu' in device_name:
+    backend = 'c-mcpu_avx512' if os.system("grep -r '\\bavx512' /proc/cpuinfo >/dev/null") == 0 else 'c-mcpu'
+  elif 'cuda' in device_name:
+    from torch.utils.cpp_extension import IS_HIP_EXTENSION
+    backend = 'c-cuda' if not IS_HIP_EXTENSION else 'c-rocm'
+  else:
+    raise Exception(f'Unrecognized device name of custom op: {backend}')
+  return backend
 
 def generate_antares_expression(ir, feed_dict, extra_outputs):
   input_dict, kwargs = {}, {}
@@ -31,10 +33,10 @@ def generate_antares_expression(ir, feed_dict, extra_outputs):
   expression = f'- einstein_v2(input_dict={input_dict}, extra_outputs=[{extra_outputs}], exprss="{ir}")'
   return expression
 
-def get_antares_cmd(expression, step=0):
+def get_antares_cmd(custom_op, expression, step=0):
   assert 0 == os.system('which antares >/dev/null 2>&1'), "`antares` command is not found in PATH, have you completed installing antares from pip?"
   commit = 'COMMIT=force' if step > 0 else ''
-  return f"BACKEND={backend} STEP={step} {commit} COMPUTE_V1='{expression}' antares"
+  return f"BACKEND={get_backend(custom_op)} STEP={step} {commit} COMPUTE_V1='{expression}' antares"
 
 class CustomOp(torch.nn.Module):
 
@@ -52,7 +54,7 @@ class CustomOp(torch.nn.Module):
 
   def request_code(self):
     expression = self.expr
-    source = subprocess.getoutput(get_antares_cmd(expression))
+    source = subprocess.getoutput(get_antares_cmd(self, expression))
     try:
       source = source[source.index(self.global_sig):source.rindex('// --------------')]
     except:
@@ -76,7 +78,7 @@ class CustomOp(torch.nn.Module):
     meta_outputs = source[meta_pos + len(' -> '):meta_end - 1].split('], ')
 
     code_name = 'Antares' + expr_hash
-    source_path = f'/tmp/antares_torch_{backend}_{code_name}.cc.kernel.cu'
+    source_path = f'/tmp/antares_torch_{get_backend(self)}_{code_name}.cc.kernel.cu'
 
     # Compile Kernel object
     with open(source_path, 'w') as fp:
@@ -103,7 +105,7 @@ class CustomOp(torch.nn.Module):
     self.output_infos = output_infos
     self.output_names = [x[0] for x in output_infos]
 
-    antares_custom_op.forward([], self.custom_key, self.kernel_sources)
+    self.custom_lib.forward([], self.custom_key, self.kernel_sources)
     return self
 
   def to(self, *args, **kwargs):
@@ -112,13 +114,25 @@ class CustomOp(torch.nn.Module):
       self.custom_device = kwargs['device']
     elif len(args) >= 1:
       self.custom_device = args[0]
+    else:
+      assert hasattr(self, 'custom_device'), "You must use custom_op.to(device) to specify the codegen device type."
+
+    backend = get_backend(self)
+    lib_name = 'antares_custom_torch_%s' % backend.replace('-', '_')
+    try:
+      self.custom_lib = importlib.import_module(lib_name)
+    except:
+      print(f'Failed to import {lib_name}. Custom Plugin for backend = {backend} is to be installed..')
+      assert 0 == os.system(f'BACKEND={backend} antares torch-setup'), "Failed to setup antares `{backend}` plugin for pytorch"
+      print(f'Plugin {lib_name} has been installed, which will be enabled in the next run.')
+      exit(0)
     return self
 
   def tune(self, step=100, use_cache=False, timeout=-1):
     if use_cache and self.request_code().find('// Saved Perf =') >= 0 or step <= 0:
       return self
     expression = self.expr
-    cmd = get_antares_cmd(expression, step=step)
+    cmd = get_antares_cmd(self, expression, step=step)
     print(f'[Exec] \033[92m{cmd}\033[0m')
     os.system(cmd)
     return self
@@ -135,6 +149,6 @@ class CustomOp(torch.nn.Module):
     for info in self.output_infos:
       out = torch.empty(info[2], device=self.custom_device, dtype=info[1])
       outputs.append(out)
-    antares_custom_op.forward(ordered_inputs + outputs, self.custom_key, '')
+    self.custom_lib.forward(ordered_inputs + outputs, self.custom_key, '')
     outputs = outputs[0] if len(outputs) == 1 else tuple(outputs)
     return outputs
