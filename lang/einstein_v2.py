@@ -492,7 +492,10 @@ def walk_in_ast(parent, attr_id, func, args):
 
 def ir_graph_parser(exprss, input_dict, extra_outputs, is_graph=False):
   statements = [s_.strip() for s_ in exprss.split(';')]
-  global full_tensor_dict
+  global full_tensor_dict, explicit_range
+  full_tensor_dict, explicit_range = None, None
+
+  visited_inputs = set()
   full_tensor_dict = copy.deepcopy(input_dict)
   output_dict = {}
   ast_seq = []
@@ -500,6 +503,10 @@ def ir_graph_parser(exprss, input_dict, extra_outputs, is_graph=False):
     if not s:
       continue
     ast = parse_to_ast(s)
+    for x in ast['props']['input_dict']:
+      if x in input_dict:
+        visited_inputs.add(x)
+
     k = ast['props']['output_name']
     ast_outputs_dict = {k: {"shape": [x['range'] for x in ast['props']['data_axes']], "dtype": ast['root']._dtype}}
     full_tensor_dict[k] = ast_outputs_dict[k]
@@ -530,14 +537,15 @@ def ir_graph_parser(exprss, input_dict, extra_outputs, is_graph=False):
   global_arg_pros['_in'].sort(key=lambda x: x['name'])
   global_arg_pros['_out'].sort(key=lambda x: x['name'])
 
+  input_dict = dict([(x, input_dict[x]) for x in visited_inputs])
   if is_graph:
     return ast_seq, input_dict, output_dict
 
-  from antares.common import AntaresGlobal
+  from ..antares.common import AntaresGlobal
   AntaresGlobal.global_arg_pros = global_arg_pros
 
   import importlib
-  passes = [(x[:-3], 'lang.pass') for x in os.listdir('lang/pass') if x.endswith('.py')]
+  passes = [(x[:-3], 'lang.pass') for x in os.listdir(os.path.dirname(__file__) + '/pass') if x.endswith('.py')]
   backend_pass_dir = 'backends/%s/pass' % os.environ['BACKEND']
   if os.path.isdir(backend_pass_dir):
     passes += [(x[:-3], backend_pass_dir.replace('/', '.')) for x in os.listdir(backend_pass_dir) if x.endswith('.py')]
@@ -593,3 +601,7 @@ def ir_graph_parser(exprss, input_dict, extra_outputs, is_graph=False):
     loops_def, pattern = emit_reduce_body(ast)
     ll_irs.append(loops_def + emit_output_body(ast, pattern))
   return '\n'.join(ll_irs)
+
+def auto_parse(exprss, input_dict, extra_outputs=[]):
+  return ir_graph_parser(exprss, input_dict, extra_outputs, is_graph=True)
+
