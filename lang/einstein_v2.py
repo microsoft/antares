@@ -541,7 +541,10 @@ def ir_graph_parser(exprss, input_dict, extra_outputs, is_graph=False):
   if is_graph:
     return ast_seq, input_dict, output_dict
 
-  from ..antares.common import AntaresGlobal
+  try:
+    from ..antares.common import AntaresGlobal
+  except:
+    from antares.common import AntaresGlobal
   AntaresGlobal.global_arg_pros = global_arg_pros
 
   import importlib

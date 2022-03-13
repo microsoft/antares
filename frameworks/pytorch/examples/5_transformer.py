@@ -61,7 +61,7 @@ layer_output_norm = CustomOp(ir=f'''
   'intermediate_bias': intermediate_bias,
   'output_weight': output_weight,
   'output_bias': output_bias,
-}).to(device).emit()
+}, device=device).emit()
 
 result = layer_output_norm(input_tensor, qkv_weight, qkv_bias, attention_weight, attention_bias, intermediate_weight, intermediate_bias, output_weight, output_bias)
 print('The result of tensor `%s` is:\n%s' % (layer_output_norm.output_names[0], result))

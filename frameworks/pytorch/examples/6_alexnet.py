@@ -53,7 +53,7 @@ output_logits = CustomOp(ir=f'''
   'const_5_': const_5_,
   'const_6_': const_6_,
   'const_7_': const_7_,
-}).to(device).emit()
+}, device=device).emit()
 
 result = output_logits(input_tensor, const_0_, const_1_, const_2_, const_3_, const_4_, const_5_, const_6_, const_7_)
 print('The result of tensor `%s` is:\n%s' % (output_logits.output_names[0], result))

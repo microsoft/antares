@@ -17,15 +17,13 @@ def get_backend(custom_op):
     raise Exception(f'Unrecognized device name of custom op: {backend}')
   return backend
 
-def generate_antares_expression(ir, feed_dict, extra_outputs):
+def generate_antares_expression(ir, feed_list, extra_outputs):
   input_dict, kwargs = {}, {}
-  for k in feed_dict:
-    v = feed_dict[k]
+  for k, i, shape, dtype in feed_list:
     input_dict[k] = {
-      'dtype': str(v.dtype).split('.')[1],
-      'shape': list(v.shape)
+      'dtype': str(dtype).split('.')[1],
+      'shape': list(shape)
     }
-    kwargs[k] = v
 
   ir = ir.replace('"', '`').replace('\n', ' ').strip()
   input_dict = json.dumps(input_dict)
@@ -40,17 +38,29 @@ def get_antares_cmd(custom_op, expression, step=0):
 
 class CustomOp(torch.nn.Module):
 
-  def __init__(self, ir, input_orders, extra_outputs=[]):
+  def __init__(self, ir, input_orders, extra_outputs=[], device=None):
     super(CustomOp, self).__init__()
     ir = ir.replace('"', '`').replace('\n', ' ').strip()
-    self.expr = generate_antares_expression(ir, input_orders, extra_outputs)
-    self.input_orders = sorted([(k, i, input_orders[k].shape, input_orders[k].dtype) for i, k in enumerate(input_orders)], key=lambda x: x[0])
+    input_list, index = [], 0
+    for k in input_orders:
+      if isinstance(input_orders[k], tuple):
+        input_list += [(k, index, input_orders[k][2], input_orders[k][1])]
+      else:
+        input_list += [(k, index, input_orders[k].shape, input_orders[k].dtype)]
+      index += 1
+
+    self.input_orders = sorted(input_list, key=lambda x: x[0])
+    self.expr = generate_antares_expression(ir, input_list, extra_outputs)
     self.global_sig = '// GLOBALS: '
-    if not hasattr(CustomOp, '__CUSTOM_KEY__'):
-      CustomOp.__CUSTOM_KEY__ = 0
-    self.custom_key = CustomOp.__CUSTOM_KEY__
-    CustomOp.__CUSTOM_KEY__ += 1
-    self.custom_device = 'cpu'
+
+    self.custom_device = 'cpu' if device is None else device.type
+    backend = get_backend(self)
+    lib_name = 'antares_custom_torch_v2_%s' % backend.replace('-', '_')
+    try:
+      self.custom_lib = importlib.import_module(lib_name)
+    except:
+      print(f'Failed to import {lib_name}.\nPlease install Custom Plugin for backend in advance: BACKEND={backend} antares torch-setup')
+      exit(1)
 
   def request_code(self):
     expression = self.expr
@@ -64,7 +74,7 @@ class CustomOp(torch.nn.Module):
   def emit(self):
     expr_hash = hashlib.sha256(self.expr.encode()).hexdigest()
     expression = self.expr
-    print('+ [Antares Op]', expression)
+    print(f'+ [AntaresOp:{get_backend(self)}]', expression)
 
     source = self.request_code()
     try:
@@ -105,28 +115,11 @@ class CustomOp(torch.nn.Module):
     self.output_infos = output_infos
     self.output_names = [x[0] for x in output_infos]
 
-    self.custom_lib.forward([], self.custom_key, self.kernel_sources)
+    self.custom_key = self.custom_lib.inject(self.kernel_sources)
     return self
 
   def to(self, *args, **kwargs):
-    self = super().to(*args, **kwargs)
-    if 'device' in kwargs:
-      self.custom_device = kwargs['device']
-    elif len(args) >= 1:
-      self.custom_device = args[0]
-    else:
-      assert hasattr(self, 'custom_device'), "You must use custom_op.to(device) to specify the codegen device type."
-
-    backend = get_backend(self)
-    lib_name = 'antares_custom_torch_%s' % backend.replace('-', '_')
-    try:
-      self.custom_lib = importlib.import_module(lib_name)
-    except:
-      print(f'Failed to import {lib_name}. Custom Plugin for backend = {backend} is to be installed..')
-      assert 0 == os.system(f'BACKEND={backend} antares torch-setup'), "Failed to setup antares `{backend}` plugin for pytorch"
-      print(f'Plugin {lib_name} has been installed, which will be enabled in the next run.')
-      exit(0)
-    return self
+    raise Exception('Deprecated Usage: Legacy `CustomOp(..).to(device)` has been simplified to `CustomOp(.., device=device)`')
 
   def tune(self, step=100, use_cache=False, timeout=-1):
     if use_cache and self.request_code().find('// Saved Perf =') >= 0 or step <= 0:
@@ -137,18 +130,19 @@ class CustomOp(torch.nn.Module):
     os.system(cmd)
     return self
 
+  def output(self, index=0):
+    return self.output_infos[index]
+
   def forward(self, *inputs):
     ordered_inputs = []
     for i in range(len(inputs)):
       inp = inputs[self.input_orders[i][1]]
-      if self.input_orders[i][3] != inp.dtype or self.input_orders[i][2] != inp.shape:
-        raise Exception(f"The order of planned inputs ({str(self.input_orders[i][3])}{list(self.input_orders[i][2])}) and given inputs ({str(inp.dtype)}{list(inp.shape)}) doesn't match.")
       ordered_inputs.append(inp.contiguous().to(self.custom_device))
 
     outputs = []
     for info in self.output_infos:
       out = torch.empty(info[2], device=self.custom_device, dtype=info[1])
       outputs.append(out)
-    self.custom_lib.forward(ordered_inputs + outputs, self.custom_key, '')
+    self.custom_lib.forward(self.custom_key, ordered_inputs + outputs)
     outputs = outputs[0] if len(outputs) == 1 else tuple(outputs)
     return outputs

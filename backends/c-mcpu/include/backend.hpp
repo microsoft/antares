@@ -105,6 +105,10 @@ namespace ab {
   static std::vector<std::vector<void*>> _task_queue;
 
   void init(int dev) {
+    static bool inited = false;
+    if (inited)
+      return;
+    inited = true;
 #if defined(__BACKEND_mcpu_avx512__)
     use_avx512 = true;
 #else
@@ -156,7 +160,7 @@ namespace ab {
     // Temporarily load `libcpu_module.so` that corresponds with launcher.sh
     const std::string path = "/system/libcpu_module.so";
 #endif
-    void* hmod = dlopen(path.c_str(), RTLD_NOW | RTLD_GLOBAL);
+    void* hmod = dlopen(path.c_str(), RTLD_NOW | RTLD_LOCAL);
     CHECK_OK(hmod != nullptr);
     return hmod;
   }
