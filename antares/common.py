@@ -4,7 +4,6 @@
 import os
 import subprocess
 import math
-from functools import reduce
 
 class Mock(object):
   pass
@@ -13,7 +12,10 @@ backend = os.environ['BACKEND']
 AntaresGlobal = Mock()
 
 def product(arrlist):
-  return reduce((lambda x, y: x * y), arrlist)
+  result = 1
+  for x in arrlist:
+    result *= int(x)
+  return result
 
 def wait_for(func, timeout=None, args=[]):
   if not timeout:

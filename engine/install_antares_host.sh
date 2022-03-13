@@ -3,7 +3,7 @@
 cd $(dirname $0)/..
 ANTARES_ROOT=$(pwd)
 
-VERSION_TAG=v0.3dev0
+VERSION_TAG=v0.3dev1
 
 if [[ "$NO_PYTHON" != "1" ]]; then
 
@@ -49,6 +49,7 @@ touch ${TVM_HOME}/device-stub/device-stub.c && gcc ${TVM_HOME}/device-stub/devic
 git checkout ${GIT_COMMIT}
 git apply device-stub/tvm_v0.8.0.patch
 git apply device-stub/tvm_extra.patch
+echo 'register_func("tvm_callback_cuda_compile", lambda code: bytearray(), override=True)' >> python/tvm/__init__.py
 
 git submodule init && git submodule update
 mkdir -p build && cd build && cp ../cmake/config.cmake .

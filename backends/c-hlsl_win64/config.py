@@ -13,6 +13,17 @@ if not os.path.exists(f'{local_dll_path}/dxcompiler.dll'):
     os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.2.0/dxil.dll -o {local_dll_path}/dxil.dll')
     os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.2.0/dxcompiler.dll -o {local_dll_path}/dxcompiler.dll')
 
+def to_search_space(ast_seq, input_dict, output_dict):
+  from antares.default_codegen import codegen
+  from antares.common import AntaresGlobal
+  codegen(ast_seq, input_dict, output_dict, {})
+  space = AntaresGlobal.auto_config.get_config_space()
+  return space
+
+def to_kernel_slices(compute_graph, best_config):
+  from antares.default_codegen import codegen
+  return codegen(*compute_graph, best_config)
+
 def get_execution_parallism():
     return 1
 

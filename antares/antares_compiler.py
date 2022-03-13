@@ -12,10 +12,8 @@ import importlib
 import signal
 import collections
 import threading
-import tvm
 
 from antares.common import *
-from lang.generic import custom_dtypes, refactor_special_names
 from graph_evaluator import client as eval_client
 
 compiler_path = os.path.dirname(os.path.abspath(__file__))
@@ -47,6 +45,7 @@ if len(sys.argv) > 1:
     from frameworks.tensorflow import setup
     exit(0)
   elif sys.argv[1] == 'exec':
+    os.chdir(os.environ.get('WORKDIR', '.'))
     os.execl(sys.executable, sys.executable, *sys.argv[2:])
   else:
     raise Exception('Unsupported command arguments: %s' % ' '.join(sys.argv[1:]))
@@ -67,7 +66,6 @@ def cleanup_on_exit(signum, frame):
 
 signal.signal(signal.SIGINT, cleanup_on_exit)
 
-tvm_target = 'cuda'
 verbose = int(os.environ.get('VERBOSE', '1'))
 
 try:
@@ -78,81 +76,6 @@ except ModuleNotFoundError:
 except:
   traceback.print_exc()
   exit(1)
-
-def get_global_arg_props():
-  return AntaresGlobal.global_arg_pros
-
-def device_properties():
-  return AntaresGlobal.attrs.device_props
-
-def verify_body(kernel_name, body):
-  max_threads_per_block = device_properties().max_threads_per_block
-  max_shared_memory_per_block = device_properties().max_shared_memory_per_block
-  assert max_threads_per_block > 0 and max_shared_memory_per_block >= 0, '[Error] Invalid device properties, maybe device is not detected correctly.'
-
-  thread_extents, shared_mem_in_bytes = dict(), 0
-  thread_extent_symbol, shared_symbol = '// [thread_extent] ', '__shared__ '
-  for line in body.split('\n'):
-    ll = line.strip()
-    if ll.startswith(thread_extent_symbol):
-      key, val = ll[len(thread_extent_symbol):].split(' = ')
-      if key not in thread_extents:
-        thread_extents[key] = int(val)
-      else:
-        assert thread_extents[key] == int(val), "Inequivalent thread_extents in function `%s`: %d v.s. %d" % (kernel_name, thread_extents[key], int(val))
-    if ll.startswith(shared_symbol):
-      assert ll.endswith('];');
-      ctype, _, count = ll[len(shared_symbol):-2].replace('[', ' ').split()
-      if ctype in ('double', 'long', 'int64_t'):
-        shared_mem_in_bytes += int(count) * 8
-      elif ctype in ('float', 'int'):
-        shared_mem_in_bytes += int(count) * 4
-      elif ctype in ('half', 'short'):
-        shared_mem_in_bytes += int(count) * 2
-      elif ctype in ('bool', 'char'):
-        shared_mem_in_bytes += int(count) * 1
-      else:
-        raise Exception("Unrecoginized C datatype: %s" % ctype)
-
-  num_threads = thread_extents.get('threadIdx.x', 1) * thread_extents.get('threadIdx.y', 1) * thread_extents.get('threadIdx.z', 1)
-  assert num_threads <= max_threads_per_block, "Invalid num_threads used in function `%s`: num_threads(%d) > max_threads_per_block(%d)" % (kernel_name, num_threads, max_threads_per_block)
-  assert shared_mem_in_bytes <= max_shared_memory_per_block, "Invalid shared memory used in function `%s`: used_shared_mem_in_bytes %d > max_shared_memory_per_block %d" % (kernel_name, shared_mem_in_bytes, max_shared_memory_per_block)
-
-def translate_code(code, config):
-  global_arg_props = get_global_arg_props()
-
-  code = refactor_special_names(code, global_arg_props)
-  tensors_pool = json.loads(os.environ.get('TENSORS_POOL', '{}'))
-  kernel_slices = []
-  for kernel in ('\n' + code).split('\nextern ')[1:]:
-    kernel = 'extern %s\n' % kernel[:kernel.index('\n}') + 2]
-    idx = kernel.index(' void ') + 6
-    if kernel[idx:].startswith('__launch_bounds__'):
-      idx = kernel.index(')', idx) + 2
-    idy = kernel.index('(', idx)
-    kernel_name = kernel[idx:idy]
-    kernel_prefix = 'template_op_kernel'
-    assert kernel_name.startswith(kernel_prefix)
-    kernel_id = int(kernel_name[len(kernel_prefix):])
-    idx = kernel.index(') {', idy)
-    body = kernel[idx+3:kernel.index('\n}', idx)].strip()
-    verify_body(kernel_name, body)
-
-    arg_line = kernel[idy+1:idx]
-    args, outputs_ex = [], []
-    for x in arg_line.split(','):
-      c_type = x.split('*')[0].strip()
-      v_name = x.split()[-1]
-      if v_name.startswith('___'):
-        continue
-      v_name_in_pool = v_name[2:] if re.match(r'^__[a-z]+', v_name) else v_name
-      v_props = tensors_pool[v_name_in_pool]
-      if re.search(r'\b___%s\b' % v_name, arg_line) is not None:
-        outputs_ex.append((c_type, v_name, v_props))
-      else:
-        args.append((c_type, v_name, v_props))
-    kernel_slices.append((kernel_id, kernel_name, args + outputs_ex, body))
-  return kernel_slices
 
 
 def compute_gflops(flop, t):
@@ -188,7 +111,7 @@ def codehub_db(compute_key, source_code=None, erase=False):
 def get_target_source(best_config, dir_sid=None):
   # Note: Not thread safe due to multiple invokes of target codegen
 
-  global_arg_props = get_global_arg_props()
+  global_arg_props = AntaresGlobal.global_arg_props
   def get_kernel_metadata(config):
     inp_args, outp_args = [], []
 
@@ -217,7 +140,7 @@ def get_target_source(best_config, dir_sid=None):
       num_outputs = len(global_arg_props['_out']) if i + 1 == len(kernel_slices) else 1
       display_inputs = ', '.join([tensor_display(x, prop) for _, x, prop in args[:-num_outputs]])
       display_outputs = ', '.join([tensor_display(x, prop) for _, x, prop in args[-num_outputs:]])
-      kernel = backend_config.do_native_translation_v2((kernel_name, args[:-num_outputs], args[-num_outputs:], body), attrs=AntaresGlobal.attrs).strip()
+      kernel = backend_config.do_native_translation_v2((kernel_name, args[:-num_outputs], args[-num_outputs:], body), attrs=getattr(AntaresGlobal, 'attrs', None)).strip()
       code.append(f'// LOCAL: {kernel_name} -- {display_inputs} -> {display_outputs}\n\n{kernel}\n')
 
     del kernel_slices
@@ -232,53 +155,10 @@ def get_target_source(best_config, dir_sid=None):
       fp.write(device_source)
     return device_source, kernel_path
 
-  if getattr(AntaresGlobal, 'mode', None) == 'antares':
-    json_config = json.loads(best_config)
-    kernel_slices = backend_config.to_kernel_slices(AntaresGlobal.compute_graph, json_config if json_config is not None else {})
-    return pack_device_source(kernel_slices)
-
-  with open(local_get_dir_file('my_kernel.time', dir_sid=dir_sid), 'w') as fp:
-    fp.write('%s' % time.time())
-  default_tune_op = AntaresGlobal.default_tune_op
-  assert isinstance(best_config, str), "Config value must be string type, got: %s" % best_config.__class__
-  if best_config.startswith('['):
-    # Ansor config
-    from tvm import auto_scheduler
-    [origin_cfg] = json.loads(best_config)
-    origin_cfg_file = local_get_dir_file('my_kernel.cfg', dir_sid=dir_sid)
-    with open(origin_cfg_file, 'w') as fp:
-      fp.write(json.dumps(origin_cfg))
-    origin_cfg = tvm.auto_scheduler.measure_record.load_records(origin_cfg_file)
-
-    from tuner.Ansor.main import create_auto_task
-    target = tvm.target.Target(tvm_target)
-    auto_task = create_auto_task(target)
-
-    for inp, res in origin_cfg:
-      s, arg_bufs = auto_task.compute_dag.apply_steps_from_state(inp.state)
-      break
-    with open(local_get_dir_file('my_kernel.sched', dir_sid=dir_sid), 'w') as fp:
-      fp.write(auto_task.compute_dag.print_python_code_from_state(inp.state))
-  else:
-    AntaresGlobal.attrs.auto_config.set_candidate(json.loads(best_config))
-    with tvm.target.Target(tvm_target):
-      s, arg_bufs = default_tune_op.get_template_op()
-
-  if s is not None:
-      lower_source = str(tvm.lower(s, arg_bufs, simple_mode=True))
-
-      lower_file = local_get_dir_file('my_kernel.lower', dir_sid=dir_sid)
-      with open(lower_file, 'w') as fp:
-        fp.write(lower_source)
-
-      # Compile Source Code
-      def build_template():
-        return tvm.build(s, arg_bufs, tvm_target, name='template_op')
-      func = build_template()
-
-  assert(len(func.imported_modules) == 1)
-  kernel_slices = translate_code(func.imported_modules[0].get_source(), best_config)
+  json_config = json.loads(best_config)
+  kernel_slices = backend_config.to_kernel_slices(AntaresGlobal.compute_graph, json_config if json_config is not None else {})
   return pack_device_source(kernel_slices)
+
 
 def code_suffix(tpr=-1.0, step_prod=0, step_plan=-1):
   return '\n// Saved Perf = %.6e sec / run; Step Produced = %d; Planned Steps = %d;' % (tpr, step_prod, step_plan)
@@ -345,10 +225,10 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
   return results
 
 def compute_mem_ratio(tpr):
-  if math.isinf(tpr) or math.isinf(float(device_properties().mem_bandwith)) or device_properties().mem_bandwith <= 0:
+  if math.isinf(tpr) or math.isinf(float(AntaresGlobal.attrs.device_props.mem_bandwith)) or AntaresGlobal.attrs.device_props.mem_bandwith <= 0:
     return -1
 
-  global_arg_props = get_global_arg_props()
+  global_arg_props = AntaresGlobal.global_arg_props
   access_bytes = 0
   for buf in global_arg_props['_in']:
     access_bytes += product(buf['shape']) * get_type_size(buf['dtype'])
@@ -358,7 +238,7 @@ def compute_mem_ratio(tpr):
   access_bytes = int(access_bytes)
   if access_bytes <= 0:
     return -1
-  ratio = math.ceil(access_bytes * 1e-7 / tpr / device_properties().mem_bandwith)
+  ratio = math.ceil(access_bytes * 1e-7 / tpr / AntaresGlobal.attrs.device_props.mem_bandwith)
   return min(int(ratio), 100)
 
 def run_config_entity(target_source, config_str, dir_sid, expected_timecost='inf', dev_id=0):
@@ -391,21 +271,16 @@ def run_config_entity(target_source, config_str, dir_sid, expected_timecost='inf
       progress(AntaresGlobal.completed_trials * 1e2 / AntaresGlobal.num_trials)
   return result
 
-
 def main_compute(code_only=False):
-  def compile_callback(code):
-   return bytearray()
-  tvm.register_func('tvm_callback_cuda_compile', compile_callback, override=True)
-
   default_tune_op = importlib.import_module('lang.generic')
 
   import logging
   import warnings
 
   warnings.simplefilter("ignore")
-  task = Mock()
-  task.template_op = default_tune_op.get_template_op()
+  default_tune_op.load_template_op()
 
+  task = Mock()
   task.flop = 0
   for ast in AntaresGlobal.compute_graph[0]:
     local_flop = product([x['range'] for x in ast['props']['data_axes']])
@@ -448,10 +323,7 @@ def main_compute(code_only=False):
       os.environ.pop('COMMIT')
 
     try:
-      if getattr(AntaresGlobal, 'mode', None) == 'antares':
-        task.search_space_v2 = backend_config.search_space(AntaresGlobal.compute_graph)
-      else:
-        task.search_space_v2 = AntaresGlobal.attrs.auto_config.get_config_space()
+      task.search_space_v2 = backend_config.to_search_space(*AntaresGlobal.compute_graph)
       task.n_parallel = batch_size
       tuner = importlib.import_module('tuner.%s.main' % tuner_type)
       tuner = tuner.MainTuner(task)
@@ -598,7 +470,6 @@ def rest_service():
   def clear_environ(compute_exp, step):
       os.environ['COMPUTE_V1'] = compute_exp
       os.environ['STEP'] = str(step)
-      os.environ['LL_IR'] = ''
       os.environ['COMMIT'] = 'force'
 
   class IndexHandler(tornado.web.RequestHandler):

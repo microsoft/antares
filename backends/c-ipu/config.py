@@ -12,8 +12,7 @@ from .auto_shard import update_ast
 def get_execution_parallism():
   return 1
 
-def search_space(compute_graph):
-  ast_seq, input_dict, output_dict = compute_graph
+def to_search_space(ast_seq, input_dict, output_dict):
   assert len(ast_seq) == 1, "Unimplemented multi ASTs."
   ast_props = ast_seq[0]['props']
 
@@ -132,7 +131,7 @@ def to_kernel_slices(compute_graph, best_config):
 
 
 def do_native_translation_v2(codeset, **kwargs):
-  if 'einstein_v2' not in kwargs['attrs'].ir:
+  if 'einstein_v2' not in os.environ['COMPUTE_V1']:
     raise Exception("Program for graphcore must be based on Antares IR")
 
   kernel_name, in_args, out_args, body = codeset
@@ -146,15 +145,12 @@ def do_native_translation_v2(codeset, **kwargs):
   for buf in out_args:
     func_args += ' Output<Vector<%s>> %s;\n' % (buf[0], buf[1])
 
-  blend_code = kwargs['attrs'].blend.strip()
+  blend_code = getattr(kwargs['attrs'], 'blend', '').strip()
   blend_code = 'namespace {\n%s\n}\n\n' if blend_code else ''
 
   from antares.common import local_get_dir_file
-  try:
-    with open(local_get_dir_file('range_book.json'), 'r') as fp:
-      range_book = json.load(fp)
-  except FileNotFoundError:
-    raise Exception("TODO: Graphcore body generation is not completely implemented in new emit_tvm_ir_v2()")
+  with open(local_get_dir_file('range_book.json'), 'r') as fp:
+    range_book = json.load(fp)
 
   props = []
   for k in range_book['book']:

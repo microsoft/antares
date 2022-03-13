@@ -4,6 +4,17 @@
 import subprocess, os
 import re
 
+def to_search_space(ast_seq, input_dict, output_dict):
+  from antares.default_codegen import codegen
+  from antares.common import AntaresGlobal
+  codegen(ast_seq, input_dict, output_dict, {})
+  space = AntaresGlobal.auto_config.get_config_space()
+  return space
+
+def to_kernel_slices(compute_graph, best_config):
+  from antares.default_codegen import codegen
+  return codegen(*compute_graph, best_config)
+
 def get_execution_parallism():
   num_gpus = len(subprocess.getoutput('ls /dev/nvidia[0-9]* 2>/dev/null').split())
   num_gpus = num_gpus if num_gpus > 0 else 1
