@@ -335,10 +335,6 @@ def parse_to_ast(expr):
 def const(other):
   return OpTensor.parse(other)
 
-def warp_axis(ax_name):
-  assert(ax_name[0].isupper() or ax_name == '_id')
-  return ax_name
-
 def f_op(func, *args):
   assert len(args) > 0
   return args[0].call(func, list(args[1:]))
@@ -411,53 +407,6 @@ def emit_antares_ir(ast, primal=False, tensor_remap=dict()):
   else:
     return '%s %s %s' % (lval, comp_type, body)
 
-def emit_tvm_body(node, props):
-  if node._op == 'const':
-    return 'tir.const(%s, dtype="%s")' % (node._value, node._dtype)
-  elif node._op == 'axis_range':
-    return 'tir.const(%s, dtype="%s")' % (props['explicit_range'][node._value], node._dtype)
-  elif node._op == 'get_item':
-    tensor = node._value['tensor']
-    index = node._value['index']
-    _str = tensor._value + '['
-    if len(index) > 0:
-      for i, it in enumerate(index):
-        _str += emit_tvm_body(it, props) + ', '
-      _str = _str[:-2] + ']'
-    return _str
-  elif node._op == 'axis':
-    axis_name = warp_axis(node._value)
-    if hasattr(node, '_func'):
-      axis_name = node._func(axis_name)
-    return axis_name
-  elif node._op == 'op':
-    op_name = node._value["name"]
-    op_input_size = len(node._value["inputs"])
-    if op_name in ('&', '|', '~'):
-      if op_name == '&':
-        return 'te.all(' + emit_tvm_body(node._value["inputs"][0], props) + '.astype("bool"), ' + emit_tvm_body(node._value["inputs"][1], props) + '.astype("bool"))'
-      elif op_name == '|':
-        return 'te.any(' + emit_tvm_body(node._value["inputs"][0], props) + '.astype("bool"), ' + emit_tvm_body(node._value["inputs"][1], props) + '.astype("bool"))'
-      else:
-        return '(' + emit_tvm_body(node._value["inputs"][0], props) + ' == 0)'
-    elif op_name == '//':
-      return 'tvm.tir.truncdiv(' + emit_tvm_body(node._value["inputs"][0], props) + ', ' + emit_tvm_body(node._value["inputs"][1], props) + ')'
-    elif op_input_size == 2:
-      return '(' + emit_tvm_body(node._value["inputs"][0], props) + ' ' + op_name + ' ' + emit_tvm_body(node._value["inputs"][1], props) + ')'
-    elif op_input_size == 1:
-      return '(' + op_name + emit_tvm_body(node._value["inputs"][0], props) + ')'
-    else:
-      raise Exception('Unrecognized op type: %s[%d]' % (op_name, op_input_size))
-  elif node._op == 'cast':
-    return '%s.astype(cast_dtype("%s"))' % (emit_tvm_body(node._value["inputs"][0], props), node._dtype)
-  elif node._op == 'call':
-    return 'tir.call_pure_extern(cast_dtype("%s"), "%s", %s)' % (node._dtype, node._value['name'], ', '.join([emit_tvm_body(x, props) for x in node._value["inputs"]]))
-  elif node._op == 'when':
-    all_conds = [emit_tvm_body(cond, props) for cond in node._value['if']]
-    return 'tir.if_then_else(te.%s(' % node._value['merge_op'] + ', '.join(all_conds) + '), t=' + emit_tvm_body(node._value['true'], props) + ', f=' + emit_tvm_body(node._value['false'], props) + ')'
-  else:
-    raise Exception('Unrecognized node type: %s' % node._op)
-
 def walk_in_ast(parent, attr_id, func, args):
   node = getattr(parent, attr_id) if isinstance(parent, OpTensor) else parent[attr_id]
 
@@ -490,7 +439,7 @@ def walk_in_ast(parent, attr_id, func, args):
 
   _walk(node, parent, attr_id)
 
-def ir_graph_parser(exprss, input_dict, extra_outputs, is_graph=False):
+def ir_graph_parser(exprss, input_dict, extra_outputs=[]):
   statements = [s_.strip() for s_ in exprss.split(';')]
   global full_tensor_dict, explicit_range
   full_tensor_dict, explicit_range = None, None
@@ -519,33 +468,7 @@ def ir_graph_parser(exprss, input_dict, extra_outputs, is_graph=False):
   if k not in extra_outputs:
     output_dict[k] = ast_outputs_dict[k]
 
-  # Registry Global Argument Properties
-  global_arg_pros = {'_in': [], '_out': []}
-  for k in input_dict:
-    prop = copy.deepcopy(input_dict[k])
-    prop['name'] = k
-    if f'___{k}' in output_dict:
-      global_arg_pros['_out'].append(prop)
-    else:
-      global_arg_pros['_in'].append(prop)
-  for k in output_dict:
-    if k.startswith('___'):
-      continue
-    prop = copy.deepcopy(output_dict[k])
-    prop['name'] = k
-    global_arg_pros['_out'].append(prop)
-  global_arg_pros['_in'].sort(key=lambda x: x['name'])
-  global_arg_pros['_out'].sort(key=lambda x: x['name'])
-
   input_dict = dict([(x, input_dict[x]) for x in visited_inputs])
-  if is_graph:
-    return ast_seq, input_dict, output_dict
-
-  try:
-    from ..antares.common import AntaresGlobal
-  except:
-    from antares.common import AntaresGlobal
-  AntaresGlobal.global_arg_pros = global_arg_pros
 
   import importlib
   passes = [(x[:-3], 'lang.pass') for x in os.listdir(os.path.dirname(__file__) + '/pass') if x.endswith('.py')]
@@ -556,55 +479,5 @@ def ir_graph_parser(exprss, input_dict, extra_outputs, is_graph=False):
   for pas in passes:
     pass_stage = importlib.import_module('%s.%s' % (pas[1], pas[0]))
     pass_stage.run_pass_v2(ast_seq, input_dict, output_dict)
-
-  from antares.common import AntaresGlobal
-  AntaresGlobal.compute_graph = ast_seq, input_dict, output_dict
-
-  # Generate LL_IR body for ast_seq
-  def emit_input_body(input_dict):
-    input_body = '_id = input("_id", [1], dtype="int32")[0]; '
-    for key in input_dict:
-      input_info = input_dict[key]
-      input_body += '%s = input("%s", %s, dtype="%s"); ' % (key, key, input_info['shape'], input_info['dtype'])
-    return input_body
-
-  def emit_reduce_body(ast):
-    reduce_body, reduce_set = '', []
-    props = ast['props']
-    if props['reduce_axes']:
-      for x in props['reduce_axes']:
-        axis_name = warp_axis(x['name'])
-        reduce_set.append(axis_name)
-        reduce_body += '%s = loop(%d, name="%s"); ' % (axis_name, x['range'], axis_name)
-      reduce_maps = {'+': 'te.sum', '>': 'te.max', '<': 'te.min'}
-      if props['reduce_type'] in reduce_maps:
-        reduce_func = reduce_maps[props['reduce_type']]
-      else:
-        spec_idx = props['reduce_type'].find('(')
-        if spec_idx >= 0:
-          reduce_func = 'common_reduce("%s", %s)' % (props['reduce_type'][:spec_idx], props['reduce_type'][spec_idx:])
-        else:
-          reduce_func = 'common_reduce("%s")' % props['reduce_type']
-      reduce_pattern = '%s(' % reduce_func + '%s' + ', axis=[%s])' % ', '.join(reduce_set)
-    else:
-      reduce_pattern = '%s'
-    return reduce_body, reduce_pattern
-
-  def emit_output_body(ast, reduce_pattern):
-    root, props = ast['root'], ast['props']
-    output_shape = [x['range'] for x in props['data_axes']]
-    output_name = props['output_name']
-    output_begin = '%s = output(shape=%s, func=lambda %s: ' % (output_name, output_shape, ', '.join([warp_axis(x['name']) for x in props['data_axes']]))
-    basic_body = emit_tvm_body(root, props)
-    output_end = ', dtype="%s", tag="%s", name="%s", final_output=%s); ' % (root._dtype, '', output_name, output_name in output_dict)
-    return output_begin + reduce_pattern % basic_body + output_end
-
-  ll_irs = [emit_input_body(input_dict)]
-  for ast in ast_seq:
-    loops_def, pattern = emit_reduce_body(ast)
-    ll_irs.append(loops_def + emit_output_body(ast, pattern))
-  return '\n'.join(ll_irs)
-
-def auto_parse(exprss, input_dict, extra_outputs=[]):
-  return ir_graph_parser(exprss, input_dict, extra_outputs, is_graph=True)
+  return ast_seq, input_dict, output_dict
 

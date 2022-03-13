@@ -2,7 +2,20 @@
 # Licensed under the MIT license.
 
 import subprocess, os
+import importlib
+import json
+import re
 
+def to_search_space(ast_seq, input_dict, output_dict):
+  from antares.default_codegen import codegen
+  from antares.common import AntaresGlobal
+  codegen(ast_seq, input_dict, output_dict, {})
+  space = AntaresGlobal.auto_config.get_config_space()
+  return space
+
+def to_kernel_slices(compute_graph, best_config):
+  from antares.default_codegen import codegen
+  return codegen(*compute_graph, best_config)
 
 def get_execution_parallism():
   ngpus = len(subprocess.getoutput('/opt/rocm/bin/rocm_agent_enumerator 2>/dev/null | grep -v gfx000').split())
