@@ -15,6 +15,7 @@ kwargs = {'dtype': dtype,
 
 x = torch.ones([64, 28 * 28], **kwargs)
 
+torch.manual_seed(0)
 def create_param(name, shape):
   return (torch.rand(shape, **kwargs) - 0.5) * 0.01
 
@@ -25,17 +26,36 @@ b1 = create_param('dense_b1', [512])
 w2 = create_param('dense_w2', [512, 10])
 b2 = create_param('dense_b2', [10])
 
-custom_op = CustomOp(ir='''
-  data_0[N, M] +=!  data[N, K] * weight_0[K, M];
-  data_0_bias[N, K] = data_0[N, K] + bias_0[K];
-  data_1[N, K] =   data_0_bias[N, K].call(`max`, [0.0]);
-  data_2[N, M] +=!  data_1[N, K] * weight_1[K, M];
-  data_2_bias[N, K] = data_2[N, K] + bias_1[K];
-  data_3[N, K] =   data_2_bias[N, K].call(`max`, [0.0]);
-  data_4[N, M] +=!  data_3[N, K] * weight_2[K, M];
-  data_5[N, K] =   (data_4[N, K] + bias_2[K]);
-''', input_orders={'data': x, 'weight_0': w0, 'weight_1': w1, 'weight_2': w2, 'bias_0': b0, 'bias_1': b1, 'bias_2': b2}).to(device).tune(step=100, use_cache=True, timeout=600).emit()
+num_steps = 100
 
-result = custom_op(x, w0, w1, w2, b0, b1, b2)
-print('The result of tensor `%s` is:\n%s' % (custom_op.output_names[0], result))
+custom_op_fc0 = CustomOp(ir='''
+  fc_out[N, M]       += data[N, K] * weight[K, M];
+  fc_out_bias[N, K]  =  fc_out[N, K] + bias[K];
+  fc_bias_relu[N, K] =  fc_out_bias[N, K].call(`max`, [0.0]);
+''', input_orders={'data': x, 'weight': w0, 'bias': b0,}, device=device).tune(step=num_steps, use_cache=True, timeout=600).emit()
+
+custom_op_fc1 = CustomOp(ir='''
+  fc_out[N, M]       += data[N, K] * weight[K, M];
+  fc_out_bias[N, K]  =  fc_out[N, K] + bias[K];
+  fc_bias_relu[N, K] =  fc_out_bias[N, K].call(`max`, [0.0]);
+''', input_orders={'data': custom_op_fc0.output(0), 'weight': w1, 'bias': b1,}, device=device).tune(step=num_steps, use_cache=True, timeout=600).emit()
+
+custom_op_fc2 = CustomOp(ir='''
+  fc_out[N, M]       += data[N, K] * weight[K, M];
+  fc_out_bias[N, K]  =  fc_out[N, K] + bias[K];
+''', input_orders={'data': custom_op_fc1.output(0), 'weight': w2, 'bias': b2}, device=device).tune(step=num_steps, use_cache=True, timeout=600).emit()
+
+y = custom_op_fc0(x, w0, b0)
+y = custom_op_fc1(y, w1, b1)
+y = custom_op_fc2(y, w2, b2)
+
+print('The result of tensor from Antares is:\n%s' % y.view(-1))
+
+z = torch.addmm(b0, x, w0)
+z = torch.nn.functional.relu(z)
+z = torch.addmm(b1, z, w1)
+z = torch.nn.functional.relu(z)
+z = torch.addmm(b2, z, w2)
+
+print('The result of tensor from Pytorch is:\n%s' % z.view(-1))
 
