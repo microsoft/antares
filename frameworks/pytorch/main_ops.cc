@@ -4,30 +4,31 @@
 #include <torch/extension.h>
 #include <vector>
 #include <string>
+#include <unordered_map>
 
 #include "execute_module.hpp"
 
-static std::vector<std::unique_ptr<ExecutionModule>> module_manager;
+static std::vector<std::string> local_sources;
+static std::unordered_map<int, std::unique_ptr<ExecutionModule>> module_manager;
 
-void custom_op_forward(std::vector<torch::Tensor> tensors, int custom_key, const std::string& source)
+static int custom_op_inject(const std::string& source)
 {
-  if (module_manager.size() <= custom_key)
-    module_manager.resize(custom_key + 1);
+  int custom_key = local_sources.size();
+  local_sources.push_back(source);
+  return custom_key;
+}
 
-  if (module_manager[custom_key] == nullptr)
-  {
-    int ord = 0;
-#if defined(ANTARES_CUDA)
-    cuCtxGetDevice(&ord);
-#elif defined(ANTARES_ROCM)
-    hipGetDevice(&ord);
-#endif
-    ab::init(ord);
-    module_manager[custom_key] = std::make_unique<ExecutionModule>(source);
-    return;
+static void custom_op_forward(int custom_key, std::vector<torch::Tensor> tensors)
+{
+  int dev = tensors[0].device().index(), comp_key = custom_key * 32 + dev;
+  auto it = module_manager.find(comp_key);
+  if (it == module_manager.end()) {
+    CHECK_EQ(true, custom_key < local_sources.size());
+    module_manager[comp_key] = std::make_unique<ExecutionModule>(local_sources[custom_key]);
+    it = module_manager.find(comp_key);
   }
 
-  auto &module = module_manager[custom_key];
+  auto &module = module_manager[comp_key];
   const auto input_size = module->global_inputs.size();
   const auto output_size = module->global_outputs.size();
   CHECK_EQ(input_size + output_size, tensors.size());
@@ -39,11 +40,12 @@ void custom_op_forward(std::vector<torch::Tensor> tensors, int custom_key, const
 
   module->compute(args.data());
 
-#if !defined(ANTARES_CUDA) && !defined(ANTARES_ROCM)
+#if !defined(HIP_VERSION) && !defined(CUDA_VERSION)
   ab::synchronize(0);
 #endif
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-  m.def("forward", &custom_op_forward, "custom forward (GPU)");
+  m.def("inject", &custom_op_inject, "custom inject");
+  m.def("forward", &custom_op_forward, "custom forward");
 }

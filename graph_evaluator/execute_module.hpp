@@ -34,7 +34,8 @@ namespace ab_utils {
   public:
     TempFile(const std::string &extension_name, const std::string &file_content) {
       // FIXME: Be careful it's not thread-safe in shared context. Fortunately, no shared context used in current version.
-      this->file_path = ".antares-module-tempfile." + extension_name;
+      static unsigned int k_count = 0;
+      this->file_path = ".antares-module-tempfile." + std::to_string(++k_count) + "." + extension_name;
 
       FILE *fp = fopen(this->file_path.c_str(), "w");
       CHECK_OK(fp != nullptr);
@@ -178,7 +179,8 @@ struct ExecutionModule {
   void *hModule;
   bool debug_output;
 
-  ExecutionModule(std::string source) {
+  ExecutionModule(std::string source, int dev = 0) {
+    ab::init(dev);
     debug_output = getenv("AB_DEBUG") && *getenv("AB_DEBUG") ? atoi(getenv("AB_DEBUG")) : 0;
 
     static const char file_proto[] = "file://";
@@ -198,7 +200,6 @@ struct ExecutionModule {
     global_inputs = parse_properties(params[0]), global_outputs = parse_properties(params[1]);
 
     backend = get_between(source, "// BACKEND: ", " (");
-    // fprintf(stderr, "%s\n", backend.c_str());
 
     hModule = ab::moduleLoad(source);
 

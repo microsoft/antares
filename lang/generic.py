@@ -192,7 +192,10 @@ def refactor_special_names(code, global_arg_props):
   for i in range(len(global_arg_props['_out'])):
     std_name = global_arg_props['_out'][i]['name']
     code = re.sub(fr'\b{std_name}\b', f'__{std_name}', code)
-    code = re.sub(fr'\b{intermediate_output}_v{i}\b', std_name, code)
+    if i == 0:
+      code = re.sub(fr'\b{intermediate_output}\b', std_name, code)
+    else:
+      code = re.sub(fr'\b{intermediate_output}{i}\b', std_name, code)
   return code
 
 def get_template_op(**kwargs):
