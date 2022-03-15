@@ -46,9 +46,9 @@ def codegen(ast_seq, input_dict, output_dict, best_config):
 
   def emit_tvm_body(node, props):
     if node._op == 'const':
-      return 'tir.const(%s, dtype="%s")' % (node._value, node._dtype)
+      return 'tvm.tir.const(%s, dtype="%s")' % (node._value, node._dtype)
     elif node._op == 'axis_range':
-      return 'tir.const(%s, dtype="%s")' % (props['explicit_range'][node._value], node._dtype)
+      return 'tvm.tir.const(%s, dtype="%s")' % (props['explicit_range'][node._value], node._dtype)
     elif node._op == 'get_item':
       tensor = node._value['tensor']
       index = node._value['index']
@@ -68,9 +68,9 @@ def codegen(ast_seq, input_dict, output_dict, best_config):
       op_input_size = len(node._value["inputs"])
       if op_name in ('&', '|', '~'):
         if op_name == '&':
-          return 'te.all(' + emit_tvm_body(node._value["inputs"][0], props) + '.astype("bool"), ' + emit_tvm_body(node._value["inputs"][1], props) + '.astype("bool"))'
+          return 'tvm.te.all(' + emit_tvm_body(node._value["inputs"][0], props) + '.astype("bool"), ' + emit_tvm_body(node._value["inputs"][1], props) + '.astype("bool"))'
         elif op_name == '|':
-          return 'te.any(' + emit_tvm_body(node._value["inputs"][0], props) + '.astype("bool"), ' + emit_tvm_body(node._value["inputs"][1], props) + '.astype("bool"))'
+          return 'tvm.te.any(' + emit_tvm_body(node._value["inputs"][0], props) + '.astype("bool"), ' + emit_tvm_body(node._value["inputs"][1], props) + '.astype("bool"))'
         else:
           return '(' + emit_tvm_body(node._value["inputs"][0], props) + ' == 0)'
       elif op_name == '//':
@@ -84,10 +84,10 @@ def codegen(ast_seq, input_dict, output_dict, best_config):
     elif node._op == 'cast':
       return '%s.astype("%s")' % (emit_tvm_body(node._value["inputs"][0], props), cast_dtype(node._dtype))
     elif node._op == 'call':
-      return 'tir.call_pure_extern("%s", "%s", %s)' % (cast_dtype(node._dtype), node._value['name'], ', '.join([emit_tvm_body(x, props) for x in node._value["inputs"]]))
+      return 'tvm.tir.call_pure_extern("%s", "%s", %s)' % (cast_dtype(node._dtype), node._value['name'], ', '.join([emit_tvm_body(x, props) for x in node._value["inputs"]]))
     elif node._op == 'when':
       all_conds = [emit_tvm_body(cond, props) for cond in node._value['if']]
-      return 'tir.if_then_else(te.%s(' % node._value['merge_op'] + ', '.join(all_conds) + '), t=' + emit_tvm_body(node._value['true'], props) + ', f=' + emit_tvm_body(node._value['false'], props) + ')'
+      return 'tvm.tir.if_then_else(tvm.te.%s(' % node._value['merge_op'] + ', '.join(all_conds) + '), t=' + emit_tvm_body(node._value['true'], props) + ', f=' + emit_tvm_body(node._value['false'], props) + ')'
     else:
       raise Exception('Unrecognized node type: %s' % node._op)
 
