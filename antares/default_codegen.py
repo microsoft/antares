@@ -9,7 +9,7 @@ import re
 
 custom_dtypes = {"@": 0}
 
-def codegen(ast_seq, input_dict, output_dict, best_config):
+def codegen(ast_seq, input_dict, output_dict, best_config, space_only=False):
   # Generate tvm body for ast_seq
 
   def warp_axis(ax_name):
@@ -251,6 +251,9 @@ def codegen(ast_seq, input_dict, output_dict, best_config):
   tvm, tvm_target = sandbox['tvm'], 'cuda'
   with tvm.target.Target(tvm_target):
     s, arg_bufs = emit_codegen()
+
+  if space_only:
+    return
 
   '''
   lower_source = str(tvm.lower(s, arg_bufs, simple_mode=True))
