@@ -67,6 +67,9 @@ def do_native_translation_v2(codeset, **kwargs):
 MAKE_VEC4_OP(int4)
 MAKE_VEC2_OP(int2)
 
+__forceinline__ __device__ __half max(const __half a, const __half b) {{ return a > b ? a : b; }}
+__forceinline__ __device__ __half min(const __half a, const __half b) {{ return a < b ? a : b; }}
+
 #endif
 {kwargs['attrs'].blend}
 
