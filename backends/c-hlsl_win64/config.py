@@ -16,7 +16,7 @@ if not os.path.exists(f'{local_dll_path}/dxcompiler.dll'):
 def to_search_space(ast_seq, input_dict, output_dict):
   from antares.default_codegen import codegen
   from antares.common import AntaresGlobal
-  codegen(ast_seq, input_dict, output_dict, {})
+  codegen(ast_seq, input_dict, output_dict, {}, space_only=True)
   space = AntaresGlobal.auto_config.get_config_space()
   return space
 

@@ -85,7 +85,10 @@ class OpTensor:
             if self._value in explicit_range and explicit_range[self._value] is not None:
                 if op_name == '//' and explicit_range[self._value] < other._value:
                     return OpTensor.parse(0, output_dtype)
-        return OpTensor('op', {"name": op_name, "inputs": [self, other]}, output_dtype)
+        result = OpTensor('op', {"name": op_name, "inputs": [self, other]}, output_dtype)
+        if 'float' in self._dtype and 'int' in other._dtype:
+            result = result.cast(self._dtype)
+        return result
 
     def __rtruediv__(self, other):
         other = OpTensor.parse(other)
