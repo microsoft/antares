@@ -112,10 +112,31 @@ namespace ab {
     return { hfunc, query("blockIdx.x"), query("blockIdx.y"), query("blockIdx.z"), query("threadIdx.x"), query("threadIdx.y"), query("threadIdx.z") };
   }
 
-  void launchKernel(const std::vector<void*> &hFunc, const std::vector<void*> &krnl_args, void *stream) {
-    std::vector<void* const*> pargs(krnl_args.size());
-    for (int i = 0; i < pargs.size(); ++i)
+  void launchKernel(std::vector<void*> &hFunc, std::vector<void*> &krnl_args, void *stream) {
+    static std::vector<int> *st_ = nullptr;
+    if (st_ == nullptr) {
+      st_ = new std::vector<int>;
+      std::string vamap = getenv("VAMAP") ? getenv("VAMAP") : "";
+      if (vamap.size() > 0) {
+        char *p = strtok(vamap.data(), ",");
+        while (p) {
+          st_->push_back(std::atoi(p));
+          p = strtok(nullptr, ",");
+        }
+        for (int i = 1; i <= 6; ++i) {
+          long dim = (long)hFunc[i];
+          if (dim < 0) // -200
+            hFunc[i] = (void*)(long)((st_->data()[(-dim) % 100] + ((-dim) / 100) - 1) / ((-dim) / 100));
+        }
+      }
+    }
+
+    std::vector<void*> pargs(krnl_args.size() + st_->size());
+    for (int i = 0; i < krnl_args.size(); ++i)
       pargs[i] = &krnl_args[i];
+    for (int i = krnl_args.size(); i < pargs.size(); ++i)
+      pargs[i] = st_->data() + (i - krnl_args.size());
+
     CHECK_OK(0 == cuLaunchKernel((CUfunction)hFunc[0], (long)hFunc[1], (long)hFunc[2], (long)hFunc[3], (long)hFunc[4], (long)hFunc[5], (long)hFunc[6],
       0, (CUstream)stream, (void**)pargs.data(), nullptr));
   }
