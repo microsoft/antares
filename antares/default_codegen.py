@@ -339,3 +339,7 @@ def codegen(ast_seq, input_dict, output_dict, best_config, space_only=False):
   kernel_slices = translate_code(func.imported_modules[0].get_source(), best_config)
   return kernel_slices
 
+try:
+  from next_codegen import codegen
+except:
+  pass

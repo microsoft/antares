@@ -34,7 +34,7 @@ else
   export TVM_HOME=${HOME}/.local/antares/3rdparty/tvm
 fi
 export PYTHONDONTWRITEBYTECODE=1
-export PYTHONPATH=${TVM_HOME}/python:${TVM_HOME}/topi/python:${TVM_HOME}/nnvm/python:${ANTARES_ROOT}:${PYTHONPATH}
+export PYTHONPATH=${TVM_HOME}/python:${TVM_HOME}/topi/python:${TVM_HOME}/nnvm/python:${ANTARES_ROOT}:${PYTHONPATH}:${WORKDIR}
 
 VERSION_TAG=$(cat engine/install_antares_host.sh | grep ^VERSION_TAG | head -n 1 | awk -F\= '{print $NF}')
 
