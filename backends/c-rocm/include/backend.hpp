@@ -118,7 +118,7 @@ namespace ab {
       st_ = new std::vector<int>;
       std::string vamap = getenv("VAMAP") ? getenv("VAMAP") : "";
       if (vamap.size() > 0) {
-        char *p = strtok(vamap.data(), ",");
+        char *p = strtok((char*)vamap.data(), ",");
         while (p) {
           st_->push_back(std::atoi(p));
           p = strtok(nullptr, ",");
