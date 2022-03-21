@@ -136,7 +136,7 @@ struct tensor_property {
         return _mem_size;
     }
 private:
-    int _mem_size = 0;
+    size_t _mem_size = 0;
 };
 
 struct kernel_property {
