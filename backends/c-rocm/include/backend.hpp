@@ -120,6 +120,7 @@ namespace ab {
       if (vamap.size() > 0) {
         char *p = strtok((char*)vamap.data(), ",");
         while (p) {
+          p = strchr(p, ':') + 1;
           st_->push_back(std::atoi(p));
           p = strtok(nullptr, ",");
         }
