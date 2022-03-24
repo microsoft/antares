@@ -41,6 +41,8 @@ def update_global_dict(ast_seq, global_input_dict, global_output_dict):
 
 def run_pass_v2(ast_seq, global_input_dict, global_output_dict):
   # Just a rough check
+  if int(os.environ.get('TVM', 1)) == 0:
+    return
   if 'plan/' in os.environ.get('COMPUTE_V1', ''):
     return
   if os.environ.get('NO_SIMPLIFY', '') or backend in ('c-ipu',):
