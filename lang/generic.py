@@ -93,9 +93,9 @@ def refactor_special_names(code, global_arg_props):
     std_name = global_arg_props['_out'][i]['name']
     code = re.sub(fr'\b{std_name}\b', f'__{std_name}', code)
     if i == 0:
-      code = re.sub(fr'\b{MultipleOutputsTempVar}\b', std_name, code)
+      code = re.sub(fr'\bMultipleOutputsTempVar\b', std_name, code)
     else:
-      code = re.sub(fr'\b{MultipleOutputsTempVar}{i}\b', std_name, code)
+      code = re.sub(fr'\bMultipleOutputsTempVar{i}\b', std_name, code)
   return code
 
 def load_template_op():
