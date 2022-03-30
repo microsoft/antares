@@ -30,10 +30,13 @@ def wait_for(func, timeout=None, args=[]):
   del my_timer
   return res
 
-def local_get_dir_file(rel_file, dir_sid=None):
+def local_get_dir_file(rel_file, dir_sid=None, prefix=None):
   if dir_sid is None:
     dir_sid = os.environ['DIR_SID'] if 'DIR_SID' in os.environ else '_'
-  dir_space = os.path.join(os.environ['ANTARES_DRIVER_PATH'], 'cache')
+  driver_path = os.environ['ANTARES_DRIVER_PATH']
+  if prefix is not None:
+    driver_path = os.path.join(driver_path, prefix)
+  dir_space = os.path.join(driver_path, 'cache')
   os.system('mkdir -p "%s/%s"' % (dir_space, dir_sid))
   return "%s/%s/%s" % (dir_space, dir_sid, rel_file)
 
