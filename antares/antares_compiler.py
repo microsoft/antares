@@ -168,11 +168,17 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
     print("\n[EvalAgent] Evaluating Modules..\n")
 
   def handle_result(result):
+    correctness = None
+    if 'RESULT' in os.environ:
+      correctness = True
+      expected_results = [float(x) for x in os.environ['RESULT'].split(',')]
+      for i, corr_result in enumerate(expected_results):
+        this_result = result.get(f'K/{i}', None)
+        if this_result is None or abs(float(corr_result) / this_result - 1.0) > 1e-5:
+          correctness = result[f'K/{i}'] = False
+
     if verbose:
       print('\n[EvalAgent] Results =', json.dumps(result))
-    if 'RESULT' in os.environ:
-      if abs(float(os.environ['RESULT']) / result['K/0'] - 1.0) > 1e-6:
-        result['TPR'] = None
 
     t = result.get('TPR', None)
     if 'K/0' in result and t is None:
@@ -182,7 +188,7 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
     else:
       gflops = compute_gflops(AntaresGlobal.default_task.flop, t)
       if verbose:
-        print("\n[Antares] Average time cost / run = %g sec, %g gflops." % (t, gflops))
+        print("\n[Antares] Average time cost / run = %g sec, %g gflops. (Checked: %s)" % (t, gflops, correctness))
       with open(local_get_dir_file('result.txt', dir_sid=dir_sid), 'w') as fp:
         fp.write(str(t) + '\n')
         for i in range(len(result)):
@@ -218,10 +224,12 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
 
   try:
     results = do_evaluate(expected_timeout)
-    if results is not None:
-      handle_result(results)
   except:
-    pass
+    results = None
+  if results is not None:
+    handle_result(results)
+  if results.get('K/0', False) == False:
+    return None
   return results
 
 def compute_mem_ratio(tpr):
@@ -295,6 +303,22 @@ def main_compute(code_only=False):
     print('  >> Backend = %s, Python PID = %s, Task = %s;' % (backend, os.getpid(), default_tune_op.__name__))
 
   num_trials = int(os.environ['STEP']) if 'STEP' in os.environ else 0
+
+  if 'RESULT' not in os.environ and int(os.environ.get('CHECK', 0)) == 1:
+    reference_result_path = local_get_dir_file('result.txt', prefix='ref')
+    try:
+      os.remove(reference_result_path)
+    except:
+      pass
+    print('  >> Computing CPU result for correctness reference..')
+    os.system('BACKEND=c-mcpu STEP=0 CHECK=0 ANTARES_DRIVER_PATH=${ANTARES_DRIVER_PATH}/ref HARDWARE_CONFIG= CONFIG= COMMIT= %s/run.sh >/dev/null 2>&1' % compiler_path)
+    try:
+      with open(reference_result_path, 'r') as fp:
+        digests = fp.read().split()[1:]
+        os.environ['RESULT'] = ','.join(digests)
+    except:
+      digests = None
+    assert digests is not None, "Failed to generate CPU result for correctness reference"
 
   config = os.environ.get('CONFIG', '').strip()
   if config != '':

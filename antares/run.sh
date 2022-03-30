@@ -5,7 +5,7 @@ ANTARES_ROOT=$(pwd)
 
 bash -e ./engine/check_environ.sh
 
-export ANTARES_DRIVER_PATH=${HOME}/.cache/antares
+export ANTARES_DRIVER_PATH=${ANTARES_DRIVER_PATH:-${HOME}/.cache/antares}
 
 if [[ "$@" == "clean" ]]; then
   set -x
