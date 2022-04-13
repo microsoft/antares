@@ -1045,16 +1045,23 @@ namespace antares {
 
             std::vector<std::wstring> flags{ L"-D__XBOX_PER_THREAD_SCRATCH_SIZE_LIMIT_IN_BYTES=0" };
 
-            // extract thread size from target snipt like [numthreads(870, 1, 1)]
-            size_t threadSize = 0;
-            size_t pos1 = text.find("[numthreads(");
-            if (pos1 != string::npos)
+            // extract thread size from target snippet like [numthreads(870, 1, 1)]
+            size_t threadSize = 1;
+            size_t start = text.find("[numthreads(");
+            if (start != string::npos)
             {
-                pos1 += strlen("[numthreads(");
-                size_t pos2 = text.find(",", pos1);
-                if (pos2 != string::npos)
+                size_t startX = start + strlen("[numthreads(");
+                size_t endX = text.find(",", startX);
+                size_t startY = endX + 1;
+                size_t endY = text.find(",", startY);
+                size_t startZ = endY + 1;
+                size_t endZ = text.find(")", startZ);
+                if (endX != string::npos && endY != string::npos && endZ != string::npos)
                 {
-                    threadSize = std::stoi(text.substr(pos1, pos2 - pos1));
+                    size_t threadX = std::stoi(text.substr(startX, endX - startX));
+                    size_t threadY = std::stoi(text.substr(startY, endY - startY));
+                    size_t threadZ = std::stoi(text.substr(startZ, endZ - startZ));
+                    threadSize = threadX * threadY * threadZ;
                 }
             }
 
