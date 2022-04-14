@@ -228,7 +228,7 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
     results = None
   if results is not None:
     handle_result(results)
-  if results.get('K/0', False) is False:
+  if results is None or results.get('K/0', False) is False:
     return None
   return results
 
