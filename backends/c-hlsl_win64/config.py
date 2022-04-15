@@ -113,7 +113,16 @@ float pow_ex(float x, float y) {
 }
 #define pow pow_ex
 '''
-
+    if re.search(r'\btanh\b', body):
+      pre_defines += '''
+float tanh_ex(float x) {
+  if (x >= 0)
+    return (1 - exp(-2 * x)) / (1 + exp(-2 * x));
+  else
+    return (exp(2 * x) - 1) / (exp(2 * x) + 1);
+}
+#define tanh tanh_ex
+'''
     body = re.sub(r'\b__syncthreads\b', 'GroupMemoryBarrierWithGroupSync', body)
     lds = '\n'.join(lds)
     registers = ''.join(registers)
