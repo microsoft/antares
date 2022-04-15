@@ -1031,6 +1031,7 @@ namespace antares {
 
         }
 
+#ifdef _GAMING_XBOX_SCARLETT
         static std::vector<std::wstring> getXboxFlags(const std::string& text, std::string mode = "cu")
         {
             // Currently dxcompiler for xbox cann't work properly for some shaders thus hanging GPU.
@@ -1103,6 +1104,7 @@ namespace antares {
             }
             return flags;
         }
+#endif
 
         ComPtr<IDxcBlob> Compile(LPCVOID pText, UINT32 size, LPCWSTR entryName, LPCWSTR profile)
         {
@@ -1111,12 +1113,14 @@ namespace antares {
             IFE(m_pLibrary->CreateBlobWithEncodingOnHeapCopy(pText, size, CP_UTF8, &pSrcBlob));
             ComPtr<IDxcOperationResult> pResult = nullptr;
 
-            std::vector<std::wstring> args = getXboxFlags((char*)pText);
             std::vector<const WCHAR*> args_i;
+#ifdef _GAMING_XBOX_SCARLETT
+            std::vector<std::wstring> args = getXboxFlags((char*)pText);
             for (size_t i = 0; i < args.size(); i++)
             {
                 args_i.push_back(args[i].c_str());
             }
+#endif
             args_i.push_back(NULL);
             // Just set a random name "ShaderFile"
             // const WCHAR* args[] = { L"-enable-templates", L"-enable-16bit-types", NULL }; // TODO: will be supported in HLSL 2021 & cs_6_2
