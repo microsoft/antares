@@ -12,6 +12,12 @@ python3 -m pip install --upgrade antares
 
 ```sh
 BACKEND=c-scpu antares
+
+# List Supported Backends
+antares backends
+
+# Help Information:
+antares help
 ```
 
 ### Usage Examples:
@@ -19,6 +25,9 @@ BACKEND=c-scpu antares
 ```sh
 # Quickly generate a multi-threaded CPU code:
 BACKEND=c-mcpu antares
+
+# Quickly generate a CUDA code with correctness checking:
+CHECK=1 BACKEND=c-cuda antares
 
 # Search an efficient multi-threaded CPU code:
 STEP=100 BACKEND=c-mcpu antares
@@ -51,9 +60,6 @@ antares rest-server
 BACKEND=c-cuda antares torch-setup
 BACKEND=c-mcpu antares torch-setup
 python3 -m antares_core.frameworks.pytorch.examples.1_hello_world
-
-# Help Information:
-antares help
 ```
 
 ## Contributing

@@ -14,6 +14,9 @@ if [[ "$@" == "clean" ]]; then
 elif [[ "$@" == "rest-server" ]]; then
   export HTTP_SERVICE=1
   shift
+elif [[ "$@" == "backends" ]]; then
+  ls -1 ./backends | grep -v c-base
+  exit 0
 elif [[ "$@" == "help" ]]; then
   if which less >/dev/null; then
     exec less ./README.md
