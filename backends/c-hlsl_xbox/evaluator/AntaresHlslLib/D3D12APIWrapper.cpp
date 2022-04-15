@@ -588,7 +588,7 @@ int dxMemcpyDtoHAsync(void* dst, void* src, size_t bytes, void* hStream)
     auto& pCmdList = pStream->pCmdList;
     src_buffer->StateTransition(pCmdList.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
     pCmdList->CopyBufferRegion(deviceCPUSrcX.Get(), 0, src_buffer->handle.Get(), offset, bytes);
-    src_buffer->StateTransition(pCmdList.Get(), D3D12_RESOURCE_STATE_COMMON);
+    src_buffer->StateTransition(pCmdList.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     IFE(pCmdList->Close());
     ID3D12CommandList* cmdlists[] = { pCmdList.Get() };
     device->pCommandQueue->ExecuteCommandLists(1, cmdlists);
