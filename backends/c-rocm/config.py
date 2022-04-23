@@ -35,6 +35,12 @@ def do_native_translation_v2(codeset, **kwargs):
       return int(body[idx+len(str_pat):body.index('\n', idx)])
     return defval
 
+  if 'AMDGFX' in os.environ:
+    amdgfx = os.environ['AMDGFX']
+  else:
+    amdgfx = kwargs['attrs'].device_props.compute_version.split('.')
+    amdgfx = '%d:%02d' % (int(amdgfx[0]), int(amdgfx[1]))
+
   launch_bounds = get_extent('threadIdx.x') * get_extent('threadIdx.y') * get_extent('threadIdx.z')
 
   full_body = f'''
@@ -53,6 +59,8 @@ def do_native_translation_v2(codeset, **kwargs):
 #define __STORE_ITEM_1__(t, out, ido, in, idi)
 #define __STORE_ITEM_2__(t, out, ido, in, idi)
 #define __STORE_ITEM_3__(t, out, ido, in, idi)
+
+#define __AMDGFX__ {amdgfx}
 
 #endif
 {kwargs['attrs'].blend}
