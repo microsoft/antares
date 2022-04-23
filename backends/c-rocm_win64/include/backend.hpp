@@ -19,6 +19,7 @@ namespace ab {
   static HMODULE hLibDll;
   static int _current_device;
   static std::unordered_map<size_t, std::vector<void*>> _cached_memory;
+  static std::string arch;
 
   void init(int dev) {
     ab::hLibDll = LoadLibrary(AMDHIP64_LIBRARY_PATH);
@@ -27,6 +28,10 @@ namespace ab {
     LOAD_ONCE(hipSetDevice, int (*)(int));
     CHECK(0 == hipSetDevice(dev), "Failed initialize AMD ROCm device with `" AMDHIP64_LIBRARY_PATH "` (No AMDGPU installed or enabled?).");
     _current_device = dev;
+
+    const char *amdgfx = getenv("AMDGFX");
+    CHECK(nullptr != amdgfx, "For Windows ROCm, you need to specify AMDGFX in system environment, e.g. expert AMDGFX=gfx906");
+    arch = amdgfx;
   }
 
   void finalize() {
@@ -56,7 +61,7 @@ namespace ab {
     ab_utils::TempFile tempfile("cu", source);
     auto path = tempfile.get_path();
 
-    ab_utils::Process({"wsl.exe", "sh", "-cx", "\"/opt/rocm/bin/hipcc " + path + " --amdgpu-target=gfx803 --amdgpu-target=gfx900 --amdgpu-target=gfx906 --amdgpu-target=gfx908 --amdgpu-target=gfx1010 --genco -Wno-ignored-attributes -O2 -o " + path + ".out 1>&2\""}, 10);
+    ab_utils::Process({"wsl.exe", "sh", "-cx", "\"/opt/rocm/bin/hipcc " + path + " --amdgpu-target=" + arch + " --genco -Wno-ignored-attributes -O2 -o " + path + ".out 1>&2\""}, 10);
 
     void *hModule;
     LOAD_ONCE(hipModuleLoad, int (*)(void*, const char*));
