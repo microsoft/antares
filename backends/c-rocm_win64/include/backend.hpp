@@ -53,10 +53,17 @@ namespace ab {
   }
 
   void* moduleLoad(const std::string &source) {
-    ab_utils::TempFile tempfile("cu", source);
-    auto path = tempfile.get_path();
+    std::string path = "/tmp/.antares-module-tempfile.cu";
+    FILE *fp = fopen(path.c_str(), "w");
+    fwrite(source.data(), source.size(), 1, fp);
+    fclose(fp);
 
-    ab_utils::Process({"wsl.exe", "sh", "-cx", "\"/opt/rocm/bin/hipcc " + path + " --amdgpu-target=gfx803 --amdgpu-target=gfx900 --amdgpu-target=gfx906 --amdgpu-target=gfx908 --amdgpu-target=gfx1010 --genco -Wno-ignored-attributes -O2 -o " + path + ".out 1>&2\""}, 10);
+    char amdgfx[] = "__AMDGFX__ gfx";
+    const char *spec = strstr(source.data(), amdgfx);
+    CHECK(spec != nullptr, "__AMDGFX__ is not found in Antares code for Windows ROCm.");
+    std::string arch = "gfx" + std::to_string(std::atoi(spec + sizeof(amdgfx) - 1));
+
+    ab_utils::Process({"wsl.exe", "sh", "-cx", "\"/opt/rocm/bin/hipcc " + path + " --amdgpu-target=" + arch + " --genco -Wno-ignored-attributes -O2 -o " + path + ".out 1>&2\""}, 10);
 
     void *hModule;
     LOAD_ONCE(hipModuleLoad, int (*)(void*, const char*));

@@ -35,7 +35,7 @@ namespace ab_utils {
     TempFile(const std::string &extension_name, const std::string &file_content) {
       // FIXME: Be careful it's not thread-safe in shared context. Fortunately, no shared context used in current version.
       static unsigned int k_count = 0;
-      this->file_path = ".antares-module-tempfile." + std::to_string(++k_count) + "." + extension_name;
+      this->file_path = ".antares-module-tempfile." + std::to_string(__sync_add_and_fetch(&k_count, 1)) + "." + extension_name;
 
       FILE *fp = fopen(this->file_path.c_str(), "w");
       CHECK_OK(fp != nullptr);
