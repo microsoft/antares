@@ -77,7 +77,6 @@ except:
   traceback.print_exc()
   exit(1)
 
-
 def compute_gflops(flop, t):
   try:
     return flop / (t * 1e3) / 1e6
@@ -141,6 +140,7 @@ def get_target_source(best_config, dir_sid=None):
       display_inputs = ', '.join([tensor_display(x, prop) for _, x, prop in args[:-num_outputs]])
       display_outputs = ', '.join([tensor_display(x, prop) for _, x, prop in args[-num_outputs:]])
       kernel = backend_config.do_native_translation_v2((kernel_name, args[:-num_outputs], args[-num_outputs:], body), attrs=getattr(AntaresGlobal, 'attrs', None)).strip()
+      kernel = cpp_format(kernel)
       code.append(f'// LOCAL: {kernel_name} -- {display_inputs} -> {display_outputs}\n\n{kernel}\n')
 
     del kernel_slices

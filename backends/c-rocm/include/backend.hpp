@@ -70,7 +70,7 @@ namespace ab {
     it.push_back(dptr);
   }
 
-  void* moduleLoad(const std::string &source) {
+  std::string moduleCompile(const std::string &source) {
     ab_utils::TempFile tempfile("cu", source);
     auto &path = tempfile.get_path();
 
@@ -94,8 +94,12 @@ namespace ab {
 #endif
 
     ab_utils::Process(compile_args, 10);
+    return file_read((path + ".out").c_str());
+  }
+
+  void* moduleLoad(const std::string &binary) {
     CUmodule hmod = nullptr;
-    CHECK_OK(0 == cuModuleLoad(&hmod, (path + ".out").c_str()));
+    CHECK_OK(0 == cuModuleLoadData(&hmod, binary.data()));
     return hmod;
   }
 

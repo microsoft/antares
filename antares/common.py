@@ -124,3 +124,6 @@ class AutoConfig(object):
       slices.append(ai)
     slices.append(ax)
     return list(reversed(slices))
+
+def cpp_format(code):
+  return code

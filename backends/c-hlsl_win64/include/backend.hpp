@@ -44,9 +44,13 @@ namespace ab {
     CHECK(0 == dxMemFree(dptr), "Failed to free device pointer.");
   }
 
-  void* moduleLoad(const std::string &source) {
+  std::string moduleCompile(const std::string &source) {
+    return source;
+  }
+
+  void* moduleLoad(const std::string &binary) {
     LOAD_ONCE(dxModuleLoad, void* (*)(const char*));
-    void *hModule = dxModuleLoad(source.c_str());
+    void *hModule = dxModuleLoad(binary.c_str());
     CHECK(hModule != nullptr, "Failed to load device module.");
     return hModule;
   }

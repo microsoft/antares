@@ -227,13 +227,19 @@ def detach_where_clause(expr):
   else:
     range_desc = ''
 
+  vamap_axes = dict()
   range_items = dict()
   for x in range_desc.split(','):
     x = x.strip()
     if not x:
       continue
     k, v = x.split(' in ')
-    range_items[k.strip()] = int(v.strip())
+    if ':' in v:
+      n, v = v.split(':')
+      vamap_axes[k] = n.strip()
+    v = v.strip()
+    range_items[k.strip()] = int(v)
+  os.environ['VAMAP_AXES'] = json.dumps(vamap_axes)
   return expr, range_items
 
 

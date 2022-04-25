@@ -52,7 +52,7 @@ namespace ab {
     it.push_back(dptr);
   }
 
-  void* moduleLoad(const std::string &source) {
+  std::string moduleCompile(const std::string &source) {
     std::string path = "/tmp/.antares-module-tempfile.cu";
     FILE *fp = fopen(path.c_str(), "w");
     fwrite(source.data(), source.size(), 1, fp);
@@ -64,10 +64,13 @@ namespace ab {
     std::string arch = "gfx" + std::to_string(std::atoi(spec + sizeof(amdgfx) - 1));
 
     ab_utils::Process({"wsl.exe", "sh", "-cx", "\"/opt/rocm/bin/hipcc " + path + " --amdgpu-target=" + arch + " --genco -Wno-ignored-attributes -O2 -o " + path + ".out 1>&2\""}, 10);
+    return file_read((path + ".out").c_str());
+  }
 
+  void* moduleLoad(const std::string &binary) {
     void *hModule;
-    LOAD_ONCE(hipModuleLoad, int (*)(void*, const char*));
-    CHECK(0 == hipModuleLoad(&hModule, (path + ".out").c_str()), "Command `/opt/rocm/bin/hipcc` in WSL is not found, please install latest `rocm-dev` package in WSL environment for C-code compilation to AMD's HSACO.");
+    LOAD_ONCE(hipModuleLoadData, int (*)(void*, const char*));
+    CHECK(0 == hipModuleLoadData(&hModule, binary.c_str()), "Failed to load HSACO module for current ROCm GPU.");
     return hModule;
   }
 

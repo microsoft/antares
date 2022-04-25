@@ -83,6 +83,26 @@ namespace ab_utils {
   };
 }
 
+inline static std::string file_read(const char *path) {
+  FILE *fp = fopen(path, "rb");
+  CHECK_OK(fp != nullptr);
+  fseek(fp, 0, SEEK_END);
+  size_t code_size = ftell(fp);
+  fseek(fp, 0, SEEK_SET);
+  std::string code;
+  code.resize(code_size);
+  CHECK_OK(code_size == fread((void*)code.data(), 1, code_size, fp));
+  fclose(fp);
+  return code;
+}
+
+inline static void file_write(const char *path, const std::string &code) {
+  FILE *fp = fopen(path, "wb");
+  CHECK_OK(fp != nullptr);
+  CHECK_OK(code.size() == fwrite((void*)code.data(), 1, code.size(), fp));
+  fclose(fp);
+}
+
 #include "backend.hpp"
 
 std::string get_between(const std::string &str, const std::string &begin, const std::string &end, int start_idx = 0, const std::string &def_ret = "") {
@@ -201,7 +221,8 @@ struct ExecutionModule {
 
     backend = get_between(source, "// BACKEND: ", " (");
 
-    hModule = ab::moduleLoad(source);
+    auto bin = ab::moduleCompile(source);
+    hModule = ab::moduleLoad(bin);
 
     auto kernel_slices = ssplit(source, "-------\n");
     for (int i = 1; i < kernel_slices.size(); ++i) {
