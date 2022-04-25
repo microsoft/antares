@@ -59,8 +59,12 @@ namespace ab {
     it.push_back(dptr);
   }
 
-  void* moduleLoad(const std::string &source) {
-    ab_utils::TempFile tempfile("cu", source);
+  std::string moduleCompile(const std::string &source) {
+    return source;
+  }
+
+  void* moduleLoad(const std::string &binary) {
+    ab_utils::TempFile tempfile("cu", binary);
     auto path = tempfile.get_path();
 
     constexpr int CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR = 75;

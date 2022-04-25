@@ -71,8 +71,12 @@ namespace ab {
     it.push_back(dptr);
   }
 
-  void* moduleLoad(const std::string &source) {
-    ab_utils::TempFile tempfile("cpp", source);
+  std::string moduleCompile(const std::string &source) {
+    return source;
+  }
+
+  void* moduleLoad(const std::string &binary) {
+    ab_utils::TempFile tempfile("cpp", binary);
     auto path = tempfile.get_path();
 
     if (__BACKEND__ == "c-sycl_intel")

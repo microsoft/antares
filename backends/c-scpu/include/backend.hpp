@@ -25,8 +25,12 @@ namespace ab {
     free(dptr);
   }
 
-  void* moduleLoad(const std::string &source) {
-    ab_utils::TempFile tempfile("cpp", source);
+  std::string moduleCompile(const std::string &source) {
+    return source;
+  }
+
+  void* moduleLoad(const std::string &binary) {
+    ab_utils::TempFile tempfile("cpp", binary);
     auto path = tempfile.get_path();
 
     ab_utils::Process({"g++", path, "-std=c++17", "-ldl", "-lpthread", "-fPIC", "-shared", "-O2", "-o", path + ".out", "-ffast-math", "-march=native"}, 10);

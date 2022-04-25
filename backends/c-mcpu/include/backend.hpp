@@ -145,9 +145,13 @@ namespace ab {
     it.push_back(dptr);
   }
 
-  void* moduleLoad(const std::string &source) {
+  std::string moduleCompile(const std::string &source) {
+    return source;
+  }
+
+  void* moduleLoad(const std::string &binary) {
 #if !defined(__BACKEND_mcpu_android__)
-    ab_utils::TempFile tempfile("cpp", source);
+    ab_utils::TempFile tempfile("cpp", binary);
     auto path = tempfile.get_path();
 
     if (use_avx512)

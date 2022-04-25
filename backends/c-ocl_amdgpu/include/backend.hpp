@@ -47,9 +47,13 @@ namespace ab {
     CHECK_OK(0 == clReleaseMemObject((cl_mem)dptr));
   }
 
-  void* moduleLoad(const std::string &source) {
-    const char *source_data = source.data();
-    size_t source_size = source.size();
+  std::string moduleCompile(const std::string &source) {
+    return source;
+  }
+
+  void* moduleLoad(const std::string &binary) {
+    const char *source_data = binary.data();
+    size_t source_size = binary.size();
     cl_program program = clCreateProgramWithSource(context, 1, &source_data, &source_size, &stat);
     CHECK_OK(stat == 0);
     if (0 != clBuildProgram(program, 1, &device_id, NULL, NULL, NULL)) {
