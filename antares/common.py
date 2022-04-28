@@ -126,4 +126,9 @@ class AutoConfig(object):
     return list(reversed(slices))
 
 def cpp_format(code):
-  return code
+  import tempfile
+  ftemp = tempfile.NamedTemporaryFile(dir=tempfile.gettempdir(), suffix='.cpp')
+  with open(ftemp.name, 'w') as fp:
+    fp.write(code)
+  st, output = subprocess.getstatusoutput('clang-format --style=Microsoft < ' + ftemp.name)
+  return code if st != 0 else output
