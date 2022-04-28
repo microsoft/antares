@@ -177,8 +177,13 @@ def codegen(ast_seq, input_dict, output_dict, config, space_only=False):
     express_right = express(ast['root'])
     express_output = express_left(ast["props"])
 
+    dax_numel = [config.get(k['name'], [-1, 1, 1, 1])[-1] for k in ast['props']['data_axes']][0]
+    output_numel = (product([k["range"] for k in ast["props"]["data_axes"]]) + dax_numel - 1) // dax_numel
+    code = ''
+
     last_dax = ast['props']['data_axes'][-1]['name']
-    code = f'int {last_dax} = blockIdx.x;\n'
+    code += f'int {last_dax} = blockIdx.x * {dax_numel} + threadIdx.z;\n'
+    code += f'// [thread_extent] threadIdx.z = {dax_numel}\n\n'
     for i, k in enumerate(ast['props']['data_axes']):
       if k["name"] != last_dax:
         stride = query_stride(ast['props']['output_name'], i)
@@ -186,12 +191,11 @@ def codegen(ast_seq, input_dict, output_dict, config, space_only=False):
     reduce_strides = [str(k['range']) if k['name'] not in vamap_axes else '_' + vamap_axes[k['name']][0] for k in ast['props']['reduce_axes']]
     code += 'int __tasks_thread_y = ' + ' * '.join(reduce_strides) + ';\n';
 
-    # code += 'int ' + ', '.join([f'{k["name"]} = threadIdx.x' for k in ast['props']['reduce_axes']]) + ';\n';
     unroll_red, num_threads = config.get('(red)', [-1, 1, 1])[1:]
     max_threads = AntaresGlobal.attrs.device_props.max_threads_per_block
     assert num_threads <= max_threads, "Num threads is larger than maximum limits: %d > %d" % (num_threads, max_threads)
 
-    code += f'// [thread_extent] blockIdx.x = {product([k["range"] for k in ast["props"]["data_axes"]])}\n'
+    code += f'// [thread_extent] blockIdx.x = {output_numel}\n'
     code += f'// [thread_extent] threadIdx.y = {num_threads}\n'
     code += f'{ast["root"].dtype()} local_output = 0;\n'
 
@@ -237,34 +241,56 @@ def codegen(ast_seq, input_dict, output_dict, config, space_only=False):
 
     code += f'}}\n'
  
-    code += f'''
-__shared__ {ast['root'].dtype()} __block_red[{num_threads}];
-((volatile {ast['root'].dtype()}*)__block_red)[(((int)threadIdx.y))] = local_output;
-__syncthreads();
-'''
     warp_size = AntaresGlobal.attrs.device_props.warp_size
     assert (warp_size & (warp_size - 1)) == 0, "Device warp size must be 2^K."
 
-    reduce_size = num_threads // 2
-    while reduce_size > warp_size // 2:
-      left = f'((volatile {ast["root"].dtype()}*)__block_red)[(((int)threadIdx.y))]'
-      right = f'((volatile {ast["root"].dtype()}*)__block_red)[(((int)threadIdx.y)) + {reduce_size}]'
-      code += f'if (((int)threadIdx.y) < {reduce_size})\n'
-      code += reduce_values(left, right, ast)
-      code += '__syncthreads();\n'
-      reduce_size //= 2
-
-    if reduce_size >= 1:
-      code += f'if (((int)threadIdx.y) < {reduce_size}) {{\n'
-      while reduce_size >= 1:
-        left = f'((volatile {ast["root"].dtype()}*)__block_red)[(((int)threadIdx.y))]'
-        right = f'((volatile {ast["root"].dtype()}*)__block_red)[(((int)threadIdx.y)) + {reduce_size}]'
+    if 'c-cuda' in backend and num_threads == warp_size and warp_size == 32 and 'NO_WARP' not in os.environ:
+      reduce_step_over = reduce_values('local_output', 'local_temp', ast).strip()
+      code += f'''
+{{
+    uint __mask = __activemask();
+    {ast['root'].dtype()} local_temp;
+    local_temp = __shfl_down_sync(__mask, local_output, 16, {warp_size});
+    {reduce_step_over}
+    local_temp = __shfl_down_sync(__mask, local_output, 8, {warp_size});
+    {reduce_step_over}
+    local_temp = __shfl_down_sync(__mask, local_output, 4, {warp_size});
+    {reduce_step_over}
+    local_temp = __shfl_down_sync(__mask, local_output, 2, {warp_size});
+    {reduce_step_over}
+    local_temp = __shfl_down_sync(__mask, local_output, 1, {warp_size});
+    {reduce_step_over}
+    local_temp = __shfl_sync(__mask, local_output, 0, {warp_size});
+    {express_output} = local_temp;
+}}
+'''
+    else:
+      code += f'''
+__shared__ {ast['root'].dtype()} __block_red_mem[{num_threads} * {dax_numel}];
+volatile {ast['root'].dtype()}* __block_red = ((volatile {ast['root'].dtype()}*)__block_red_mem) + ((int)threadIdx.z) * {num_threads};
+__block_red[((int)threadIdx.y)] = local_output;
+__syncthreads();
+'''
+      reduce_size = num_threads // 2
+      while reduce_size > warp_size // 2:
+        left = f'__block_red[(((int)threadIdx.y))]'
+        right = f'__block_red[(((int)threadIdx.y)) + {reduce_size}]'
+        code += f'if (((int)threadIdx.y) < {reduce_size})\n'
         code += reduce_values(left, right, ast)
+        code += '__syncthreads();\n'
         reduce_size //= 2
-      code += f'}}\n'
-      code += '__syncthreads();\n';
 
-    code += f'{express_output} = ((volatile {ast["root"].dtype()}*)__block_red)[0];';
+      if reduce_size >= 1:
+        code += f'if (((int)threadIdx.y) < {reduce_size}) {{\n'
+        while reduce_size >= 1:
+          left = f'__block_red[(((int)threadIdx.y))]'
+          right = f'__block_red[(((int)threadIdx.y)) + {reduce_size}]'
+          code += reduce_values(left, right, ast)
+          reduce_size //= 2
+        code += f'}}\n'
+        code += '__syncthreads();\n';
+
+      code += f'{express_output} = __block_red[0];';
 
   code = re.sub(r'\bfloat64\b', 'double', code)
   code = re.sub(r'\bfloat32\b', 'float', code)

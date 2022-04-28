@@ -125,7 +125,11 @@ class AutoConfig(object):
     slices.append(ax)
     return list(reversed(slices))
 
+use_format = 'FORMAT' in os.environ
+
 def cpp_format(code):
+  if not use_format:
+    return code
   import tempfile
   ftemp = tempfile.NamedTemporaryFile(dir=tempfile.gettempdir(), suffix='.cpp')
   with open(ftemp.name, 'w') as fp:
