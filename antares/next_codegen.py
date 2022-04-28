@@ -36,6 +36,10 @@ def codegen(ast_seq, input_dict, output_dict, config, space_only=False):
             compute_version = val + compute_version
           elif key in ('ComputeCapabilityMinor'):
             compute_version = compute_version + val
+          elif key in ('WarpSize'):
+            props.warp_size = int(val)
+          elif key in ('MaxThreadsPerBlock'):
+            props.max_threads_per_block = int(val)
         mem_bandwith = 'inf' if not mem_bandwith else product(mem_bandwith) * 2.5e-7
         props.mem_bandwith = float(mem_bandwith)
         props.compute_version = compute_version
@@ -44,7 +48,9 @@ def codegen(ast_seq, input_dict, output_dict, config, space_only=False):
     AntaresGlobal.attrs.device_props = get_device_props()
 
   if space_only:
-    space = dict([(x['name'], {'_type': 'factor', '_value': [8192 * 2, 4]}) for i, x in enumerate(ast['props']['data_axes'])])
+    space = [(x['name'], {'_type': 'factor', '_value': [1024 * 16, 4]}) for i, x in enumerate(ast['props']['data_axes'])]
+    space += [('(red)', {'_type': 'factor', '_value': [1024 * 16, 3]})]
+    space = dict(space)
     AntaresGlobal.auto_config._config = space
     return space
 
@@ -71,7 +77,7 @@ def codegen(ast_seq, input_dict, output_dict, config, space_only=False):
   def express_left(props):
     for i, k in enumerate(props['data_axes']):
         if vamap[props['output_name']][i] is None and k['name'] in vamap_axes:
-          vamap[props['output_name']][i] = '_' + vamap_axes[k['name']]
+          vamap[props['output_name']][i] = '_' + vamap_axes[k['name']][0]
     return f"{props['output_name']}[{merge_index([x['name'] for x in props['data_axes']], props['output_name'])}]"
 
   def express(root):
@@ -115,56 +121,151 @@ def codegen(ast_seq, input_dict, output_dict, config, space_only=False):
     else:
       raise Exception('Unhandled Op type in AST: %s' % root._op)
 
-  # Must Express Right to infer left-side shape infos
-  code = express(ast['root']);
-  code = express_left(ast['props']) + ' = ' + code + ';';
+  if not ast['props']['reduce_type']:
+    # Must Express Right to infer left-side shape infos
+    code = express(ast['root']);
+    code = express_left(ast['props']) + ' = ' + code + ';';
 
-  loops, d_axes, splits = '', ['x', 'y', 'z'], []
-  for ax in ast['props']['data_axes']:
-    splits += [(ax['name'], config.get(ax['name'], [-1, 1, 1, 1])[1:])]
+    loops, d_axes, splits = '', ['x', 'y', 'z'], []
+    for ax in ast['props']['data_axes']:
+      splits += [(ax['name'], config.get(ax['name'], [-1, 1, 1, 1])[1:])]
 
-  thread_strides = [sp[1] for _, sp in splits]
-  total_threads = product(thread_strides)
-  if total_threads > 1024:
-    raise
+    thread_strides = [sp[1] for _, sp in splits]
+    total_threads = product(thread_strides)
+    if total_threads > 1024:
+      raise
 
-  block_strides = [(ax['range'] + product(sp) - 1) // product(sp) for ax, (_, sp) in zip(ast['props']['data_axes'], splits)]
-  loops += f'  // [thread_extent] blockIdx.x = {product(block_strides)}\n  int __tasks_block = blockIdx.x;\n'
-  for i, (ax_name, sp) in enumerate(splits):
-    loops += f'  int {ax_name}_0 = __tasks_block % {block_strides[i]} * {product(sp)}; __tasks_block /= {block_strides[i]};\n'
-  loops += '\n'
-  loops += f'  // [thread_extent] threadIdx.x = {total_threads}\n  int __tasks_thread = threadIdx.x;\n'
-  for i, (ax_name, sp) in enumerate(splits):
-    loops += f'  int {ax_name}_2 = __tasks_thread % {thread_strides[i]} * {product(sp[2:])}; __tasks_thread /= {thread_strides[i]};\n'
-  loops += '\n'
-  unroll_step = int(os.environ.get('UNROLL', 32))
-
-  def codegen(bound_check):
-    loops = ''
-
+    block_strides = [(ax['range'] + product(sp) - 1) // product(sp) for ax, (_, sp) in zip(ast['props']['data_axes'], splits)]
+    loops += f'  // [thread_extent] blockIdx.x = {product(block_strides)}\n  int __tasks_block = blockIdx.x;\n'
     for i, (ax_name, sp) in enumerate(splits):
-      loops += f'  for (int {ax_name}_1 = 0; {ax_name}_1 < {product(sp[0:1])} * {product(sp[1:])}; {ax_name}_1 += {product(sp[1:])})\n'
-
-    refactor_code, real_bounds = code, []
+      loops += f'  int {ax_name}_0 = __tasks_block % {block_strides[i]} * {product(sp)}; __tasks_block /= {block_strides[i]};\n'
+    loops += '\n'
+    loops += f'  // [thread_extent] threadIdx.x = {total_threads}\n  int __tasks_thread = threadIdx.x;\n'
     for i, (ax_name, sp) in enumerate(splits):
-      if product(sp[2:]) <= unroll_step:
-        loops += '  #pragma unroll\n'
-      loops += f'  for (int {ax_name}_3 = 0; {ax_name}_3 < {product(sp[2:])}; {ax_name}_3 ++)\n'
-      real_name = f'({ax_name}_0 + {ax_name}_1 + {ax_name}_2 + {ax_name}_3)'
-      refactor_code = re.sub(rf'\b{ax_name}\b', real_name, refactor_code)
-      real_bounds += [real_name]
-    if bound_check:
-      loops += '    if (' + ' && '.join([f'{real_name} < {query_stride(ast["props"]["output_name"], i)}' for i, real_name in enumerate(real_bounds)]) + ')\n  '
-    loops += '    ' + refactor_code
-    return loops
+      loops += f'  int {ax_name}_2 = __tasks_thread % {thread_strides[i]} * {product(sp[2:])}; __tasks_thread /= {thread_strides[i]};\n'
+    loops += '\n'
+    unroll_step = int(os.environ.get('UNROLL', 32))
 
-  loops += 'if (' + ' && '.join([f'{ax_name}_0 + {product(sp)} <= {query_stride(ast["props"]["output_name"], i)}' for i, (ax_name, sp) in enumerate(splits)]) + ') {\n'
-  loops += codegen(False)
-  loops += '\n} else {\n'
-  loops += codegen(True)
-  loops += '\n}'
+    def codegen(bound_check):
+      loops = ''
 
-  code = loops + '\n'
+      for i, (ax_name, sp) in enumerate(splits):
+        loops += f'  for (int {ax_name}_1 = 0; {ax_name}_1 < {product(sp[0:1])} * {product(sp[1:])}; {ax_name}_1 += {product(sp[1:])})\n'
+
+      refactor_code, real_bounds = code, []
+      for i, (ax_name, sp) in enumerate(splits):
+        if product(sp[2:]) <= unroll_step:
+          loops += '  #pragma unroll\n'
+        loops += f'  for (int {ax_name}_3 = 0; {ax_name}_3 < {product(sp[2:])}; {ax_name}_3 ++)\n'
+        real_name = f'({ax_name}_0 + {ax_name}_1 + {ax_name}_2 + {ax_name}_3)'
+        refactor_code = re.sub(rf'\b{ax_name}\b', real_name, refactor_code)
+        real_bounds += [real_name]
+      if bound_check:
+        loops += '    if (' + ' && '.join([f'{real_name} < {query_stride(ast["props"]["output_name"], i)}' for i, real_name in enumerate(real_bounds)]) + ')\n  '
+      loops += '    ' + refactor_code
+      return loops
+
+    loops += 'if (' + ' && '.join([f'{ax_name}_0 + {product(sp)} <= {query_stride(ast["props"]["output_name"], i)}' for i, (ax_name, sp) in enumerate(splits)]) + ') {\n'
+    loops += codegen(False)
+    loops += '\n} else {\n'
+    loops += codegen(True)
+    loops += '\n}'
+
+    code = loops + '\n'
+  else:
+    # Must be put in the first place
+    express_right = express(ast['root'])
+    express_output = express_left(ast["props"])
+
+    last_dax = ast['props']['data_axes'][-1]['name']
+    code = f'int {last_dax} = blockIdx.x;\n'
+    for i, k in enumerate(ast['props']['data_axes']):
+      if k["name"] != last_dax:
+        stride = query_stride(ast['props']['output_name'], i)
+        code += f'int {k["name"]} = {last_dax} % {stride}; {last_dax} /= {stride};\n'
+    reduce_strides = [str(k['range']) if k['name'] not in vamap_axes else '_' + vamap_axes[k['name']][0] for k in ast['props']['reduce_axes']]
+    code += 'int __tasks_thread_y = ' + ' * '.join(reduce_strides) + ';\n';
+
+    # code += 'int ' + ', '.join([f'{k["name"]} = threadIdx.x' for k in ast['props']['reduce_axes']]) + ';\n';
+    unroll_red, num_threads = config.get('(red)', [-1, 1, 1])[1:]
+    max_threads = AntaresGlobal.attrs.device_props.max_threads_per_block
+    assert num_threads <= max_threads, "Num threads is larger than maximum limits: %d > %d" % (num_threads, max_threads)
+
+    code += f'// [thread_extent] blockIdx.x = {product([k["range"] for k in ast["props"]["data_axes"]])}\n'
+    code += f'// [thread_extent] threadIdx.y = {num_threads}\n'
+    code += f'{ast["root"].dtype()} local_output = 0;\n'
+
+    last_rax = ast['props']['reduce_axes'][-1]['name']
+
+    def reduce_values(left, right, ast):
+      if ast['props']['reduce_type'] == '+':
+        return f"{left} += {right};\n"
+      elif ast['props']['reduce_type'] == '<':
+        return f"{left} = min({left}, {right});\n"
+      elif ast['props']['reduce_type'] == '>':
+        return f"{left} = max({left}, {right});\n"
+      else:
+        raise Exception('Unrecognized reduce type: %s' % ast['props']['reduce_type'])
+
+
+    code += f'{{ int __tasks_thread_it = 0;\n'
+
+    code += f'for (; __tasks_thread_it + {num_threads} * {unroll_red} <= __tasks_thread_y; __tasks_thread_it += {num_threads} * {unroll_red})\n'
+    code += f'for (int __unroll_red = 0; __unroll_red < {unroll_red} * {num_threads}; __unroll_red += {num_threads}) {{\n'
+    code += f'int {last_rax} = __tasks_thread_it + __unroll_red + (int)threadIdx.y;\n'
+    for i, k in enumerate(ast['props']['reduce_axes']):
+      if k['name'] != last_rax:
+        code += f"int {k['name']} = {last_rax} % {reduce_strides[i]}; {last_rax} /= {reduce_strides[i]};\n"
+    code += reduce_values('local_output', express(ast['root']), ast) + '}\n'
+
+    if unroll_red > 2:
+      unroll_red //= 2
+      code += f'for (; __tasks_thread_it + {num_threads} * {unroll_red} <= __tasks_thread_y; __tasks_thread_it += {num_threads} * {unroll_red})\n'
+      code += f'for (int __unroll_red = 0; __unroll_red < {unroll_red} * {num_threads}; __unroll_red += {num_threads}) {{\n'
+      code += f'int {last_rax} = __tasks_thread_it + __unroll_red + (int)threadIdx.y;\n'
+      for i, k in enumerate(ast['props']['reduce_axes']):
+        if k['name'] != last_rax:
+          code += f"int {k['name']} = {last_rax} % {reduce_strides[i]}; {last_rax} /= {reduce_strides[i]};\n"
+      code += reduce_values('local_output', express(ast['root']), ast) + '}\n'
+
+    code += f'for (__tasks_thread_it += (int)threadIdx.y; __tasks_thread_it < __tasks_thread_y; __tasks_thread_it += {num_threads}) {{\n'
+    code += f'int {last_rax} = __tasks_thread_it;\n'
+    for i, k in enumerate(ast['props']['reduce_axes']):
+      if k['name'] != last_rax:
+        code += f"int {k['name']} = {last_rax} % {reduce_strides[i]}; {last_rax} /= {reduce_strides[i]};\n"
+    code += reduce_values('local_output', express(ast['root']), ast) + '}\n'
+
+    code += f'}}\n'
+ 
+    code += f'''
+__shared__ {ast['root'].dtype()} __block_red[{num_threads}];
+((volatile {ast['root'].dtype()}*)__block_red)[(((int)threadIdx.y))] = local_output;
+__syncthreads();
+'''
+    warp_size = AntaresGlobal.attrs.device_props.warp_size
+    assert (warp_size & (warp_size - 1)) == 0, "Device warp size must be 2^K."
+
+    reduce_size = num_threads // 2
+    while reduce_size > warp_size // 2:
+      left = f'((volatile {ast["root"].dtype()}*)__block_red)[(((int)threadIdx.y))]'
+      right = f'((volatile {ast["root"].dtype()}*)__block_red)[(((int)threadIdx.y)) + {reduce_size}]'
+      code += f'if (((int)threadIdx.y) < {reduce_size})\n'
+      code += reduce_values(left, right, ast)
+      code += '__syncthreads();\n'
+      reduce_size //= 2
+
+    if reduce_size >= 1:
+      code += f'if (((int)threadIdx.y) < {reduce_size}) {{\n'
+      while reduce_size >= 1:
+        left = f'((volatile {ast["root"].dtype()}*)__block_red)[(((int)threadIdx.y))]'
+        right = f'((volatile {ast["root"].dtype()}*)__block_red)[(((int)threadIdx.y)) + {reduce_size}]'
+        code += reduce_values(left, right, ast)
+        reduce_size //= 2
+      code += f'}}\n'
+      code += '__syncthreads();\n';
+
+    code += f'{express_output} = ((volatile {ast["root"].dtype()}*)__block_red)[0];';
+
   code = re.sub(r'\bfloat64\b', 'double', code)
   code = re.sub(r'\bfloat32\b', 'float', code)
   code = re.sub(r'\bfloat16\b', 'half', code)
@@ -184,6 +285,9 @@ def codegen(ast_seq, input_dict, output_dict, config, space_only=False):
         else:
           value = ast['props']['data_axes'][i]['range']
         vamap_args.append(f'{x}:{value}')
+  for key in vamap_axes:
+    if ('_' + key) not in visited:
+      vamap_args.append(f'_{vamap_axes[key][0]}:{vamap_axes[key][1]}')
   vamap_args = sorted(vamap_args)
   if vamap_args:
     os.environ['VAMAP'] = ','.join(vamap_args)
