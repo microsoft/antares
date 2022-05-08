@@ -311,7 +311,7 @@ def main_compute(code_only=False):
     except:
       pass
     print('  >> Computing CPU result for correctness reference..')
-    os.system('BACKEND=c-mcpu STEP=0 CHECK=0 ANTARES_DRIVER_PATH=${ANTARES_DRIVER_PATH}/ref HARDWARE_CONFIG= CONFIG= COMMIT= %s/run.sh >/dev/null 2>&1' % compiler_path)
+    os.system('BACKEND=c-mcpu STEP=0 CHECK=0 TVM=1 ANTARES_DRIVER_PATH=${ANTARES_DRIVER_PATH}/ref HARDWARE_CONFIG= CONFIG= COMMIT= %s/run.sh >/dev/null 2>&1' % compiler_path)
     try:
       with open(reference_result_path, 'r') as fp:
         digests = fp.read().split()[1:]

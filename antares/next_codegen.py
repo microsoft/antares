@@ -6,6 +6,7 @@ import copy
 import importlib
 import json
 import re
+import math
 
 from antares.common import Mock, AutoConfig, AntaresGlobal, product, backend
 
@@ -40,6 +41,8 @@ def codegen(ast_seq, input_dict, output_dict, config, space_only=False):
             props.warp_size = int(val)
           elif key in ('MaxThreadsPerBlock'):
             props.max_threads_per_block = int(val)
+          elif key in ('MaxSharedMemoryPerBlock'):
+            props.max_shared_memory_per_block = int(val)
         mem_bandwith = 'inf' if not mem_bandwith else product(mem_bandwith) * 2.5e-7
         props.mem_bandwith = float(mem_bandwith)
         props.compute_version = compute_version
@@ -48,8 +51,9 @@ def codegen(ast_seq, input_dict, output_dict, config, space_only=False):
     AntaresGlobal.attrs.device_props = get_device_props()
 
   if space_only:
-    space = [(x['name'], {'_type': 'factor', '_value': [1024 * 16, 4]}) for i, x in enumerate(ast['props']['data_axes'])]
-    space += [('(red)', {'_type': 'factor', '_value': [1024 * 16, 3]})]
+    space = [(x['name'], {'_type': 'factor', '_value': [1024 * 16, 4], '_init': [[-1, 1, 1, 1]]}) for i, x in enumerate(ast['props']['data_axes'])]
+    if ast['props']['reduce_type'] is not None:
+      space += [('(red)', {'_type': 'factor', '_value': [1024 * 16, 3], '_init': [[-1, 1, 1]]})]
     space = dict(space)
     AntaresGlobal.auto_config._config = space
     return space
