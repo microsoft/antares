@@ -93,7 +93,7 @@ namespace ab {
     std::vector<std::string> compile_args = {"/opt/rocm/bin/hipcc", path, "--genco", "-O2", ("--amdgpu-target=gfx" + _gpu_arch), "-Wno-ignored-attributes", "-o", (path + ".out")};
 #endif
 
-    ab_utils::Process(compile_args, 10);
+    ab_utils::Process(compile_args, 30);
     return file_read((path + ".out").c_str());
   }
 

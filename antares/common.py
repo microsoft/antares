@@ -134,5 +134,5 @@ def cpp_format(code):
   ftemp = tempfile.NamedTemporaryFile(dir=tempfile.gettempdir(), suffix='.cpp')
   with open(ftemp.name, 'w') as fp:
     fp.write(code)
-  st, output = subprocess.getstatusoutput('clang-format --style=Microsoft < ' + ftemp.name)
+  st, output = subprocess.getstatusoutput('clang-format < ' + ftemp.name)
   return code if st != 0 else output
