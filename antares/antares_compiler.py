@@ -27,15 +27,20 @@ if use_progress:
     pass
   progress_print, print = print, print_none
 
-save_path = None
+def get_real_path(path):
+  if not path.startswith('/'):
+    work_dir = os.environ['WORKDIR']
+    if not work_dir.endswith('/'):
+      work_dir += '/'
+    path = work_dir + path
+  return path
+
+save_path, eval_path = None, None
 if len(sys.argv) > 1:
   if sys.argv[1] == 'save':
-    save_path = sys.argv[2]
-    if not save_path.startswith('/'):
-      work_dir = os.environ['WORKDIR']
-      if not work_dir.endswith('/'):
-        work_dir += '/'
-      save_path = work_dir + save_path
+    save_path = get_real_path(sys.argv[2])
+  elif sys.argv[1] == 'eval':
+    eval_path = get_real_path(sys.argv[2])
   elif sys.argv[1] == 'torch-setup':
     sys.argv = sys.argv[:1] + sys.argv[2:]
     from frameworks.pytorch import setup
@@ -43,6 +48,9 @@ if len(sys.argv) > 1:
   elif sys.argv[1] == 'tf-setup':
     sys.argv = sys.argv[:1] + sys.argv[2:]
     from frameworks.tensorflow import setup
+    exit(0)
+  elif sys.argv[1] == 'pwd':
+    print(compiler_path)
     exit(0)
   elif sys.argv[1] == 'exec':
     os.chdir(os.environ.get('WORKDIR', '.'))
@@ -130,6 +138,10 @@ def get_target_source(best_config, dir_sid=None):
     return header_meta + properties
 
   def slices_to_code(kernel_slices):
+    if eval_path is not None:
+      with open(eval_path, 'r') as fp:
+        return fp.read()
+
     def tensor_display(encoded_name, prop):
       return f'{encoded_name}:{prop["dtype"]}{str(prop["shape"])}'
 
