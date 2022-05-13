@@ -8,7 +8,7 @@ def schedule_branch(attrs, output, prefix, tail_op):
 
   rax = cfg.define_knob(f"{prefix}S", [x for x in range(len(s[output].op.reduce_axis))])
   for i, ax in enumerate(s[output].op.reduce_axis):
-    sizes = cfg.define_split(f"{prefix}R{i}", attrs.get_extent(ax), num_outputs=2, init_vals=[[-1, attrs.device_props.warp_size]])
+    sizes = cfg.define_split(f"{prefix}R{i}", 1024 * 16, num_outputs=2, init_vals=[[-1, attrs.device_props.warp_size]])
     if rax == i:
       use_wrap_reduce = cfg.define_knob(f"{prefix}W", [True, False])
       r_range = attrs.device_props.warp_size if use_wrap_reduce else sizes[1]
