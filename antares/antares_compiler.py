@@ -35,28 +35,39 @@ def get_real_path(path):
     path = work_dir + path
   return path
 
-save_path, eval_path = None, None
-if len(sys.argv) > 1:
-  if sys.argv[1] == 'save':
-    save_path = get_real_path(sys.argv[2])
-  elif sys.argv[1] == 'eval':
-    eval_path = get_real_path(sys.argv[2])
-  elif sys.argv[1] == 'torch-setup':
-    sys.argv = sys.argv[:1] + sys.argv[2:]
-    from frameworks.pytorch import setup
-    exit(0)
-  elif sys.argv[1] == 'tf-setup':
-    sys.argv = sys.argv[:1] + sys.argv[2:]
-    from frameworks.tensorflow import setup
-    exit(0)
-  elif sys.argv[1] == 'pwd':
-    print(compiler_path)
-    exit(0)
-  elif sys.argv[1] == 'exec':
-    os.chdir(os.environ.get('WORKDIR', '.'))
-    os.execl(sys.executable, sys.executable, *sys.argv[2:])
-  else:
-    raise Exception('Unsupported command arguments: %s' % ' '.join(sys.argv[1:]))
+def init_arg_parser():
+  save_path, eval_path = None, None
+  if len(sys.argv) > 1:
+    if sys.argv[1] == 'save':
+      save_path = get_real_path(sys.argv[2])
+    elif sys.argv[1] == 'eval':
+      eval_path = get_real_path(sys.argv[2])
+      with open(eval_path, 'r') as fp:
+        data, symback, symcomp = fp.read(), '\n// BACKEND: ', '\n// COMPUTE_V1: '
+        idx = data.index(symcomp) + len(symcomp)
+        os.environ['COMPUTE_V1'] = data[idx:data.index('\n', idx)]
+        idx = data.index(symback) + len(symback)
+        eval_backend = data[idx:data.index(' ', idx)]
+        assert backend == eval_backend, f"Current backend `{backend}` doesn't correspond with the evaluation requirement. Please retry with: BACKEND={eval_backend} antares eval .."
+    elif sys.argv[1] == 'torch-setup':
+      sys.argv = sys.argv[:1] + sys.argv[2:]
+      from frameworks.pytorch import setup
+      exit(0)
+    elif sys.argv[1] == 'tf-setup':
+      sys.argv = sys.argv[:1] + sys.argv[2:]
+      from frameworks.tensorflow import setup
+      exit(0)
+    elif sys.argv[1] == 'pwd':
+      print(compiler_path)
+      exit(0)
+    elif sys.argv[1] == 'exec':
+      os.chdir(os.environ.get('WORKDIR', '.'))
+      os.execl(sys.executable, sys.executable, *sys.argv[2:])
+    else:
+      raise Exception('Unsupported command arguments: %s' % ' '.join(sys.argv[1:]))
+  return save_path, eval_path
+
+save_path, eval_path = init_arg_parser()
 
 def save_to_path_if_necessary(saved_code):
   if save_path is None:
@@ -177,7 +188,7 @@ def code_suffix(tpr=-1.0, step_prod=0, step_plan=-1):
 
 def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True, expected_timeout=None):
   if verbose:
-    print("\n[EvalAgent] Evaluating Modules..\n")
+    print("\n[EvalAgent] Evaluating Modules .. (with backend = %s)" % backend)
 
   def handle_result(result):
     correctness = None

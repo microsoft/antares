@@ -24,15 +24,16 @@
 
 #define CHECK_OK(x)  ((x) ? 1 : (use_progress ? 0: (fprintf(stderr, "[CheckFail] %s:%d\n", __FILE__, __LINE__), exit(1), 0)))
 
-static int use_progress = -1;
+static int use_progress = 0, debug_output = 0;
 
 namespace ab_utils {
 
   class TempFile {
     std::string file_path;
+    bool auto_delete;
 
   public:
-    TempFile(const std::string &extension_name, const std::string &file_content) {
+    TempFile(const std::string &extension_name, const std::string &file_content, bool auto_delete = true): auto_delete(auto_delete) {
       // FIXME: Be careful it's not thread-safe in shared context. Fortunately, no shared context used in current version.
       static unsigned int k_count = 0;
       this->file_path = ".antares-module-tempfile." + std::to_string(__sync_add_and_fetch(&k_count, 1)) + "." + extension_name;
@@ -44,7 +45,8 @@ namespace ab_utils {
     }
 
     ~TempFile() {
-      remove(this->file_path.c_str());
+      if (auto_delete)
+        remove(this->file_path.c_str());
     }
 
     const std::string& get_path() {
@@ -197,12 +199,8 @@ struct ExecutionModule {
   std::string backend;
 
   void *hModule;
-  bool debug_output;
 
-  ExecutionModule(std::string source, int dev = 0) {
-    ab::init(dev);
-    debug_output = getenv("AB_DEBUG") && *getenv("AB_DEBUG") ? atoi(getenv("AB_DEBUG")) : 0;
-
+  static std::string load_source(std::string source) {
     static const char file_proto[] = "file://";
 
     if (0 == strncmp(source.c_str(), file_proto, sizeof(file_proto) - 1)) {
@@ -214,6 +212,12 @@ struct ExecutionModule {
       CHECK_OK(filesize = fread((void*)source.data(), 1, filesize, fp));
       fclose(fp);
     }
+    return source;
+ }
+
+  ExecutionModule(std::string source, int dev = 0) {
+    ab::init(dev);
+    source = ExecutionModule::load_source(source);
 
     auto encoded_params = get_between(source, "// GLOBALS: ", "\n");
     auto params = ssplit(encoded_params, " -> ", true);

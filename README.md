@@ -35,6 +35,9 @@ STEP=100 BACKEND=c-mcpu antares
 # Search an efficient multi-threaded CPU code and save code to specified location:
 STEP=100 BACKEND=c-mcpu antares save ./kernel_example.cpp
 
+# Reproduce kernel evaluation based on an early saved source code:
+BACKEND=c-mcpu antares eval ./kernel_example.cpp
+
 # Search an efficient multi-threaded CPU code showing progress bar only:
 PROGRESS=1 STEP=100 BACKEND=c-mcpu antares save ./kernel_example.cpp
 

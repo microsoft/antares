@@ -27,7 +27,7 @@ def init(**kwargs):
 
     evaluator_path = '%s/evaluator.%s' % (os.environ['ANTARES_DRIVER_PATH'], backend)
 
-    if 0 != os.system(f"diff {backend_root}/include/backend.hpp {os.environ['ANTARES_DRIVER_PATH']}/backend.hpp-{backend} >/dev/null 2>&1"):
+    if 0 != os.system(f"diff {backend_root}/include/backend.hpp {os.environ['ANTARES_DRIVER_PATH']}/backend.hpp.{backend} >/dev/null 2>&1"):
       with open(f'{backend_root}/include/backend.hpp', 'r') as fp:
         eval_flags_pref = f'//; eval_flags({backend}):'
         eval_flags, compiler = '', 'g++'
@@ -52,7 +52,7 @@ def init(**kwargs):
       compile_stat = os.system(f'timeout 30s {compile_cmd}')
       sys.stdout.write('\033[0m\n')
       assert compile_stat == 0, error_info
-      os.system(f"cp {backend_root}/include/backend.hpp {os.environ['ANTARES_DRIVER_PATH']}/backend.hpp-{backend}")
+      os.system(f"cp {backend_root}/include/backend.hpp {os.environ['ANTARES_DRIVER_PATH']}/backend.hpp.{backend}")
       os.system(f'mv {evaluator_path}.tmp {evaluator_path} >/dev/null 2>&1')
       is_wsl = 1 if (os.environ.get('IS_WSL', '0') == '1') else 0
 
@@ -77,7 +77,20 @@ def eval(kernel_path, **kwargs):
     launcher = f'{backend_root}/launcher.sh'
     if not os.path.exists(launcher):
       launcher = ''
-    exec_cmd = f'sh -c "cd %s && DEV_ID={dev_id} EXPECTED_TIMEOUT=%s BACKEND={backend} {launcher} {evaluator_path} my_kernel.cc" || true' % (os.path.dirname(kernel_path), kwargs['expected_timeout'])
+    flags = []
+    if int(kwargs.get("compile", 0)) == 0:
+      flags += ['--dev', str(dev_id)]
+      if int(os.environ.get('PROGRESS', 0)) > 0:
+        flags += ['--progress']
+      if int(os.environ.get('AB_DEBUG', 0)) > 0:
+        flags += ['--debug']
+      timeout = str(kwargs["expected_timeout"]).strip()
+      if timeout:
+        flags += ['--timeout', timeout]
+    else:
+      flags += ['--compile']
+    flags = ' '.join(flags)
+    exec_cmd = f'sh -c "cd {os.path.dirname(kernel_path)} && BACKEND={backend} {launcher} {evaluator_path} my_kernel.cc {flags}" || true'
     try:
       output = subprocess.check_output(exec_cmd, shell=True).decode()
     except:
@@ -87,5 +100,8 @@ def eval(kernel_path, **kwargs):
     for line in output.split('\n'):
         if line.startswith('- '):
             key, val = line[2:].split(': ')
-            results[key] = float(val)
+            if val[0].isdigit():
+              results[key] = float(val)
+            else:
+              results[key] = val
     return results
