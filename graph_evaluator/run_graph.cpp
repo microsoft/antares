@@ -5,8 +5,26 @@
 
 int main(int argc, char** argv)
 {
-    float expected_timeout = getenv("EXPECTED_TIMEOUT") ? std::atof(getenv("EXPECTED_TIMEOUT")) : -1;
-    use_progress = getenv("PROGRESS") ? std::atof(getenv("PROGRESS")) : 0;
+    float expected_timeout = -1;
+    use_progress = 0;
+    int dev = 0, compile = 0;
+
+    for (int i = 2; i < argc; ++i) {
+      if (!strcmp(argv[i], "--progress"))
+        use_progress = 1;
+      else if (!strcmp(argv[i], "--debug"))
+        debug_output = 1;
+      else if (!strcmp(argv[i], "--compile"))
+        compile = 1;
+      else if (!strcmp(argv[i], "--timeout"))
+        expected_timeout = std::atof(argv[++i]);
+      else if (!strcmp(argv[i], "--dev"))
+        dev = std::atoi(argv[++i]);
+      else {
+        fprintf(stderr, "[Error] Unrecognized keyword: %s\n", argv[i]);
+        return 1;
+      }
+    }
 
 #if !defined(_WIN64) || defined(__MINGW64__)
     pthread_t p_timeout_monitor;
@@ -23,11 +41,21 @@ int main(int argc, char** argv)
     }, &expected_timeout);
     pthread_detach(p_timeout_monitor);
 #endif
-    int dev = getenv("DEV_ID") ? std::atoi(getenv("DEV_ID")) : 0;
-    ab::init(dev);
 
     const char *module_path = argc > 1 ? argv[1] : "./my_kernel.cc";
-    ExecutionModule gm(std::string("file://") + module_path);
+
+    auto src = ExecutionModule::load_source(std::string("file://") + module_path);
+    ExecutionModule gm(src, dev);
+
+    if (compile) {
+      auto binary = ab::moduleCompile(src);
+      printf("\n- HEX: @");
+      for (int i = 0; i < binary.size(); ++i)
+        printf("%02X", binary[i]);
+      printf("\n"), fflush(stdout);
+      ab::finalize();
+      return 0;
+    }
 
     std::vector<void*> global_args;
     for (int i = 0; i < gm.global_inputs.size(); ++i) {

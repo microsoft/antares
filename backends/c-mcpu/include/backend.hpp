@@ -146,12 +146,9 @@ namespace ab {
   }
 
   std::string moduleCompile(const std::string &source) {
-    return source;
-  }
-
-  void* moduleLoad(const std::string &binary) {
 #if !defined(__BACKEND_mcpu_android__)
-    ab_utils::TempFile tempfile("cpp", binary);
+    ab_utils::TempFile tempfile("cpp", source);
+
     auto path = tempfile.get_path();
 
     if (use_avx512)
@@ -160,6 +157,17 @@ namespace ab {
       ab_utils::Process({"g++", path, "-std=c++17", "-ldl", "-lpthread", "-fPIC", "-shared", "-O3", "-o", path + ".out", "-ffast-math", "-march=native"}, 10);
 
     path = (path[0] == '/' ? path : "./" + path) + ".out";
+    return file_read(path.c_str());
+#else
+    return source;
+#endif
+  }
+
+  void* moduleLoad(const std::string &binary) {
+#if !defined(__BACKEND_mcpu_android__)
+    ab_utils::TempFile tempfile("so", binary, false);
+    auto path = tempfile.get_path();
+    path = (path[0] == '/' ? path : "./" + path);
 #else
     // Temporarily load `libcpu_module.so` that corresponds with launcher.sh
     const std::string path = "/system/libcpu_module.so";
