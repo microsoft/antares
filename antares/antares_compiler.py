@@ -19,6 +19,7 @@ from graph_evaluator import client as eval_client
 
 compiler_path = os.path.dirname(os.path.abspath(__file__))
 antares_driver_path = os.environ['ANTARES_DRIVER_PATH']
+fix_device_id = int(os.environ.get('DEVICE_ID', -1))
 
 AntaresGlobal.cleanup_funcs = []
 use_progress = int(os.environ.get('PROGRESS', 0)) == 1
@@ -244,7 +245,7 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
 
       results = eval_client.eval(kernel_path=local_get_dir_file('my_kernel.cc', dir_sid=dir_sid),
                   expected_timeout=expected_timeout,
-                  dev_id=dev_id, backend_root=backend_root
+                  dev_id=(fix_device_id if fix_device_id >= 0 else dev_id), backend_root=backend_root
                 )
       return results
     except SystemExit:
@@ -326,7 +327,7 @@ def dump_binaries(path, hex_code, properties):
 #include "execute_module.hpp"
 
 int main() {{
-  ab::init(0);
+  ab::init({fix_device_id if fix_device_id >= 0 else 0});
 
   auto func = ab::moduleGetFunction(ab::moduleLoad(file_read("./kernels.bin")), "{kernel_name}", {{
     {keydict}
@@ -453,7 +454,7 @@ def main_compute(code_only=False):
   if config != '':
     best_config = config
   elif num_trials > 0:
-    dev_num = backend_config.get_execution_parallism()
+    dev_num = backend_config.get_execution_parallism() if fix_device_id < 0 else 1
     if dev_num <= 0:
         raise Exception("No valid device found for backend: %s." % backend)
     batch_size = os.environ.get('BATCH', '')
