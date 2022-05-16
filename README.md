@@ -20,23 +20,28 @@ antares backends
 antares help
 ```
 
-### Usage Examples:
+### Usage Examples (antares save/eval/compile):
 
 ```sh
 # Quickly generate a multi-threaded CPU code:
 BACKEND=c-mcpu antares
 
-# Quickly generate a CUDA code with correctness checking:
-CHECK=1 BACKEND=c-cuda antares
-
-# Search an efficient multi-threaded CPU code:
-STEP=100 BACKEND=c-mcpu antares
-
-# Search an efficient multi-threaded CPU code and save code to specified location:
+# Search an efficient multi-threaded CPU code and save best code to specified location:
 STEP=100 BACKEND=c-mcpu antares save ./kernel_example.cpp
 
 # Reproduce kernel evaluation based on an early saved source code:
 BACKEND=c-mcpu antares eval ./kernel_example.cpp
+
+# Freeze kernels and compiled into edge-side binaries:
+BACKEND=c-mcpu antares compile ./kernel_example.cpp ./output-dest/
+# Build solution in destination directory:
+cd ./output-dest && make
+```
+
+### Advanced Examples:
+```sh
+# Quickly generate a CUDA code with correctness checking:
+CHECK=1 BACKEND=c-cuda antares
 
 # Search an efficient multi-threaded CPU code showing progress bar only:
 PROGRESS=1 STEP=100 BACKEND=c-mcpu antares save ./kernel_example.cpp

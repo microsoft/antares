@@ -51,7 +51,7 @@ int main(int argc, char** argv)
       auto binary = ab::moduleCompile(src);
       printf("\n- HEX: @");
       for (int i = 0; i < binary.size(); ++i)
-        printf("%02X", binary[i]);
+        printf("%02X", ((unsigned char)binary[i]));
       printf("\n"), fflush(stdout);
       ab::finalize();
       return 0;

@@ -39,7 +39,7 @@ def do_native_translation_v2(codeset, **kwargs):
     amdgfx = os.environ['AMDGFX']
   else:
     amdgfx = kwargs['attrs'].device_props.compute_version.split('.')
-    amdgfx = '%d%02d' % (int(amdgfx[0]), int(amdgfx[1]))
+    amdgfx = 'gfx%d%02d' % (int(amdgfx[0]), int(amdgfx[1]))
 
   launch_bounds = get_extent('threadIdx.x') * get_extent('threadIdx.y') * get_extent('threadIdx.z')
 
