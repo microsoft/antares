@@ -18,7 +18,7 @@ namespace ab {
 
   void init(int dev) {
     ab::hLibDll = LoadLibrary(HLSL_LIBRARY_PATH);
-    CHECK(hLibDll, "Cannot find `" HLSL_LIBRARY_PATH "` !\n");
+    CHECK(hLibDll, "Failed to load `" HLSL_LIBRARY_PATH "` !\n");
 
     LOAD_ONCE(dxInit, int (*)(int));
     CHECK(0 == dxInit(0), "Failed initialize DirectX12 device.");

@@ -7,6 +7,8 @@ import subprocess
 import hashlib
 import traceback
 
+EVAL_PROPERTIES={}
+
 def init(**kwargs):
     backend_root = kwargs['backend_root']
     backend = os.path.basename(backend_root)
@@ -27,7 +29,7 @@ def init(**kwargs):
 
     evaluator_path = '%s/evaluator.%s' % (os.environ['ANTARES_DRIVER_PATH'], backend)
 
-    if 0 != os.system(f"diff {backend_root}/include/backend.hpp {os.environ['ANTARES_DRIVER_PATH']}/backend.hpp.{backend} >/dev/null 2>&1"):
+    if backend_root:
       with open(f'{backend_root}/include/backend.hpp', 'r') as fp:
         eval_flags_pref = f'//; eval_flags({backend}):'
         eval_flags, compiler = '', 'g++'
@@ -45,16 +47,20 @@ def init(**kwargs):
               eval_flags += ' -lpthread'
             break
 
-      error_info = f"SDK for `{backend}` is not configured correctly, please look into the error messages and reconfigure the corresponding environment."
-      compile_cmd = f'{compiler} {source_root}/run_graph.cpp -D__BACKEND__=\\"{backend}\\" -D__BACKEND_{backend[backend.index("-")+1:]}__ -I{backend_root}/include -std=c++17 -Wno-string-compare -Wno-unused-result -Wno-unused-value -o {evaluator_path}.tmp {eval_flags}'
-      sys.stdout.write('\033[91m')
-      print(f'\n[EvalAgent] Compiling Evaluator: {compile_cmd}')
-      compile_stat = os.system(f'timeout 30s {compile_cmd}')
-      sys.stdout.write('\033[0m\n')
-      assert compile_stat == 0, error_info
-      os.system(f"cp {backend_root}/include/backend.hpp {os.environ['ANTARES_DRIVER_PATH']}/backend.hpp.{backend}")
-      os.system(f'mv {evaluator_path}.tmp {evaluator_path} >/dev/null 2>&1')
-      is_wsl = 1 if (os.environ.get('IS_WSL', '0') == '1') else 0
+      compile_flags = f'-D__BACKEND__=\\"{backend}\\" -D__BACKEND_{backend[backend.index("-")+1:]}__ -I{backend_root}/include -std=c++17 -Wno-string-compare -Wno-unused-result -Wno-unused-value {eval_flags}'
+      EVAL_PROPERTIES['compiler'], EVAL_PROPERTIES['compile_flags'] = compiler, compile_flags
+
+      if 0 != os.system(f"diff {backend_root}/include/backend.hpp {os.environ['ANTARES_DRIVER_PATH']}/backend.hpp.{backend} >/dev/null 2>&1"):
+        error_info = f"SDK for `{backend}` is not configured correctly, please look into the error messages and reconfigure the corresponding environment."
+        compile_cmd = f'{compiler} {source_root}/run_graph.cpp -o {evaluator_path}.tmp {compile_flags}'
+        sys.stdout.write('\033[91m')
+        print(f'\n[EvalAgent] Compiling Evaluator: {compile_cmd}')
+        compile_stat = os.system(f'timeout 30s {compile_cmd}')
+        sys.stdout.write('\033[0m\n')
+        assert compile_stat == 0, error_info
+        os.system(f"cp {backend_root}/include/backend.hpp {os.environ['ANTARES_DRIVER_PATH']}/backend.hpp.{backend}")
+        os.system(f'mv {evaluator_path}.tmp {evaluator_path} >/dev/null 2>&1')
+        is_wsl = 1 if (os.environ.get('IS_WSL', '0') == '1') else 0
 
 def eval(kernel_path, **kwargs):
     dev_id = kwargs['dev_id']
@@ -84,7 +90,7 @@ def eval(kernel_path, **kwargs):
         flags += ['--progress']
       if int(os.environ.get('AB_DEBUG', 0)) > 0:
         flags += ['--debug']
-      timeout = str(kwargs["expected_timeout"]).strip()
+      timeout = str(kwargs.get("expected_timeout", "")).strip()
       if timeout:
         flags += ['--timeout', timeout]
     else:

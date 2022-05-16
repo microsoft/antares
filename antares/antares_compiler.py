@@ -12,6 +12,7 @@ import importlib
 import signal
 import collections
 import threading
+import binascii
 
 from antares.common import *
 from graph_evaluator import client as eval_client
@@ -35,20 +36,28 @@ def get_real_path(path):
     path = work_dir + path
   return path
 
+def load_eval(eval_path):
+  with open(eval_path, 'r') as fp:
+    data, symback, symcomp = fp.read(), '\n// BACKEND: ', '\n// COMPUTE_V1: '
+    idx = data.index(symcomp) + len(symcomp)
+    os.environ['COMPUTE_V1'] = data[idx:data.index('\n', idx)]
+    idx = data.index(symback) + len(symback)
+    eval_backend = data[idx:data.index(' ', idx)]
+    assert backend == eval_backend, f"Current backend `{backend}` doesn't correspond with the evaluation requirement. Please retry with: BACKEND={eval_backend} antares eval .."
+
 def init_arg_parser():
-  save_path, eval_path = None, None
+  save_path, eval_path, dump_path = None, None, None
   if len(sys.argv) > 1:
     if sys.argv[1] == 'save':
       save_path = get_real_path(sys.argv[2])
+    elif sys.argv[1] == 'compile':
+      assert len(sys.argv) == 4, f"Improper compile arguments. Please follow:\n\n    BACKEND={backend} antares compile ./saved_code.cpp ./<dest-folder>\n"
+      eval_path = get_real_path(sys.argv[2])
+      dump_path = get_real_path(sys.argv[3])
+      load_eval(eval_path)
     elif sys.argv[1] == 'eval':
       eval_path = get_real_path(sys.argv[2])
-      with open(eval_path, 'r') as fp:
-        data, symback, symcomp = fp.read(), '\n// BACKEND: ', '\n// COMPUTE_V1: '
-        idx = data.index(symcomp) + len(symcomp)
-        os.environ['COMPUTE_V1'] = data[idx:data.index('\n', idx)]
-        idx = data.index(symback) + len(symback)
-        eval_backend = data[idx:data.index(' ', idx)]
-        assert backend == eval_backend, f"Current backend `{backend}` doesn't correspond with the evaluation requirement. Please retry with: BACKEND={eval_backend} antares eval .."
+      load_eval(eval_path)
     elif sys.argv[1] == 'torch-setup':
       sys.argv = sys.argv[:1] + sys.argv[2:]
       from frameworks.pytorch import setup
@@ -65,9 +74,9 @@ def init_arg_parser():
       os.execl(sys.executable, sys.executable, *sys.argv[2:])
     else:
       raise Exception('Unsupported command arguments: %s' % ' '.join(sys.argv[1:]))
-  return save_path, eval_path
+  return save_path, eval_path, dump_path
 
-save_path, eval_path = init_arg_parser()
+save_path, eval_path, dump_path = init_arg_parser()
 
 def save_to_path_if_necessary(saved_code):
   if save_path is None:
@@ -211,7 +220,7 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
     else:
       gflops = compute_gflops(AntaresGlobal.default_task.flop, t)
       if verbose:
-        print("\n[Antares] Average time cost / run = %g sec, %g gflops. (Checked: %s)" % (t, gflops, correctness))
+        print("\n[Antares] Average time cost / run = %g sec, %g gflops. (Checked: %s)\n" % (t, gflops, correctness))
       with open(local_get_dir_file('result.txt', dir_sid=dir_sid), 'w') as fp:
         fp.write(str(t) + '\n')
         for i in range(len(result)):
@@ -254,6 +263,103 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
   if results is None or results.get('K/0', False) is False:
     return None
   return results
+
+def dump_binaries(path, hex_code, properties):
+  try:
+    os.makedirs(path)
+  except FileExistsError:
+    pass
+
+  _, backend_type = backend.split('-')
+  with open(f'{path}/kernels.bin', 'wb') as fp:
+    fp.write(hex_code)
+
+  import shutil
+  try:
+    shutil.copyfile(f'{compiler_path}/../backends/{backend}/include/backend.hpp', f'{path}/backend.hpp')
+  except:
+    return
+  shutil.copyfile(f'{compiler_path}/../graph_evaluator/execute_module.hpp', f'{path}/execute_module.hpp')
+
+  with open(f'{path}/Makefile', 'w') as fp:
+    fp.write('main:\n\t%s main.cpp -o main.exe %s\n\t./main.exe\n' % (properties['compiler'], properties['compile_flags']))
+
+  input_list = AntaresGlobal.global_arg_props['_in']
+  output_list = AntaresGlobal.global_arg_props['_out']
+  device_source = AntaresGlobal.device_source
+
+  def split_between(code, start, stop, leading_idx=0):
+    ll = code.find(start, leading_idx)
+    if ll < 0:
+      return None, -1
+    ll += len(start)
+    rr = code.index(stop, ll)
+    return code[ll:rr], rr
+
+  kernel_name, _ = split_between(device_source, '\n// LOCAL: ', ' -- ')
+
+  leading_idx, keydict = 0, {}
+  keywords, leading_idx = split_between(device_source, '\n  // [thread_extent] ', '\n', leading_idx=leading_idx)
+  while keywords is not None:
+    key, value = keywords.split(' = ')
+    keydict[key.strip()] = int(value.strip())
+    keywords, leading_idx = split_between(device_source, '\n  // [thread_extent] ', '\n', leading_idx=leading_idx)
+
+  keydict = ', '.join([f'{{"{x}", {keydict[x]}}}' for x in keydict])
+
+  def size_of(x):
+    bits = []
+    for c in reversed(x['dtype']):
+      if not c.isdigit():
+        break
+      bits += [c]
+    return ((int(''.join(reversed(bits))) + 7) // 8)
+
+  with open(f'{path}/main.cpp', 'w') as fp:
+    fp.write(f'''
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License
+
+// COMPUTE_V1: {os.environ["COMPUTE_V1"]}
+// ANTARES CROSS-BACKEND DUMP CODE - v3
+
+#include "execute_module.hpp"
+
+int main() {{
+  ab::init(0);
+
+  auto func = ab::moduleGetFunction(ab::moduleLoad(file_read("./kernels.bin")), "{kernel_name}", {{
+    {keydict}
+  }});
+
+''')
+
+    for i, x in enumerate(input_list + output_list):
+      if x['dtype'] == 'int32':
+        tensor_field = f'std::vector<int> {x["name"]}({size_of(x) // 4}LU * {" * ".join([str(k) for k in x["shape"]])}, 1)'
+      elif x['dtype'] == 'float32':
+        tensor_field = f'std::vector<float> {x["name"]}({size_of(x) // 4}LU * {" * ".join([str(k) for k in x["shape"]])}, 1.0f)'
+      else:
+        tensor_field = f'std::vector<char> {x["name"]}({size_of(x)}LU * {" * ".join([str(k) for k in x["shape"]])}, 0)'
+      fp.write(f'  {tensor_field};\n')
+
+    fp.write(f'\n  std::vector<void*> args = {{\n')
+    for x in input_list + output_list:
+      fp.write(f'    ab::alloc({x["name"]}.size() * sizeof(*{x["name"]}.data()), {{{str(x["shape"])[1:-1]}}}, "{x["dtype"]}", "{x["name"]}"),\n')
+    fp.write(f'  }};\n\n')
+
+    for i, x in enumerate(input_list):
+      fp.write(f'  ab::memcpyHtoD(args[{i}], {x["name"]}.data(), {x["name"]}.size() * sizeof(*{x["name"]}.data()), nullptr);\n')
+
+    fp.write(f'\n  ab::launchKernel(func, args, nullptr);\n\n')
+    for i, x in enumerate(output_list):
+      fp.write(f'  ab::memcpyDtoH({x["name"]}.data(), args[{len(input_list) + i}], {x["name"]}.size() * sizeof(*{x["name"]}.data()), nullptr);\n')
+    fp.write(f'  ab::synchronize(nullptr);\n')
+    for i, x in enumerate(output_list):
+      fp.write(f'  std::cout << "Result of `{x["name"]}` = [" << {x["name"]}[0] << ", " << {x["name"]}[1] << ", .., " << {x["name"]}.back() << "].\\n";\n')
+    fp.write(f'\n  ab::finalize();\n}}\n')
+
+    print(f'[Solution] Kernel binaries have been compiled to directory: {os.path.abspath(path)}\n')
 
 def compute_mem_ratio(tpr):
   if math.isinf(tpr) or math.isinf(float(AntaresGlobal.attrs.device_props.mem_bandwith)) or AntaresGlobal.attrs.device_props.mem_bandwith <= 0:
@@ -463,7 +569,7 @@ def main_compute(code_only=False):
         if auto_commit:
           codehub_db(os.environ['COMPUTE_V1'], source_code=tuner.task.best.code)
 
-      print("\n[Best Config] CONFIG='%s'  ==>  Performance is up to %f Gflops, occurred at step %d / %d; time per run = %g sec." % (
+      print("\n[Best Config] CONFIG='%s'  ==>  Performance is up to %f Gflops, occurred at step %d / %d; time per run = %g sec.\n" % (
         best_config,
         compute_gflops(tuner.task.flop, tuner.task.best.timecost),
         tuner.task.best.occur,
@@ -473,7 +579,6 @@ def main_compute(code_only=False):
       cleanup_on_exit(-1, None)
     else:
       raise Exception('Unrecognized tuner type: `%s`' % tuner_type)
-    exit(0)
   else:
     saved_code = codehub_db(os.environ['COMPUTE_V1'])
     if saved_code is not None:
@@ -502,8 +607,18 @@ def main_compute(code_only=False):
   save_to_path_if_necessary(device_source)
   eval_client.init(backend_root=backend_root)
   dev_id = int(os.environ.get('DEV_ID', '0'))
-  result = evaluate_perf(kernel_path, dev_id, device_source)
-  exit(0 if result is not None and len(result) > 1 else 1)
+  result = evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None)
+
+  is_positive_result = (result is not None and len(result) > 1)
+
+  if is_positive_result and dump_path is not None:
+    AntaresGlobal.device_source = device_source
+    kernel_path = local_get_dir_file('my_kernel.cc', dir_sid=None)
+    hex_code = eval_client.eval(kernel_path=kernel_path, dev_id=0, backend_root=backend_root, compile=1)['HEX']
+    hex_code = binascii.unhexlify(hex_code[1:].strip())
+    dump_binaries(path=dump_path, hex_code=hex_code, properties=eval_client.EVAL_PROPERTIES)
+
+  exit(0 if is_positive_result else 1)
 
 
 def rest_service():
@@ -595,6 +710,6 @@ if __name__ == '__main__':
     else:
       main_compute()
   except SystemExit:
-    cleanup_on_exit(0, None)
+    cleanup_on_exit(-1, None)
   except:
     traceback.print_exc()
