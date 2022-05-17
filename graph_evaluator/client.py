@@ -50,7 +50,7 @@ def init(**kwargs):
       compile_flags = f'-D__BACKEND__=\\"{backend}\\" -D__BACKEND_{backend[backend.index("-")+1:]}__ -I{backend_root}/include -std=c++17 -Wno-string-compare -Wno-unused-result -Wno-unused-value {eval_flags}'
       EVAL_PROPERTIES['compiler'], EVAL_PROPERTIES['compile_flags'] = compiler, compile_flags
 
-      if 0 != os.system(f"diff {backend_root}/include/backend.hpp {os.environ['ANTARES_DRIVER_PATH']}/backend.hpp.{backend} >/dev/null 2>&1"):
+      if 0 != os.system(f"diff {backend_root}/include/backend.hpp {os.environ['ANTARES_DRIVER_PATH']}/backend.hpp_{backend} >/dev/null 2>&1"):
         error_info = f"SDK for `{backend}` is not configured correctly, please look into the error messages and reconfigure the corresponding environment."
         compile_cmd = f'{compiler} {source_root}/run_graph.cpp -o {evaluator_path}.tmp {compile_flags}'
         sys.stdout.write('\033[91m')
@@ -58,7 +58,7 @@ def init(**kwargs):
         compile_stat = os.system(f'timeout 30s {compile_cmd}')
         sys.stdout.write('\033[0m\n')
         assert compile_stat == 0, error_info
-        os.system(f"cp {backend_root}/include/backend.hpp {os.environ['ANTARES_DRIVER_PATH']}/backend.hpp.{backend}")
+        os.system(f"cp {backend_root}/include/backend.hpp {os.environ['ANTARES_DRIVER_PATH']}/backend.hpp_{backend}")
         os.system(f'mv {evaluator_path}.tmp {evaluator_path} >/dev/null 2>&1')
         is_wsl = 1 if (os.environ.get('IS_WSL', '0') == '1') else 0
 

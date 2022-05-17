@@ -45,9 +45,9 @@ int main(int argc, char** argv)
     const char *module_path = argc > 1 ? argv[1] : "./my_kernel.cc";
 
     auto src = ExecutionModule::load_source(std::string("file://") + module_path);
-    ExecutionModule gm(src, dev);
 
     if (compile) {
+      ab::init(0); // Useful to initialize libraries.
       auto binary = ab::moduleCompile(src);
       printf("\n- HEX: @");
       for (int i = 0; i < binary.size(); ++i)
@@ -57,6 +57,7 @@ int main(int argc, char** argv)
       return 0;
     }
 
+    ExecutionModule gm(src, dev);
     std::vector<void*> global_args;
     for (int i = 0; i < gm.global_inputs.size(); ++i) {
       auto &it = gm.global_inputs[i];
