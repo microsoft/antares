@@ -3,9 +3,6 @@
 
 //; eval_flags(c-rocm_win64): [x86_64-w64-mingw32-g++] -O2 -static -lpthread
 
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-
 #include <random>
 #include <sstream>
 
@@ -53,8 +50,8 @@ namespace ab {
   }
 
   std::string moduleCompile(const std::string &source) {
-    std::string path = "/tmp/.antares-module-tempfile.cu";
-    FILE *fp = fopen(path.c_str(), "w");
+    std::string wsl_path = "/tmp/.antares-module-tempfile.cu";
+    FILE *fp = fopen(wsl_path.c_str(), "w");
     fwrite(source.data(), source.size(), 1, fp);
     fclose(fp);
 
@@ -63,8 +60,8 @@ namespace ab {
     CHECK(spec != nullptr, "__AMDGFX__ is not found in Antares code for Windows ROCm. Please export correspoding AMD arch before code generation. e.g. export AMDGFX=gfx906 antares save ..");
     std::string arch = "gfx" + std::to_string(std::atoi(spec + sizeof(amdgfx) - 1));
 
-    ab_utils::Process({"wsl.exe", "sh", "-cx", "\"/opt/rocm/bin/hipcc " + path + " --amdgpu-target=" + arch + " --genco -Wno-ignored-attributes -O2 -o " + path + ".out 1>&2\""}, 10);
-    return file_read((path + ".out").c_str());
+    ab_utils::Process({"wsl.exe", "sh", "-cx", "\"/opt/rocm/bin/hipcc " + wsl_path + " --amdgpu-target=" + arch + " --genco -Wno-ignored-attributes -O2 -o " + wsl_path + ".out 1>&2\""}, 30);
+    return file_read((wsl_path + ".out").c_str());
   }
 
   void* moduleLoad(const std::string &binary) {
@@ -112,6 +109,13 @@ namespace ab {
   }
 
   void* recordTime(void *stream) {
+    ab::synchronize(stream);
+
+    auto pt = new std::chrono::high_resolution_clock::time_point;
+    *pt = std::chrono::high_resolution_clock::now();
+    return pt;
+
+    // Event-based timing not working for Windows ROCm driver
     void *hEvent;
     LOAD_ONCE(hipEventCreate, int (*)(void*, int));
     LOAD_ONCE(hipEventRecord, int (*)(void*, void*));
@@ -121,6 +125,13 @@ namespace ab {
   }
 
   double convertToElapsedTime(void *hStart, void *hStop) {
+    auto h1 = (std::chrono::high_resolution_clock::time_point*)hStart;
+    auto h2 = (std::chrono::high_resolution_clock::time_point*)hStop;
+
+    double et = 1e-9 * std::chrono::duration_cast<std::chrono::nanoseconds>(*h2 - *h1).count();
+    delete h1, h2;
+    return std::max(et, 1e-9);
+
     LOAD_ONCE(hipDeviceSynchronize, int (*)());
     CHECK(0 == hipDeviceSynchronize(), "Failed to sychronize device.");
 

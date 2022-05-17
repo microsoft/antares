@@ -3,10 +3,10 @@
 
 import subprocess, os
 import re
+from antares.common import backend, AntaresGlobal
 
 def to_search_space(ast_seq, input_dict, output_dict):
   from antares.default_codegen import codegen
-  from antares.common import AntaresGlobal
   codegen(ast_seq, input_dict, output_dict, {}, space_only=True)
   space = AntaresGlobal.auto_config.get_config_space()
   return space
@@ -34,6 +34,11 @@ def do_native_translation_v2(codeset, **kwargs):
     return defval
 
   launch_bounds = get_extent('threadIdx.x') * get_extent('threadIdx.y') * get_extent('threadIdx.z')
+
+  cuda_linux_half = ''
+  if '_win64' not in backend:
+    cuda_linux_half += '\n__forceinline__ __device__ __half max(const __half &a, const __half &b) {{ return a > b ? a : b; }}'
+    cuda_linux_half += '\n__forceinline__ __device__ __half min(const __half &a, const __half &b) {{ return a < b ? a : b; }}\n'
 
   full_body = f'''
 #include <cuda_runtime.h>
@@ -68,10 +73,7 @@ def do_native_translation_v2(codeset, **kwargs):
 
 MAKE_VEC4_OP(int4)
 MAKE_VEC2_OP(int2)
-
-__forceinline__ __device__ __half max(const __half a, const __half b) {{ return a > b ? a : b; }}
-__forceinline__ __device__ __half min(const __half a, const __half b) {{ return a < b ? a : b; }}
-
+{cuda_linux_half}
 #endif
 {kwargs['attrs'].blend}
 

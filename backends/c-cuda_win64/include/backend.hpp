@@ -3,9 +3,6 @@
 
 //; eval_flags(c-cuda_win64): [x86_64-w64-mingw32-g++] -O2 -static -lpthread
 
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-
 #include <random>
 #include <sstream>
 
@@ -60,11 +57,7 @@ namespace ab {
   }
 
   std::string moduleCompile(const std::string &source) {
-    return source;
-  }
-
-  void* moduleLoad(const std::string &binary) {
-    ab_utils::TempFile tempfile("cu", binary);
+    ab_utils::TempFile tempfile("cu", source);
     auto path = tempfile.get_path();
 
     constexpr int CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR = 75;
@@ -76,10 +69,13 @@ namespace ab {
     auto arch = std::to_string(major * 10 + minor);
 
     ab_utils::Process({"nvcc.exe", path, "--fatbin", "-gencode", "arch=compute_" + arch + ",code=sm_" + arch, "-O2", "-o", path + ".out", "1>&2"}, 10);
+    return file_read((path + ".out").c_str());
+  }
 
+  void* moduleLoad(const std::string &binary) {
     void *hModule;
-    LOAD_ONCE(cuModuleLoad, int (*)(void*, const char*));
-    CHECK(0 == cuModuleLoad(&hModule, (path + ".out").c_str()), "Failed to compiler sources with command `nvcc.exe` from Windows PATH and load target to NVIDIA GPU.");
+    LOAD_ONCE(cuModuleLoadData, int (*)(void*, const char*));
+    CHECK(0 == cuModuleLoadData(&hModule, binary.c_str()), "Failed to compiler sources with command `nvcc.exe` from Windows PATH and load target to NVIDIA GPU.");
     return hModule;
   }
 

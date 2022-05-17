@@ -279,7 +279,7 @@ def dump_binaries(path, hex_code, properties):
   try:
     shutil.copyfile(f'{compiler_path}/../backends/{backend}/include/backend.hpp', f'{path}/backend.hpp')
   except:
-    return
+    return False
   shutil.copyfile(f'{compiler_path}/../graph_evaluator/execute_module.hpp', f'{path}/execute_module.hpp')
 
   with open(f'{path}/Makefile', 'w') as fp:
@@ -361,6 +361,8 @@ int main() {{
     fp.write(f'\n  ab::finalize();\n}}\n')
 
     print(f'[Solution] Kernel binaries have been compiled to directory: {os.path.abspath(path)}\n')
+
+  return True
 
 def compute_mem_ratio(tpr):
   if math.isinf(tpr) or math.isinf(float(AntaresGlobal.attrs.device_props.mem_bandwith)) or AntaresGlobal.attrs.device_props.mem_bandwith <= 0:
@@ -608,16 +610,16 @@ def main_compute(code_only=False):
   save_to_path_if_necessary(device_source)
   eval_client.init(backend_root=backend_root)
   dev_id = int(os.environ.get('DEV_ID', '0'))
-  result = evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None)
 
-  is_positive_result = (result is not None and len(result) > 1)
-
-  if is_positive_result and dump_path is not None:
+  if dump_path is not None:
     AntaresGlobal.device_source = device_source
     kernel_path = local_get_dir_file('my_kernel.cc', dir_sid=None)
-    hex_code = eval_client.eval(kernel_path=kernel_path, dev_id=0, backend_root=backend_root, compile=1)['HEX']
+    hex_code = eval_client.eval(kernel_path=kernel_path, dev_id=(fix_device_id if fix_device_id >= 0 else dev_id), backend_root=backend_root, compile=1)['HEX']
     hex_code = binascii.unhexlify(hex_code[1:].strip())
-    dump_binaries(path=dump_path, hex_code=hex_code, properties=eval_client.EVAL_PROPERTIES)
+    is_positive_result = dump_binaries(path=dump_path, hex_code=hex_code, properties=eval_client.EVAL_PROPERTIES)
+  else:
+    result = evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None)
+    is_positive_result = (result is not None and len(result) > 1)
 
   exit(0 if is_positive_result else 1)
 

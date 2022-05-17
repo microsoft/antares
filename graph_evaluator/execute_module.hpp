@@ -17,6 +17,11 @@
 #include <functional>
 #include <numeric>
 
+#if defined(_WIN64)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
 #if !defined(_WIN64) || defined(__MINGW64__)
 #include <pthread.h>
 #include <unistd.h>
@@ -37,6 +42,11 @@ namespace ab_utils {
       // FIXME: Be careful it's not thread-safe in shared context. Fortunately, no shared context used in current version.
       static unsigned int k_count = 0;
       this->file_path = ".antares-module-tempfile." + std::to_string(__sync_add_and_fetch(&k_count, 1)) + "." + extension_name;
+#if defined(_WIN64)
+      static char temp[4096];
+      GetTempPath(sizeof(temp), temp);
+      this->file_path = std::string(temp) + "\\" + this->file_path;
+#endif
 
       FILE *fp = fopen(this->file_path.c_str(), "w");
       CHECK_OK(fp != nullptr);
@@ -76,11 +86,21 @@ namespace ab_utils {
 #else
       std::string warp_cmd = system_cmd;
 #endif
+
+#if defined(_WIN64)
+      static char work[4096], temp[4096];
+      GetCurrentDirectory(sizeof(work), work);
+      GetTempPath(sizeof(temp), temp);
+      chdir(temp);
+#endif
       if (0 != system(warp_cmd.c_str())) {
         if (use_progress)
           exit(1);
         throw std::runtime_error("Failed to execute command: sh -c '" + system_cmd + "'\n");
       }
+#if defined(_WIN64)
+      chdir(work);
+#endif
     }
   };
 }
