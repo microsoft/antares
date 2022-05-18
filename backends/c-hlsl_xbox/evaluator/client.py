@@ -44,5 +44,5 @@ def eval(kernel_path, **kwargs):
     key = 'K/%d' % i
     if key not in results:
       break
-    results[key] = float('%.10e' % results[key])
+    results[key] = float('%.10e' % float(results[key]))
   return results
