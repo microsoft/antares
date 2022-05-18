@@ -357,7 +357,7 @@ int main() {{
       fp.write(f'  ab::memcpyDtoH({x["name"]}.data(), args[{len(input_list) + i}], {x["name"]}.size() * sizeof(*{x["name"]}.data()), nullptr);\n')
     fp.write(f'  ab::synchronize(nullptr);\n')
     for i, x in enumerate(output_list):
-      fp.write(f'  std::cout << "Result of `{x["name"]}` = [" << {x["name"]}[0] << ", " << {x["name"]}[1] << ", .., " << {x["name"]}.back() << "].\\n";\n')
+      fp.write(f'  std::cout << "Result of `{x["name"]}` on {backend} = [" << {x["name"]}[0] << ", " << {x["name"]}[1] << ", .., " << {x["name"]}.back() << "].\\n";\n')
     fp.write(f'\n  ab::finalize();\n}}\n')
 
     print(f'[Solution] Kernel binaries have been compiled to directory: {os.path.abspath(path)}\n')

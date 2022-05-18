@@ -58,13 +58,23 @@ def einstein_v2(exprss, input_dict, extra_outputs=[], **kwargs):
   AntaresGlobal.global_arg_props = global_arg_props
   AntaresGlobal.compute_graph = ast_seq, input_dict, output_dict
 
+def implement_builtins(name, args):
+  if name == '__builtin_set':
+    assert len(args) == 2
+    return f'(({args[0]}) = ({args[1]}))'
+  elif name == '__builtin_add':
+    assert len(args) == 2
+    return f'atomicAdd(&({args[0]}), ({args[1]}))'
+  else:
+    raise Exception(f'Builtin function with {name} is not handled.')
+
 def refactor_builtins(code):
   result_lines = []
   for line in code.split('\n'):
-    at = re.search(r'\b__builtin_set\(', line)
+    at = re.search(r'\b__builtin_[a-z]+\(', line)
     while at is not None:
-      arg_list = []
       start, stop, cnt = at.start(), at.end(), 0
+      bname, arg_list = line[start:stop-1], []
       for i in range(stop, len(line)):
         if line[i] in ('(', '['):
           cnt += 1
@@ -74,7 +84,7 @@ def refactor_builtins(code):
           arg_list.append(line[stop:i].strip())
           stop = i + 1
           if line[i] == ')':
-            line = line[:start] + f'(({arg_list[0]}) = ({arg_list[1]}))' + line[stop:]
+            line = line[:start] + implement_builtins(bname, arg_list) + line[stop:]
             break
       at = re.search(r'\b__builtin_set\(', line)
     result_lines.append(line)

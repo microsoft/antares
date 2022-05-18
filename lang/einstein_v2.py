@@ -262,10 +262,20 @@ def parse_to_ast(expr):
   set_index = expr.find('=.')
   if set_index >= 1:
     end_index = set_index + 2
-    start_index = set_index - 1 if expr[set_index - 1] in ('+',)  else set_index
+    start_index = set_index - 1 if expr[set_index - 1] in ('+', '<', '>', '(', ')')  else set_index
     set_op, symbolic_output = expr[start_index:end_index], expr[:expr.index('[')].strip()
     if set_op == '=.':
       set_op = '__builtin_set'
+    elif set_op == '+=.':
+      set_op = '__builtin_add'
+    elif set_op == '<=.':
+      set_op = '__builtin_min'
+    elif set_op == '>=.':
+      set_op = '__builtin_max'
+    elif set_op == '(=.':
+      set_op = '__builtin_argmin'
+    elif set_op == ')=.':
+      set_op = '__builtin_argmax'
     else:
       raise Exception(f'Unimplemented set_op: `{set_op}`')
     expr = f'___{symbolic_output}[{", ".join(valid_axis)}] = {expr[:start_index].strip()}.call("{set_op}", [{expr[end_index:].strip()},])'
