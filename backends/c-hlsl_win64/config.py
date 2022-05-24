@@ -90,7 +90,7 @@ def do_native_translation_v2(codeset, **kwargs):
     # FIXME: `pre_defines` is only for float32. Template dtype will be supported after the release of HLSL 2021.
     pre_defines = ''
 
-    if re.search(r'\berf\b', body):
+    if re.search(r'\berf\b', body) or re.search(r'\bnormcdf\b', body):
       pre_defines += '''
 float erf(float x) {
   float a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741, a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
@@ -99,6 +99,10 @@ float erf(float x) {
   float t = 1.0 / (1.0 + p * x);
   float y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * exp(-x * x);
   return sign * y;
+}
+
+float normcdf(float x) {
+  return 0.5 * (1 + erf(x * sqrt(0.5)));
 }
 '''
     if re.search(r'\bpow\b', body):
@@ -124,6 +128,7 @@ float tanh_ex(float x) {
 #define tanh tanh_ex
 '''
     body = re.sub(r'\b__syncthreads\b', 'GroupMemoryBarrierWithGroupSync', body)
+    body = re.sub(r'\(signed char\)', '', body)
     lds = '\n'.join(lds)
     registers = ''.join(registers)
 
