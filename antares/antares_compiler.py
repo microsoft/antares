@@ -412,6 +412,11 @@ def run_config_entity(target_source, config_str, dir_sid, expected_timecost='inf
   return result
 
 def main_compute(code_only=False):
+  if backend == 'c-mcpu':
+    for k in os.environ:
+      if k.startswith('VAMAP'):
+        os.environ.pop(k, None)
+
   default_tune_op = importlib.import_module('lang.generic')
 
   import logging
