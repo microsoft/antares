@@ -74,8 +74,11 @@ def schedule_branch(attrs, output, prefix):
   s[output].bind(s[output].fuse(*third), te.thread_axis("threadIdx.x"))
 
   load_stage = []
-  for load in input_tensors:
+  for i, load in enumerate(input_tensors):
+    use_align = cfg.define_knob(f"{prefix}AL{i}", [0, 1], init_vals=[0])
     load_stage.append(s.cache_read(load, 'shared', [output_local]))
+    if use_align:
+      s[load_stage[-1]].storage_align(load_stage[-1].op.axis[0], 2, 1)
     s[load_stage[-1]].compute_at(s[output_local], output_local_rv_o_o)
 
   for i, load in enumerate(load_stage):

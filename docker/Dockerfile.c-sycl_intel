@@ -16,7 +16,6 @@ RUN apt-get update && apt install -y --no-install-recommends git ca-certificates
 
 RUN /bin/echo -e "set backspace=indent,eol,start\nset nocompatible\nset ts=4" > /etc/vim/vimrc.tiny
 
-ADD ./engine /antares/engine
-RUN /antares/engine/install_antares_host.sh && rm -rf /var/lib/apt/lists/* ~/.cache
+RUN pip3 install --upgrade antares && mkdir -p /root/.local/antares && ln -s $(antares pwd)/../3rdparty /root/.local/antares/3rdparty
 
 # RUN python3 -m pip install --upgrade intel-tensorflow && python3 -m pip install --upgrade numpy mpi4py
