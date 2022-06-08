@@ -20,6 +20,6 @@ RUN /bin/echo -e "set backspace=indent,eol,start\nset nocompatible\nset ts=4" > 
 RUN [ -e /usr/lib/x86_64-linux-gnu/libcuda.so.1 ] || ln -s /host/usr/lib/x86_64-linux-gnu/libcuda.so.1 /usr/lib/x86_64-linux-gnu
 RUN ln -sf libcudart.so /usr/local/cuda/targets/x86_64-linux/lib/libcudart_static.a
 
-ADD ./engine /antares/engine
-RUN /antares/engine/install_antares_host.sh && rm -rf /var/lib/apt/lists/* ~/.cache
+ENV LD_LIBRARY_PATH=/usr/local/nvidia/lib64:$LD_LIBRARY_PATH
+RUN pip3 install --upgrade antares && mkdir -p /root/.local/antares && ln -s $(antares pwd)/../3rdparty /root/.local/antares/3rdparty
 # RUN python3 -m pip install tensorflow-gpu==2.4.0 mpi4py
