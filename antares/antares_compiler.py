@@ -84,6 +84,8 @@ def save_to_path_if_necessary(saved_code):
     return
   with open(save_path, 'w') as fp:
     fp.write(saved_code)
+    if 'VAMAP' in os.environ:
+      fp.write('\n// VAMAP: %s\n' % os.environ['VAMAP'])
 
 def cleanup_on_exit(signum, frame):
   for func in AntaresGlobal.cleanup_funcs:

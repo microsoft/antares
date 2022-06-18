@@ -4,13 +4,15 @@
 from tvm import te
 import os
 
+is_base2 = int(os.environ.get('BASE2', '0')) > 0
+
 def plan_threads(attrs, axes):
   num_step = os.getenv('STEP', '')
   num_step = int(num_step) if num_step else 0
   if not num_step:
     return [1] * len(axes), [1] * len(axes)
 
-  num_threads, init_threads, shape = 256, [1] * len(axes), [attrs.get_extent(ax) for ax in axes]
+  num_threads, init_threads, shape = 256, [1] * len(axes), [4096 if is_base2 else attrs.get_extent(ax) for ax in axes]
   for th in range(2, num_threads + 1):
     while num_threads > 1:
       unchanged = True
@@ -37,12 +39,11 @@ def schedule_branch(attrs, output, prefix):
   input_tensors = s[output].op.input_tensors
 
   data_sizes, reduce_sizes = [], []
-  num_elements = 1
   for i, ax in enumerate(s[output].op.axis):
-    num_elements *= attrs.get_extent(ax)
-    data_sizes.append(cfg.define_split(f"{prefix}D{i}", attrs.get_extent(ax), num_outputs=4, init_vals=[[-1, 1, init_threads[i], 1], [-1, init_vthreads[i], init_threads[i], 1],[-1, 1, init_threads[i], init_vthreads[i]]]))
+    data_sizes.append(cfg.define_split(f"{prefix}D{i}", 4096 if is_base2 else attrs.get_extent(ax), num_outputs=4, init_vals=[[-1, 1, init_threads[i], 1], [-1, init_vthreads[i], init_threads[i], 1],[-1, 1, init_threads[i], init_vthreads[i]]]))
   for i, ax in enumerate(s[output].op.reduce_axis):
-    reduce_sizes.append(cfg.define_split(f"{prefix}R{i}", attrs.get_extent(ax), num_outputs=3, init_vals=[[-1, 1, 1]]))
+    factors = cfg.define_split(f"{prefix}R{i}", 4096 if is_base2 else attrs.get_extent(ax), num_outputs=3, init_vals=[[-1, 1, 1]])
+    reduce_sizes.append([-1, 1, factors[1] * factors[2]])
 
   num_threads, num_vthreads = 1, 1
   for i in range(len(s[output].op.axis)):
@@ -50,7 +51,6 @@ def schedule_branch(attrs, output, prefix):
     num_vthreads *= data_sizes[i][1] * data_sizes[i][3]
 
   assert num_vthreads <= 512, "Unrecommended large vthread counts: %d" % num_vthreads
-  # assert num_threads >= min(num_elements, 64), "Unrecommended small thread counts: %d" % num_threads
   assert num_threads <= attrs.device_props.max_threads_per_block, "Invalid schedule plans: num_threads(%d) > %d" % (num_threads, attrs.device_props.max_threads_per_block)
 
   reduce_at = cfg.define_knob(f"{prefix}RA", [x for x in range(len(s[output].op.reduce_axis))], init_vals=[0])
