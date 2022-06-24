@@ -46,9 +46,9 @@ def do_native_translation_v2(codeset, **kwargs):
     lines, lds = [], []
     for line in body.split('\n'):
       # Parse Group Shared
-      pos = line.find(' __shared__ ')
-      if pos >= 0 and ' ' * pos == line[:pos]:
-        lds.append('groupshared ' + line[pos + len(' __shared__ '):])
+      pos = re.search(r'^ *__shared__ ', line)
+      if pos:
+        lds.append('groupshared ' + line[pos.end():])
       else:
         # Convert L1 booling math operator
         def wrap_bool_math_operator(line):
@@ -140,7 +140,7 @@ float tanh_ex(float x) {
 {registers}{kwargs['attrs'].blend}
 [RootSignature("DescriptorTable({require_srv}UAV(u0, numDescriptors={len(out_args)}))")]
 [numthreads({get_extent('threadIdx.x')}, {get_extent('threadIdx.y')}, {get_extent('threadIdx.z')})]
-void CSMain(uint3 threadIdx: SV_GroupThreadID, uint3 blockIdx: SV_GroupID, uint3 dispatchIdx: SV_DispatchThreadID) {{
+void CSMain(uint3 threadIdx: SV_GroupThreadID, uint3 blockIdx: SV_GroupID) {{
   {body}
 }}
 '''
