@@ -113,10 +113,23 @@ namespace ab {
 
     CUfunction hfunc = nullptr;
     CHECK_OK(0 == cuModuleGetFunction(&hfunc, (CUmodule)hModule, fname.c_str()));
-    return { hfunc, query("blockIdx.x"), query("blockIdx.y"), query("blockIdx.z"), query("threadIdx.x"), query("threadIdx.y"), query("threadIdx.z") };
+    std::vector<void*> fdata = { hfunc, query("blockIdx.x"), query("blockIdx.y"), query("blockIdx.z"), query("threadIdx.x"), query("threadIdx.y"), query("threadIdx.z") };
+
+    void *item = query("$", 0);
+    if (item) {
+      fdata.push_back(item);
+
+      for (int i = 0; ; ++i) {
+        void *item = query("$" + std::to_string(i), 0);
+        if (!item)
+          break;
+        fdata.push_back(item);
+      }
+    }
+    return fdata;
   }
 
-  void launchKernel(std::vector<void*> &hFunc, std::vector<void*> &krnl_args, void *stream) {
+  void launchKernel(std::vector<void*> &hFunc, const std::vector<void*> &krnl_args, void *stream) {
     static std::vector<int> *st_ = nullptr;
     if (st_ == nullptr) {
       st_ = new std::vector<int>;
@@ -128,19 +141,26 @@ namespace ab {
           st_->push_back(std::atoi(p));
           p = strtok(nullptr, ",");
         }
-        for (int i = 1; i <= 6; ++i) {
-          long dim = (long)hFunc[i];
-          if (dim < 0) // -200
-            hFunc[i] = (void*)(long)((st_->data()[(-dim) % 100] + ((-dim) / 100) - 1) / ((-dim) / 100));
-        }
       }
     }
 
     std::vector<void*> pargs(krnl_args.size() + st_->size());
     for (int i = 0; i < krnl_args.size(); ++i)
-      pargs[i] = &krnl_args[i];
+      pargs[i] = (void*)&krnl_args[i];
     for (int i = krnl_args.size(); i < pargs.size(); ++i)
       pargs[i] = st_->data() + (i - krnl_args.size());
+
+    if (hFunc.size() > 7) {
+      long attrs = 1;
+      for (int i = 8; i < hFunc.size(); ++i) {
+        long val = (long)hFunc[i];
+        if (val < 0) continue;
+
+        auto ptr = (int*)pargs[i - 8 + (long)hFunc[7]];
+        attrs *= (*ptr + val - 1) / val;
+      }
+      hFunc[1] = (void*)attrs;
+    }
 
     CHECK_OK(0 == cuLaunchKernel((CUfunction)hFunc[0], (long)hFunc[1], (long)hFunc[2], (long)hFunc[3], (long)hFunc[4], (long)hFunc[5], (long)hFunc[6],
       0, (CUstream)stream, (void**)pargs.data(), nullptr));

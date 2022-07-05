@@ -8,7 +8,7 @@ import math
 class Mock(object):
   pass
 
-backend = os.environ['BACKEND']
+backend = os.environ.get('BACKEND', None)
 AntaresGlobal = Mock()
 
 def product(arrlist):

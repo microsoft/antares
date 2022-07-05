@@ -1,5 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
+#if !defined(__EXECUTION_MODULE__)
+#define __EXECUTION_MODULE__
 
 #include <algorithm>
 #include <chrono>
@@ -29,7 +31,9 @@
 
 #define CHECK_OK(x)  ((x) ? 1 : (use_progress ? 0: (fprintf(stderr, "[CheckFail] %s:%d\n", __FILE__, __LINE__), exit(1), 0)))
 
-static int use_progress = 0, debug_output = 0;
+namespace {
+
+static int use_progress = 0;
 
 namespace ab_utils {
 
@@ -211,6 +215,8 @@ void *allocate_tensor(tensor_property &tp) {
   return ab::alloc(align_size, tp.shape, tp.dtype, tp.name);
 }
 
+static int debug_output = 0;
+
 struct ExecutionModule {
   std::vector<tensor_property> global_inputs, global_outputs;
   std::unordered_map<std::string, tensor_property> local_tensors;
@@ -340,3 +346,6 @@ struct ExecutionModule {
     return 0;
   }
 };
+
+} // namespace
+#endif // __EXECUTION_MODULE__
