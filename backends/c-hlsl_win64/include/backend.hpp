@@ -15,6 +15,7 @@
 namespace ab {
 
   static HMODULE hLibDll;
+  static bool cpu_timing = false;
 
   void init(int dev) {
     ab::hLibDll = LoadLibrary(HLSL_LIBRARY_PATH);
@@ -22,6 +23,19 @@ namespace ab {
 
     LOAD_ONCE(dxInit, int (*)(int));
     CHECK(0 == dxInit(0), "Failed initialize DirectX12 device.");
+
+    LOAD_ONCE(dxEventCreate, void* (*)());
+    LOAD_ONCE(dxEventRecord, int (*)(void*, void*));
+    LOAD_ONCE(dxEventElapsedSecond, float (*)(void*, void*));
+    LOAD_ONCE(dxEventDestroy, int (*)(void*));
+
+    void *hEvent = dxEventCreate();
+    dxEventRecord(hEvent, nullptr);
+    float _t = dxEventElapsedSecond(hEvent, hEvent);
+    if (_t < 0) {
+      ab::cpu_timing = true;
+      fprintf(stderr, "[DirectX 12] Failed to enable device timing due to improper TDR setting, falling back to cpu timing.\n"), fflush(stderr);
+    }
   }
 
   void finalize() {
@@ -83,28 +97,29 @@ namespace ab {
   }
 
   void* recordTime(void *stream) {
-    ab::synchronize(stream);
+    if (cpu_timing) {
+      ab::synchronize(stream);
 
-    auto pt = new std::chrono::high_resolution_clock::time_point;
-    *pt = std::chrono::high_resolution_clock::now();
-    return pt;
-#if 0
+      auto pt = new std::chrono::high_resolution_clock::time_point;
+      *pt = std::chrono::high_resolution_clock::now();
+      return pt;
+    }
     LOAD_ONCE(dxEventCreate, void* (*)());
     LOAD_ONCE(dxEventRecord, int (*)(void*, void*));
     void *hEvent = dxEventCreate();
     CHECK(0 == dxEventRecord(hEvent, stream), "Failed to record event to default stream.");
     return hEvent;
-#endif
   }
 
   double convertToElapsedTime(void *hStart, void *hStop) {
-    auto h1 = (std::chrono::high_resolution_clock::time_point*)hStart;
-    auto h2 = (std::chrono::high_resolution_clock::time_point*)hStop;
+    if (cpu_timing) {
+      auto h1 = (std::chrono::high_resolution_clock::time_point*)hStart;
+      auto h2 = (std::chrono::high_resolution_clock::time_point*)hStop;
 
-    double et = 1e-9 * std::chrono::duration_cast<std::chrono::nanoseconds>(*h2 - *h1).count();
-    delete h1, h2;
-    return std::max(et, 1e-9);
-#if 0
+      double et = 1e-9 * std::chrono::duration_cast<std::chrono::nanoseconds>(*h2 - *h1).count();
+      delete h1, h2;
+      return std::max(et, 1e-9);
+    }
     ab::synchronize(nullptr);
     LOAD_ONCE(dxEventElapsedSecond, float (*)(void*, void*));
     LOAD_ONCE(dxEventDestroy, int (*)(void*));
@@ -113,7 +128,6 @@ namespace ab {
     CHECK(0 == dxEventDestroy(hStart), "Failed to destroy released event.");
     CHECK(0 == dxEventDestroy(hStop), "Failed to destroy released event.");
     return (double)sec;
-#endif
   }
 }
 
