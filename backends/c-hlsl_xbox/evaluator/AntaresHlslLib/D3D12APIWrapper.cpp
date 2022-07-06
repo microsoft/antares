@@ -809,7 +809,11 @@ float dxEventElapsedSecond(void* hStart, void* hStop)
     uint64_t* pData;
     uint64_t timeStampStart = 0;
     uint64_t timeStampEnd = 0;
-    IFE(device->globalQueryHeaps[pQueryStart->heapIdx].pReadbackBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pData)));
+
+    HRESULT res = device->globalQueryHeaps[pQueryStart->heapIdx].pReadbackBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pData));
+    if (res < 0)
+        return -1.0f;
+
     timeStampStart = pData[pQueryStart->queryIdxInHeap];
 
     if (pQueryEnd->heapIdx == pQueryStart->heapIdx)

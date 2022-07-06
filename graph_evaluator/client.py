@@ -106,7 +106,8 @@ def eval(kernel_path, **kwargs):
     for line in output.split('\n'):
         if line.startswith('- '):
             key, val = line[2:].split(': ')
-            if val[0].isdigit():
+            val = val.strip()
+            if val[-1].isdigit():
               results[key] = float(val)
             else:
               results[key] = val

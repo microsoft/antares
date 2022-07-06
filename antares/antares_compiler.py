@@ -52,11 +52,13 @@ def init_arg_parser():
     if sys.argv[1] == 'save':
       save_path = get_real_path(sys.argv[2])
     elif sys.argv[1] == 'compile':
+      os.environ.pop('STEP', 0)
       assert len(sys.argv) == 4, f"Improper compile arguments. Please follow:\n\n    BACKEND={backend} antares compile ./saved_code.cpp ./<dest-folder>\n"
       eval_path = get_real_path(sys.argv[2])
       dump_path = get_real_path(sys.argv[3])
       load_eval(eval_path)
     elif sys.argv[1] == 'eval':
+      os.environ.pop('STEP', 0)
       eval_path = get_real_path(sys.argv[2])
       load_eval(eval_path)
     elif sys.argv[1] == 'torch-setup':
