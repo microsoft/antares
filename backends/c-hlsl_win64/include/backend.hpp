@@ -7,7 +7,7 @@
 #include <windows.h>
 #include <chrono>
 
-#define HLSL_LIBRARY_PATH R"(.\antares_hlsl_v0.2_x64.dll)"
+#define HLSL_LIBRARY_PATH R"(.\antares_hlsl_v0.3_x64.dll)"
 
 #define CHECK(stat, reason, ...)  ((stat) ? 1 : (fprintf(stderr, "[CheckFail] "), fprintf(stderr, reason, ##__VA_ARGS__), fprintf(stderr, "\n\n"), fflush(stderr), exit(1), 0))
 #define LOAD_ONCE(func, ftype)   static FARPROC __ ## func; if (!__ ## func) { __ ## func = GetProcAddress(hLibDll, #func); CHECK(__ ## func, "No such function symbol defined: %s()", #func); } auto func = (ftype)__ ## func;
@@ -73,12 +73,44 @@ namespace ab {
     LOAD_ONCE(dxModuleGetShader, void* (*)(const void*, const char*));
     void *hFunction = dxModuleGetShader(hModule, fname.c_str());
     CHECK(hFunction != nullptr, "Failed to get function `%s` from module.", fname.c_str());
-    return { hFunction };
+
+    auto query = [&](const std::string &axis, ssize_t defval = 1) -> void* {
+      auto it = threads.find(axis);
+      if (it == threads.end())
+        return (void*)defval;
+      return (void*)(ssize_t)it->second;
+    };
+
+    std::vector<void*> fdata = { hFunction };
+
+    void *item = query("$", 0);
+    if (item) {
+      fdata.push_back(item);
+
+      for (int i = 0; ; ++i) {
+        void *item = query("$" + std::to_string(i), 0);
+        if (!item)
+          break;
+        fdata.push_back(item);
+      }
+    }
+    return fdata;
   }
 
-  void launchKernel(const std::vector<void*> &hFunction, const std::vector<void*> &krnl_args, void *stream) {
-    LOAD_ONCE(dxShaderLaunchAsync, int (*)(void*, void* const*, void*));
-    CHECK(0 == dxShaderLaunchAsync(hFunction[0], krnl_args.data(), stream), "Failed to launch a shader.");
+  void launchKernel(const std::vector<void*> &hFunc, const std::vector<void*> &krnl_args, void *stream) {
+    LOAD_ONCE(dxShaderLaunchAsyncExt, int (*)(...));
+    ssize_t attrs = -1;
+    if (hFunc.size() > 1) {
+      for (int i = 2; i < hFunc.size(); ++i) {
+        ssize_t val = (ssize_t)hFunc[i];
+        if (val < 0) continue;
+
+        auto ptr = (ssize_t*)&krnl_args[i - 2 + (ssize_t)hFunc[1]];
+        attrs *= (*ptr + val - 1) / val;
+      }
+      attrs = -attrs;
+    }
+    CHECK(0 == dxShaderLaunchAsyncExt(hFunc[0], krnl_args.data(), krnl_args.size(), attrs, stream), "Failed to launch a shader.");
   }
 
   void memcpyHtoD(void *dptr, void *hptr, size_t byteSize, void *stream) {

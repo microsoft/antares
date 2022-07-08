@@ -25,6 +25,7 @@ __EXPORT__ void*  dxModuleGetShader(void *hModule, const char* fname);
 __EXPORT__ void   dxModuleUnload(void* hModule);
 
 __EXPORT__ void*  dxShaderLoad_v2(const char* shader_src);
+__EXPORT__ int    dxShaderLaunchAsyncExt(void* hShader, void** buffers, int n, int blocks, void* hStream);
 __EXPORT__ int    dxShaderLaunchAsync(void* hShader, void** buffers, void* hStream);
 __EXPORT__ void   dxShaderUnload(void* hShader);
 
