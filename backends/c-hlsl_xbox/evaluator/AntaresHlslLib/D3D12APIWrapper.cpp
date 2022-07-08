@@ -15,6 +15,12 @@
 #include "D3D12Util.h"
 #include "D3D12APIWrapper.h"
 
+#if _DEBUG
+#define DEBUG_PRINT(msg) (fprintf(stderr, "[DEBUG] %s\n", msg), fflush(stderr))
+#else
+#define DEBUG_PRINT(msg)
+#endif
+
 namespace {
     static bool _USE_DESCRIPTOR_HEAP_ = false;
 
@@ -75,16 +81,34 @@ namespace {
         }
     };
 
+    struct VectorHasher {
+        int operator()(const std::vector<size_t>& V) const {
+            int hash = V.size();
+            for (auto& i : V) {
+                hash ^= (i ^ (i >> 32)) + 0x9e3779b9L;
+            }
+            return hash;
+        }
+    };
+
+    std::string ReplaceAll(std::string str, const std::string& from, const std::string& to) {
+        size_t start_pos = 0;
+        while ((start_pos = str.find(from, start_pos)) != std::string::npos) {
+            str.replace(start_pos, from.length(), to);
+            start_pos += to.length(); // Handles case where 'to' is a substring of 'from'
+        }
+        return str;
+    }
+
     struct dx_shader_t
     {
         int block[3], thread[3];
         std::vector<dx_tensor_t> inputs, outputs;
         std::string source;
-        CD3DX12_SHADER_BYTECODE bytecode;
+        std::unordered_map<std::vector<size_t>, ComPtr<ID3D12PipelineState>, VectorHasher> pPSO_ht; // bytecode_ht;
 
         // Added D3D12 resource ptr.
         ComPtr<ID3D12RootSignature> pRootSignature;
-        ComPtr<ID3D12PipelineState> pPSO;
     };
 
     // Stream is wrapper of resources for record and execute commands.
@@ -126,11 +150,8 @@ namespace {
         std::vector<size_t> queryHeapsNeedToResolve;
     };
 
-#ifdef _DEBUG
-    static std::shared_ptr<antares::D3DDevice> device = std::make_shared<antares::D3DDevice>(true, true);
-#else
-    static std::shared_ptr<antares::D3DDevice> device = std::make_shared<antares::D3DDevice>(false, false);
-#endif
+
+    static std::shared_ptr<antares::D3DDevice> device;
 
     static void* defaultStream = nullptr;
 
@@ -175,6 +196,16 @@ namespace {
 
 int dxInit(int flags)
 {
+    DEBUG_PRINT(__func__);
+
+    if (device == nullptr) {
+#ifdef _DEBUG
+        device = std::make_shared<antares::D3DDevice>(true, true);
+#else
+        device = std::make_shared<antares::D3DDevice>(false, false);
+#endif
+    }
+
     if (!defaultStream)
     {
         // flags = 1: enable descriptor heap, no logging
@@ -193,6 +224,8 @@ int dxInit(int flags)
 }
 
 int dxFinalize() {
+    DEBUG_PRINT(__func__);
+
     device = nullptr;
     defaultStream = nullptr;
     return 0;
@@ -200,6 +233,8 @@ int dxFinalize() {
 
 void* dxMemAlloc(size_t bytes)
 {
+    DEBUG_PRINT(__func__);
+
     if (dxInit(0) != 0)
         return nullptr;
 
@@ -218,6 +253,8 @@ void* dxMemAlloc(size_t bytes)
 
 int dxMemFree(void* vPtr)
 {
+    DEBUG_PRINT(__func__);
+
     VirtualFree(vPtr, 0, MEM_RELEASE);
     memBlocks.erase(vPtr);
     return 0;
@@ -225,6 +262,8 @@ int dxMemFree(void* vPtr)
 
 void* dxShaderLoad_v2(const char* shader_src)
 {
+    DEBUG_PRINT(__func__);
+
     if (dxInit(0) != 0)
         return nullptr;
 
@@ -240,27 +279,6 @@ void* dxShaderLoad_v2(const char* shader_src)
 
     dx_shader_t* handle = new dx_shader_t;
     handle->source = source;
-
-#ifdef _USE_DXC_
-    // Use cs_6_0 since dxc only supports cs_6_0 or higher shader models.
-    auto computeShader = antares::DXCompiler::Get()->Compile(source.data(), (uint32_t)source.size(), L"CSMain", L"cs_6_0");
-    if (computeShader != nullptr)
-        handle->bytecode = CD3DX12_SHADER_BYTECODE(computeShader->GetBufferPointer(), computeShader->GetBufferSize());
-    else
-        abort();
-#else
-    ComPtr<ID3DBlob> computeShader = nullptr, errMsg = nullptr;
-    if (D3DCompile(source.data(), source.size(), NULL, NULL, NULL, "CSMain", "cs_5_1", 0, 0, &computeShader, &errMsg) >= 0 && computeShader != nullptr)
-        handle->bytecode = CD3DX12_SHADER_BYTECODE(computeShader.Get());
-    else {
-        auto error_message = (char*)errMsg->GetBufferPointer();
-        fprintf(stderr, "[ERROR] D3D12: Shader Compile Failed: %s\n", error_message);
-    }
-#endif
-    if (computeShader == nullptr) {
-        //delete handle;
-        return nullptr;
-    }
 
     std::string str_params;
     std::vector<std::string> arr_params, in_params, out_params;
@@ -321,8 +339,6 @@ void* dxShaderLoad_v2(const char* shader_src)
     auto& hd = handle;
 
     ComPtr<ID3D12RootSignature>& m_computeRootSignature = hd->pRootSignature;
-    ComPtr<ID3D12PipelineState>& m_computeState = hd->pPSO;
-    D3D12_COMPUTE_PIPELINE_STATE_DESC computePsoDesc{};
 
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC computeRootSignatureDesc;
     std::vector<CD3DX12_ROOT_PARAMETER1> computeRootParameters;
@@ -356,21 +372,20 @@ void* dxShaderLoad_v2(const char* shader_src)
 
     IFE(D3DX12SerializeVersionedRootSignature(&computeRootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1_1, &signature, &error));
     IFE(device->pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_GRAPHICS_PPV_ARGS(m_computeRootSignature.ReleaseAndGetAddressOf())));
-
-    computePsoDesc.CS = hd->bytecode;
-    computePsoDesc.pRootSignature = m_computeRootSignature.Get();
-    IFE(device->pDevice->CreateComputePipelineState(&computePsoDesc, IID_GRAPHICS_PPV_ARGS(m_computeState.ReleaseAndGetAddressOf())));
-
     return handle;
 }
 
 void dxShaderUnload(void* hShader)
 {
+    DEBUG_PRINT(__func__);
+
     free(hShader);
 }
 
 void* dxModuleLoad(const char* module_src)
 {
+    DEBUG_PRINT(__func__);
+
     std::string source;
     const char proto[] = "file://";
     if (strncmp(module_src, proto, sizeof(proto) - 1) == 0) {
@@ -401,6 +416,8 @@ void* dxModuleLoad(const char* module_src)
 
 void dxModuleUnload(void* hModule)
 {
+    DEBUG_PRINT(__func__);
+
     auto& hShaderDict = *(std::unordered_map<std::string, void*>*)hModule;
     for (auto& it : hShaderDict)
         dxShaderUnload(it.second);
@@ -409,6 +426,8 @@ void dxModuleUnload(void* hModule)
 
 void* dxModuleGetShader(void* hModule, const char* fname)
 {
+    DEBUG_PRINT(__func__);
+
     auto& dict = *(std::unordered_map<std::string, void*>*)hModule;
     auto it = dict.find(fname);
     return it != dict.end() ? it->second : nullptr;
@@ -416,6 +435,8 @@ void* dxModuleGetShader(void* hModule, const char* fname)
 
 void* dxStreamCreate()
 {
+    DEBUG_PRINT(__func__);
+
     if (dxInit(0) != 0)
         return nullptr;
 
@@ -446,6 +467,8 @@ void* dxStreamCreate()
 
 int dxStreamDestroy(void* hStream)
 {
+    DEBUG_PRINT(__func__);
+
     if (hStream != nullptr)
         delete (dx_stream_t*)hStream;
     return 0;
@@ -453,6 +476,8 @@ int dxStreamDestroy(void* hStream)
 
 int dxStreamSubmit(void* hStream)
 {
+    DEBUG_PRINT(__func__);
+
     if (!hStream)
         hStream = defaultStream;
 
@@ -480,6 +505,8 @@ int dxStreamSubmit(void* hStream)
 
 int dxStreamSynchronize(void* hStream)
 {
+    DEBUG_PRINT(__func__);
+
     if (!hStream)
         hStream = defaultStream;
 
@@ -499,6 +526,8 @@ int dxStreamSynchronize(void* hStream)
 
 int dxMemcpyDtoDAsync(void* dst, void* src, size_t bytes, void* hStream)
 {
+    DEBUG_PRINT(__func__);
+
     if (!hStream)
         hStream = defaultStream;
 
@@ -522,6 +551,8 @@ int dxMemcpyDtoDAsync(void* dst, void* src, size_t bytes, void* hStream)
 
 int dxMemcpyHtoDAsync(void* dst, void* src, size_t bytes, void *hStream)
 {
+    DEBUG_PRINT(__func__);
+
     if (!hStream)
         hStream = defaultStream;
 
@@ -563,6 +594,8 @@ int dxMemcpyHtoDAsync(void* dst, void* src, size_t bytes, void *hStream)
 
 int dxMemcpyDtoHAsync(void* dst, void* src, size_t bytes, void* hStream)
 {
+    DEBUG_PRINT(__func__);
+
     if (!hStream)
         hStream = defaultStream;
 
@@ -599,14 +632,49 @@ int dxMemcpyDtoHAsync(void* dst, void* src, size_t bytes, void* hStream)
     return dxStreamSynchronize(hStream);
 }
 
-int dxShaderLaunchAsync(void* hShader, void** buffers, void* hStream)
+int dxShaderLaunchAsyncExt(void* hShader, void** buffers, int n, int blocks, void* hStream)
 {
+    DEBUG_PRINT(__func__);
+
     if (!hStream)
         hStream = defaultStream;
-
     auto hd = (dx_shader_t*)hShader;
     auto pStream = (dx_stream_t*)hStream;
     assert(pStream->state == dx_stream_t::State::INRECORD);
+
+    n -= hd->inputs.size() + hd->outputs.size();
+    n = max(0, n);
+    std::vector<size_t> pargs(n);
+    for (int i = 0, j = hd->inputs.size() + hd->outputs.size(); i < n; ++i, ++j)
+        pargs[i] = (size_t)buffers[j];
+    auto pso_iter = hd->pPSO_ht.find(pargs);
+    if (pso_iter == hd->pPSO_ht.end()) {
+        std::string src = hd->source;
+        for (int i = 0; i < n; ++i)
+            src = ReplaceAll(src, "@" + std::to_string(i) + "@", std::to_string(pargs[i]));
+        CD3DX12_SHADER_BYTECODE bytecode;
+#ifdef _USE_DXC_
+        // Use cs_6_0 since dxc only supports cs_6_0 or higher shader models.
+        auto computeShader = antares::DXCompiler::Get()->Compile(src.data(), (uint32_t)src.size(), L"CSMain", L"cs_6_0");
+        if (computeShader != nullptr)
+            bytecode = CD3DX12_SHADER_BYTECODE(computeShader->GetBufferPointer(), computeShader->GetBufferSize());
+#else
+        ComPtr<ID3DBlob> computeShader = nullptr, errMsg = nullptr;
+        if (D3DCompile(source.data(), source.size(), NULL, NULL, NULL, "CSMain", "cs_5_1", 0, 0, &computeShader, &errMsg) >= 0 && computeShader != nullptr)
+            bytecode = CD3DX12_SHADER_BYTECODE(computeShader.Get());
+#endif
+        if (computeShader == nullptr) {
+            //delete handle;
+            IFE(-1);
+        }
+
+        ComPtr<ID3D12PipelineState>& m_computeState = hd->pPSO_ht[pargs];
+        D3D12_COMPUTE_PIPELINE_STATE_DESC computePsoDesc{};
+        computePsoDesc.CS = bytecode;
+        computePsoDesc.pRootSignature = hd->pRootSignature.Get();
+        IFE(device->pDevice->CreateComputePipelineState(&computePsoDesc, IID_GRAPHICS_PPV_ARGS(m_computeState.ReleaseAndGetAddressOf())));
+        pso_iter = hd->pPSO_ht.find(pargs);
+    }
 
     std::vector<void*> devicePtrs;
     std::vector<UINT64> offsets;
@@ -636,7 +704,7 @@ int dxShaderLaunchAsync(void* hShader, void** buffers, void* hStream)
     }
 
     pStream->pCmdList->SetComputeRootSignature(hd->pRootSignature.Get());
-    pStream->pCmdList->SetPipelineState(hd->pPSO.Get());
+    pStream->pCmdList->SetPipelineState(pso_iter->second.Get());
 
 
     if (_USE_DESCRIPTOR_HEAP_)
@@ -696,15 +764,22 @@ int dxShaderLaunchAsync(void* hShader, void** buffers, void* hStream)
     // Set StartTimer here to only consider kernel execution time.
     device->StartTimer(pStream->pCmdList.Get(), m_nTimerIndex);
 #endif
-    pStream->pCmdList->Dispatch(hd->block[0], hd->block[1], hd->block[2]);
+    pStream->pCmdList->Dispatch(blocks >= 0 ? blocks : hd->block[0], hd->block[1], hd->block[2]);
 #ifdef _USE_GPU_TIMER_
     device->StopTimer(pStream->pCmdList.Get(), m_nTimerIndex);
 #endif
     return 0;
 }
 
+int dxShaderLaunchAsync(void* hShader, void** buffers, void* hStream)
+{
+    return dxShaderLaunchAsyncExt(hShader, buffers, 0, -1, hStream);
+}
+
 void* dxEventCreate()
 {
+    DEBUG_PRINT(__func__);
+
     if (dxInit(0) != 0)
         return nullptr;
 
@@ -767,6 +842,8 @@ void* dxEventCreate()
 
 int dxEventDestroy(void* hEvent)
 {
+    DEBUG_PRINT(__func__);
+
     if (hEvent == nullptr)
         return -1;
 
@@ -779,6 +856,8 @@ int dxEventDestroy(void* hEvent)
 
 int dxEventRecord(void* hEvent, void* hStream)
 {
+    DEBUG_PRINT(__func__);
+
     if (!hStream)
         hStream = defaultStream;
 
@@ -802,6 +881,8 @@ int dxEventRecord(void* hEvent, void* hStream)
 
 float dxEventElapsedSecond(void* hStart, void* hStop)
 {
+    DEBUG_PRINT(__func__);
+
     auto pQueryStart = (antares::dx_query_t*)hStart;
     auto pQueryEnd = (antares::dx_query_t*)hStop;
 

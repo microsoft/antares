@@ -95,6 +95,10 @@ def eval(kernel_path, **kwargs):
         flags += ['--timeout', timeout]
     else:
       flags += ['--compile']
+
+    if 'VAMAP' in os.environ:
+      flags += ['--vamap', os.environ['VAMAP']]
+
     flags = ' '.join(flags)
     exec_cmd = f'sh -c "cd {os.path.dirname(kernel_path)} && BACKEND={backend} {launcher} {evaluator_path} my_kernel.cc {flags}" || true'
     try:

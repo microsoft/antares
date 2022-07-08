@@ -8,6 +8,7 @@ int main(int argc, char** argv)
     float expected_timeout = -1;
     use_progress = 0;
     int dev = 0, compile = 0;
+    std::string vamap;
 
     for (int i = 2; i < argc; ++i) {
       if (!strcmp(argv[i], "--progress"))
@@ -18,6 +19,8 @@ int main(int argc, char** argv)
         compile = 1;
       else if (!strcmp(argv[i], "--timeout"))
         expected_timeout = std::atof(argv[++i]);
+      else if (!strcmp(argv[i], "--vamap"))
+        vamap = argv[++i];
       else if (!strcmp(argv[i], "--dev"))
         dev = std::atoi(argv[++i]);
       else {
@@ -52,7 +55,7 @@ int main(int argc, char** argv)
       printf("\n- HEX: @");
       for (int i = 0; i < binary.size(); ++i)
         printf("%02X", ((unsigned char)binary[i]));
-      printf("\n"), fflush(stdout);
+      printf("@\n"), fflush(stdout);
       ab::finalize();
       return 0;
     }
@@ -99,8 +102,18 @@ int main(int argc, char** argv)
       ab::memcpyHtoD(dptr, hptr.data(), hptr.size(), nullptr);
       ab::synchronize(nullptr);
     }
+    int expanded_args = 0;
+    if (vamap.size() > 0) {
+      char *p = strtok((char*)vamap.data(), ",");
+      while (p) {
+        p = strchr(p, ':') + 1;
+        global_args.push_back((void*)(size_t)std::atoi(p));
+        p = strtok(nullptr, ",");
+        ++expanded_args;
+      }
+    }
 
-    gm.compute(global_args.data());
+    gm.compute(global_args.data(), expanded_args);
 
     FILE *fp = fopen("stdout.log", "wb");
     CHECK_OK(fp != nullptr);
@@ -136,7 +149,7 @@ int main(int argc, char** argv)
 
     do {
       auto x = ab::recordTime(nullptr);
-      gm.compute(global_args.data());
+      gm.compute(global_args.data(), expanded_args);
       auto y = ab::recordTime(nullptr);
       ab::synchronize(nullptr);
 
@@ -151,7 +164,7 @@ int main(int argc, char** argv)
       tpr = 0.0f;
       x = ab::recordTime(nullptr);
       for (int i = 0; i < num_runs; ++i)
-        gm.compute(global_args.data());
+        gm.compute(global_args.data(), expanded_args);
       y = ab::recordTime(nullptr);
       tpr = ab::convertToElapsedTime(x, y) / num_runs;
       printf("\n- TPR: %g\n", tpr), fflush(stdout);

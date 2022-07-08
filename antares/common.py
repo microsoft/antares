@@ -135,4 +135,6 @@ def cpp_format(code):
   with open(ftemp.name, 'w') as fp:
     fp.write(code)
   st, output = subprocess.getstatusoutput('clang-format < ' + ftemp.name)
-  return code if st != 0 else output
+  if st != 0:
+    return code
+  return output.replace(' @\n', '@\n')

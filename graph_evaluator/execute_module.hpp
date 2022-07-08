@@ -289,7 +289,7 @@ struct ExecutionModule {
     }
   }
 
-  size_t compute(void **args, void *stream = nullptr) {
+  size_t compute(void **args, int expanded_args = 0, void *stream = nullptr) {
     std::unordered_map<std::string, int> tensor_used;
     for (int i = 0; i < global_inputs.size(); ++i)
       ++tensor_used[global_inputs[i].name];
@@ -317,6 +317,8 @@ struct ExecutionModule {
         krnl_args.push_back(tensor_memory[arg]);
       for (auto &arg: it->out_args)
         krnl_args.push_back(tensor_memory[arg]);
+      for (int i = 0; i < expanded_args; ++i)
+        krnl_args.push_back(args[i + global_inputs.size() + global_outputs.size()]);
 
       ab::launchKernel(it->hFunction, krnl_args, stream);
 

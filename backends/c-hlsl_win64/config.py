@@ -9,7 +9,7 @@ local_dll_path = os.environ["ANTARES_DRIVER_PATH"]
 
 if not os.path.exists(f'{local_dll_path}/dxcompiler.dll'):
     print('\nDownload Microsoft DirectX Shader Compiler 6 ...\n')
-    os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.2.0/antares_hlsl_v0.2_x64.dll -o {local_dll_path}/antares_hlsl_v0.2_x64.dll')
+    os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.2.0/antares_hlsl_v0.3_x64.dll -o {local_dll_path}/antares_hlsl_v0.3_x64.dll')
     os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.2.0/dxil.dll -o {local_dll_path}/dxil.dll')
     os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.2.0/dxcompiler.dll -o {local_dll_path}/dxcompiler.dll')
 
@@ -133,6 +133,9 @@ float tanh_ex(float x) {
     registers = ''.join(registers)
 
     require_srv = f'SRV(t0, numDescriptors={len(in_args)}), ' if len(in_args) > 0 else ''
+
+    if 'VAMAP' in os.environ:
+      pre_defines = '\n'.join([f'#define {x.split(":")[0]} @{i}@' for i, x in enumerate(os.environ['VAMAP'].split(','))]) + f'\n{pre_defines}'
 
     full_body = f'''
 {pre_defines}

@@ -130,25 +130,9 @@ namespace ab {
   }
 
   void launchKernel(std::vector<void*> &hFunc, const std::vector<void*> &krnl_args, void *stream) {
-    static std::vector<int> *st_ = nullptr;
-    if (st_ == nullptr) {
-      st_ = new std::vector<int>;
-      std::string vamap = getenv("VAMAP") ? getenv("VAMAP") : "";
-      if (vamap.size() > 0) {
-        char *p = strtok((char*)vamap.data(), ",");
-        while (p) {
-          p = strchr(p, ':') + 1;
-          st_->push_back(std::atoi(p));
-          p = strtok(nullptr, ",");
-        }
-      }
-    }
-
-    std::vector<void*> pargs(krnl_args.size() + st_->size());
+    std::vector<void*> pargs(krnl_args.size());
     for (int i = 0; i < krnl_args.size(); ++i)
       pargs[i] = (void*)&krnl_args[i];
-    for (int i = krnl_args.size(); i < pargs.size(); ++i)
-      pargs[i] = st_->data() + (i - krnl_args.size());
 
     if (hFunc.size() > 7) {
       long attrs = 1;

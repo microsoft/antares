@@ -624,7 +624,7 @@ def main_compute(code_only=False):
     AntaresGlobal.device_source = device_source
     kernel_path = local_get_dir_file('my_kernel.cc', dir_sid=None)
     hex_code = eval_client.eval(kernel_path=kernel_path, dev_id=(fix_device_id if fix_device_id >= 0 else dev_id), backend_root=backend_root, compile=1)['HEX']
-    hex_code = binascii.unhexlify(hex_code[1:].strip())
+    hex_code = binascii.unhexlify(hex_code[1:-1].strip())
     is_positive_result = dump_binaries(path=dump_path, hex_code=hex_code, properties=eval_client.EVAL_PROPERTIES)
   else:
     result = evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None)
