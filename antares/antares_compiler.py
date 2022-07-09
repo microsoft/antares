@@ -304,11 +304,11 @@ def dump_binaries(path, hex_code, properties):
   kernel_name, _ = split_between(device_source, '\n// LOCAL: ', ' -- ')
 
   leading_idx, keydict = 0, {}
-  keywords, leading_idx = split_between(device_source, '\n  // [thread_extent] ', '\n', leading_idx=leading_idx)
+  keywords, leading_idx = split_between(device_source, '// [thread_extent] ', '\n', leading_idx=leading_idx)
   while keywords is not None:
     key, value = keywords.split(' = ')
     keydict[key.strip()] = int(value.strip())
-    keywords, leading_idx = split_between(device_source, '\n  // [thread_extent] ', '\n', leading_idx=leading_idx)
+    keywords, leading_idx = split_between(device_source, '// [thread_extent] ', '\n', leading_idx=leading_idx)
 
   keydict = ', '.join([f'{{"{x}", {keydict[x]}}}' for x in keydict])
 
