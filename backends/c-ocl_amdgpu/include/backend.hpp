@@ -81,14 +81,44 @@ namespace ab {
     size_t gx = query("get_group_id(0)"), gy = query("get_group_id(1)"), gz = query("get_group_id(2)");
 
     CHECK_OK(lx * ly * lz <= max_work_group_size);
-    return { kernel, (void*)(gx * lx), (void*)(gy * ly), (void*)(gz * lz), (void*)lx, (void*)ly, (void*)lz };
+    std::vector<void*> fdata = { kernel, (void*)(gx * lx), (void*)(gy * ly), (void*)(gz * lz), (void*)lx, (void*)ly, (void*)lz };
+
+    void *item = (void*)query("$", 0);
+    if (item) {
+      fdata.push_back(item);
+
+      for (int i = 0; ; ++i) {
+        void *item = (void*)query("$" + std::to_string(i), 0);
+        if (!item)
+          break;
+        fdata.push_back(item);
+      }
+    }
+
+    return fdata;
   }
 
-  void launchKernel(const std::vector<void*> &hFunction, const std::vector<void*> &krnl_args, void *stream) {
-    auto kernel = (cl_kernel)hFunction[0];
-    for (int i = 0; i < krnl_args.size(); ++i)
-      CHECK_OK(0 == clSetKernelArg(kernel, i, sizeof(cl_mem), (void*)&krnl_args[i]));
-    CHECK_OK(0 == clEnqueueNDRangeKernel(cmdqueue, kernel, 3, nullptr, (size_t*)(hFunction.data() + 1), (size_t*)(hFunction.data() + 4), 0, nullptr, nullptr));
+  void launchKernel(std::vector<void*> &hFunc, const std::vector<void*> &krnl_args, void *stream) {
+    if (hFunc.size() > 7) {
+      long attrs = 1;
+      for (int i = 8; i < hFunc.size(); ++i) {
+        long val = (long)hFunc[i];
+        if (val < 0) continue;
+
+        auto ptr = (size_t*)&krnl_args[i - 8 + (long)hFunc[7]];
+        attrs *= (*ptr + val - 1) / val;
+      }
+      hFunc[1] = (void*)(size_t(hFunc[4]) * attrs);
+    }
+
+    auto kernel = (cl_kernel)hFunc[0];
+    for (int i = 0; i < krnl_args.size(); ++i) {
+      if (i >= (long)hFunc[7])
+        CHECK_OK(0 == clSetKernelArg(kernel, i, sizeof(cl_uint), (void*)&krnl_args[i]));
+      else
+        CHECK_OK(0 == clSetKernelArg(kernel, i, sizeof(cl_mem), (void*)&krnl_args[i]));
+    }
+    CHECK_OK(0 == clEnqueueNDRangeKernel(cmdqueue, kernel, 3, nullptr, (size_t*)(hFunc.data() + 1), (size_t*)(hFunc.data() + 4), 0, nullptr, nullptr));
   }
 
   void memcpyHtoD(void *dptr, void *hptr, size_t byteSize, void *stream) {
