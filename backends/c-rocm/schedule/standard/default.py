@@ -9,7 +9,7 @@ import json
 import os
 
 def _schedule_single(attrs, output, op_name, tail_op):
-  s = attrs.scheduler
+  cfg, s = attrs.auto_config, attrs.scheduler
 
   def cache_local(output):
     if not tail_op:
@@ -20,16 +20,16 @@ def _schedule_single(attrs, output, op_name, tail_op):
     return output, OL
   s.cache_local = cache_local
 
-  num_inputs = len(s[output].op.input_tensors)
-
-  # Rough classification of computing features
-  if len(output.op.reduce_axis) > 0 and (num_inputs <= 1 or len(output.shape) <= 1):
-    from .algo_reduce import schedule_branch
-    return schedule_branch(attrs, output, f"R{op_name}:", tail_op)
-
   if len(output.op.reduce_axis) > 0:
-    from .algo_tiling import schedule_branch
-    return schedule_branch(attrs, output, f"T{op_name}:")
+    num_inputs = len(s[output].op.input_tensors)
+    tile_algo = cfg.define_knob(f"M{op_name}T", [True, False]) if num_inputs > 1 else False
+
+    if tile_algo:
+      from .algo_tiling import schedule_branch
+      return schedule_branch(attrs, output, f"M{op_name}:")
+    else:
+      from .algo_reduce import schedule_branch
+      return schedule_branch(attrs, output, f"M{op_name}:", tail_op)
 
   from .algo_format import schedule_branch
   return schedule_branch(attrs, output, f"F{op_name}:")
