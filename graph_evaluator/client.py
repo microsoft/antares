@@ -2,7 +2,6 @@
 # Licensed under the MIT license.
 
 import os, sys, time, math
-import numpy as np
 import subprocess
 import hashlib
 import traceback

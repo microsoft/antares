@@ -5,7 +5,6 @@ import os
 import re
 import copy
 import json
-import numpy as np
 
 # Tensor name: the first charactor must be lower case letter, and the following charactors must be within [a-zA-Z_]
 # Axis name: the first charactor must be upper case letter, and the following charactors must be within [a-zA-Z]

@@ -2,7 +2,7 @@
 # Licensed under the MIT license.
 
 from tvm import te
-import numpy as np
+from antares.common import product
 
 def schedule(attrs):
   cfg, s = attrs.auto_config, attrs.scheduler
@@ -36,9 +36,9 @@ def schedule(attrs):
     slice_global_axes = []
     for i in range(len(output.op.axis)):
       if cfg.define_knob(f"{prefix}:_{i}", [False, True], init_vals=[0,]):
-        slice_global_axes.append(cfg.apply_split(s, output, output.op.axis[i], [-1, slice_data[i][1], int(np.product(slice_data[i][2:]))]))
+        slice_global_axes.append(cfg.apply_split(s, output, output.op.axis[i], [-1, slice_data[i][1], int(product(slice_data[i][2:]))]))
       else:
-        slice_global_axes.append(cfg.apply_split(s, output, output.op.axis[i], [-1, 1, int(np.product(slice_data[i][1:]))]))
+        slice_global_axes.append(cfg.apply_split(s, output, output.op.axis[i], [-1, 1, int(product(slice_data[i][1:]))]))
 
     s[output].reorder(*([x[0] for x in slice_global_axes] + [x[1] for x in slice_global_axes] + [x[2] for x in slice_global_axes]))
 

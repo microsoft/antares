@@ -1,7 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-import numpy as np
 import logging
 import sys, time, subprocess
 import json
