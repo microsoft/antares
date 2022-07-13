@@ -4,7 +4,6 @@
 import os
 import json
 import itertools
-import numpy as np
 from common import backend, AntaresGlobal
 from lang.einstein_v2 import walk_in_ast, OpTensor
 
