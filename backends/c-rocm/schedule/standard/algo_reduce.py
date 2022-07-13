@@ -6,12 +6,12 @@ from tvm import te
 def schedule_branch(attrs, output, prefix, tail_op):
   cfg, s = attrs.auto_config, attrs.scheduler
 
-  rax = cfg.define_knob(f"{prefix}S", [x for x in range(len(s[output].op.reduce_axis))])
+  rax = cfg.define_knob(f"{prefix}RA", [x for x in range(len(s[output].op.reduce_axis))])
   for i, ax in enumerate(s[output].op.reduce_axis):
-    sizes = cfg.define_split(f"{prefix}R{i}", 1024 * 16, num_outputs=2, init_vals=[[-1, attrs.device_props.warp_size]])
+    sizes = cfg.define_split(f"{prefix}R{i}", 1024 * 16, num_outputs=3, init_vals=[[-1, 1, attrs.device_props.warp_size]])
     if rax == i:
-      use_wrap_reduce = cfg.define_knob(f"{prefix}W", [True, False])
-      r_range = attrs.device_props.warp_size if use_wrap_reduce else sizes[1]
+      use_wrap_reduce = cfg.define_knob(f"{prefix}U", [True, False])
+      r_range = attrs.device_props.warp_size if use_wrap_reduce else sizes[-1]
       r_range = max(r_range, 2)
       ko, ki = s[output].split(ax, factor=r_range)
       s[output].bind(ki, te.thread_axis("threadIdx.x"))
@@ -28,8 +28,8 @@ def schedule_branch(attrs, output, prefix, tail_op):
 
   data_slices, main_op = [], tail_op or output
   for i, ax in enumerate(s[main_op].op.axis):
-    sizes = cfg.define_split(f"{prefix}D{i}", attrs.get_extent(ax), num_outputs=2)
-    data_slices.append(sizes)
+    sizes = cfg.define_split(f"{prefix}D{i}", attrs.get_extent(ax), num_outputs=4)
+    data_slices.append([-1, sizes[1] * sizes[2] * sizes[3]])
 
   if not getattr(tail_op, 'is_fused', False):
     data_slices = data_slices[:len(s[output].op.axis)]

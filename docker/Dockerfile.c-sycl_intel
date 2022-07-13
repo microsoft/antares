@@ -1,4 +1,4 @@
-FROM intel/oneapi-hpckit:2021.2-devel-ubuntu18.04
+FROM intel/oneapi-hpckit:latest
 
 ENV DEBIAN_FRONTEND noninteractive
 ENV PYTHONDONTWRITEBYTECODE 1
