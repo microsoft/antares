@@ -8,7 +8,8 @@ from common import backend
 local_dll_path = os.environ["ANTARES_DRIVER_PATH"]
 
 if not os.path.exists(f'{local_dll_path}/dxcompiler.dll'):
-    print('\nDownload Microsoft DirectX Shader Compiler 6 ...\n')
+    print('\nDownload Microsoft DirectX Shader Compiler 6 ...')
+    print('\nIf this is the first time to setup DirectX environment, please download and apply this file (https://github.com/microsoft/antares/releases/download/v0.1.0/antares_hlsl_tdr_v0.1.reg) into Windows Registry to avoid Blue Screen Issue triggered by default Windows TDR setting.\n')
     os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.2.0/antares_hlsl_v0.3_x64.dll -o {local_dll_path}/antares_hlsl_v0.3_x64.dll')
     os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.2.0/dxil.dll -o {local_dll_path}/dxil.dll')
     os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.2.0/dxcompiler.dll -o {local_dll_path}/dxcompiler.dll')
@@ -129,6 +130,8 @@ float tanh_ex(float x) {
 '''
     body = re.sub(r'\b__syncthreads\b', 'GroupMemoryBarrierWithGroupSync', body)
     body = re.sub(r'\(signed char\)', '', body)
+    body = re.sub(r'__float2half_rn', '', body)
+    body = re.sub(r'__half2float_rn', '', body)
     lds = '\n'.join(lds)
     registers = ''.join(registers)
 
