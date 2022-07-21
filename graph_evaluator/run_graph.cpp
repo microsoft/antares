@@ -78,6 +78,9 @@ int main(int argc, char** argv)
       } else if (it.dtype == "int64") {
         for (size_t x = 0; x < size; ++x)
           ((long*)hptr.data())[x] = 0;
+      } else if (it.dtype == "float16") {
+        for (size_t x = 0; x < size; ++x)
+          ((short*)hptr.data())[x] = 0x3c;
       } else if (it.dtype == "float32") {
         for (size_t x = 0; x < size; ++x)
           ((float*)hptr.data())[x] = (x + i + 1) % 71;

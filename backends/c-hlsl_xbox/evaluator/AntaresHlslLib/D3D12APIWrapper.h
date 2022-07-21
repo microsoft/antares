@@ -20,6 +20,7 @@ __EXPORT__ int    dxMemcpyHtoDAsync(void* dst, void* src, size_t bytes, void* hS
 __EXPORT__ int    dxMemcpyDtoHAsync(void* dst, void* src, size_t bytes, void* hStream);
 __EXPORT__ int    dxMemcpyDtoDAsync(void* dst, void* src, size_t bytes, void* hStream);
 
+__EXPORT__ int    dxModuleSetCompat(const char* compat_name);
 __EXPORT__ void*  dxModuleLoad(const char* module_src);
 __EXPORT__ void*  dxModuleGetShader(void *hModule, const char* fname);
 __EXPORT__ void   dxModuleUnload(void* hModule);
