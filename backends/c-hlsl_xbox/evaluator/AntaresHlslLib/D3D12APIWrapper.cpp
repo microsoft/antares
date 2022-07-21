@@ -8,6 +8,8 @@
 #include <unordered_map>
 #include <vector>
 #include <map>
+#include <locale>
+#include <codecvt>
 
 #define _USE_GPU_TIMER_
 #define _USE_DXC_
@@ -632,6 +634,14 @@ int dxMemcpyDtoHAsync(void* dst, void* src, size_t bytes, void* hStream)
     return dxStreamSynchronize(hStream);
 }
 
+static std::wstring default_compat = L"cs_6_0";
+
+int dxModuleSetCompat(const char* compat_name) {
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+    ::default_compat = converter.from_bytes(compat_name);
+    return 0;
+}
+
 int dxShaderLaunchAsyncExt(void* hShader, void** buffers, int n, int blocks, void* hStream)
 {
     DEBUG_PRINT(__func__);
@@ -655,7 +665,7 @@ int dxShaderLaunchAsyncExt(void* hShader, void** buffers, int n, int blocks, voi
         CD3DX12_SHADER_BYTECODE bytecode;
 #ifdef _USE_DXC_
         // Use cs_6_0 since dxc only supports cs_6_0 or higher shader models.
-        auto computeShader = antares::DXCompiler::Get()->Compile(src.data(), (uint32_t)src.size(), L"CSMain", L"cs_6_0");
+        auto computeShader = antares::DXCompiler::Get()->Compile(src.data(), (uint32_t)src.size(), L"CSMain", default_compat.c_str());
         if (computeShader != nullptr)
             bytecode = CD3DX12_SHADER_BYTECODE(computeShader->GetBufferPointer(), computeShader->GetBufferSize());
 #else
