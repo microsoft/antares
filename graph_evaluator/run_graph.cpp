@@ -80,7 +80,7 @@ int main(int argc, char** argv)
           ((long*)hptr.data())[x] = 0;
       } else if (it.dtype == "float16") {
         for (size_t x = 0; x < size; ++x)
-          ((short*)hptr.data())[x] = 0x3c;
+          ((unsigned short*)hptr.data())[x] = fp32_to_fp16((x + i + 1) % 71);
       } else if (it.dtype == "float32") {
         for (size_t x = 0; x < size; ++x)
           ((float*)hptr.data())[x] = (x + i + 1) % 71;
@@ -134,6 +134,9 @@ int main(int argc, char** argv)
       if (it.dtype == "int32") {
         for (size_t x = 0; x < byte_size / sizeof(int); ++x)
           digest += (x + 1) % 83 * ((int*)hptr.data())[x];
+      } else if (it.dtype == "float16") {
+        for (size_t x = 0; x < byte_size / sizeof(unsigned short); ++x)
+          digest += (x + 1) % 83 * fp16_to_fp32(((unsigned short*)hptr.data())[x]);
       } else if (it.dtype == "float32") {
         for (size_t x = 0; x < byte_size / sizeof(float); ++x)
           digest += (x + 1) % 83 * ((float*)hptr.data())[x];
