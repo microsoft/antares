@@ -118,6 +118,7 @@ namespace ab {
     void *item = query("$", 0);
     if (item) {
       fdata.push_back(item);
+      fdata.push_back(query("$$", 1));
 
       for (int i = 0; ; ++i) {
         void *item = query("$" + std::to_string(i), 0);
@@ -135,12 +136,12 @@ namespace ab {
       pargs[i] = (void*)&krnl_args[i];
 
     if (hFunc.size() > 7) {
-      long attrs = 1;
-      for (int i = 8; i < hFunc.size(); ++i) {
+      long attrs = (long)hFunc[8];
+      for (int i = 9; i < hFunc.size(); ++i) {
         long val = (long)hFunc[i];
         if (val < 0) continue;
 
-        auto ptr = (int*)pargs[i - 8 + (long)hFunc[7]];
+        auto ptr = (int*)pargs[i - 9 + (long)hFunc[7]];
         attrs *= (*ptr + val - 1) / val;
       }
       hFunc[1] = (void*)attrs;
