@@ -89,6 +89,7 @@ namespace ab {
     void *item = query("$", 0);
     if (item) {
       fdata.push_back(item);
+      fdata.push_back(query("$$", 1));
 
       for (int i = 0; ; ++i) {
         void *item = query("$" + std::to_string(i), 0);
@@ -104,14 +105,14 @@ namespace ab {
     LOAD_ONCE(dxShaderLaunchAsyncExt, int (*)(...));
     ssize_t attrs = -1;
     if (hFunc.size() > 1) {
-      for (int i = 2; i < hFunc.size(); ++i) {
+      attrs = (ssize_t)hFunc[2];
+      for (int i = 3; i < hFunc.size(); ++i) {
         ssize_t val = (ssize_t)hFunc[i];
         if (val < 0) continue;
 
-        auto ptr = (ssize_t*)&krnl_args[i - 2 + (ssize_t)hFunc[1]];
+        auto ptr = (ssize_t*)&krnl_args[i - 3 + (ssize_t)hFunc[1]];
         attrs *= (*ptr + val - 1) / val;
       }
-      attrs = -attrs;
     }
     CHECK(0 == dxShaderLaunchAsyncExt(hFunc[0], krnl_args.data(), krnl_args.size(), attrs, stream), "Failed to launch a shader.");
   }
