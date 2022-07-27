@@ -6,6 +6,7 @@ import copy
 import importlib
 import json
 import re
+import traceback
 
 custom_dtypes = {"@": 0}
 
@@ -45,7 +46,7 @@ def codegen(ast_seq, input_dict, output_dict, best_config, space_only=False):
       raise Exception("Not support custom dtype of bits = %d" % bits)
 
   def emit_tvm_body(node, props):
-    if node._op == 'const':
+    if node._op in ('const', 'alter'):
       return 'tvm.tir.const(%s, dtype="%s")' % (node._value, node._dtype)
     elif node._op == 'axis_range':
       return 'tvm.tir.const(%s, dtype="%s")' % (props['explicit_range'][node._value], node._dtype)

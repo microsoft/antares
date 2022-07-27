@@ -26,7 +26,7 @@ def do_native_translation_v2(codeset, **kwargs):
   kernel_name, in_args, out_args, body = codeset
   expand_args = ', '.join([f'{x[0]}* __restrict__ {x[1]}' for x in in_args + out_args])
   if 'VAMAP' in os.environ:
-    expand_args += ', ' + ', '.join([f'int {x.split(":")[0]}' for x in os.environ['VAMAP'].split(',')])
+    expand_args += ', ' + ', '.join([f'int {x.split(":")[0]}' if '/_' not in x.split(":")[0] else x.split(":")[0].replace('/', ' ') for x in os.environ['VAMAP'].split(',')])
 
   def get_extent(key, defval=1):
     str_pat = f'// [thread_extent] {key} = '
