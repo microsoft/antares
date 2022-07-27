@@ -37,6 +37,12 @@ class OpTensor:
     def dtype(self):
         return self._dtype
 
+    def alter(self, name):
+        assert self._op == 'const', "Only constant value is allowed for function alter()."
+        self._op = 'alter'
+        self._alter_name = name
+        return self
+
     def val(self):
         assert self._op == 'axis', "Only axis op can support value fetch for its range."
         return OpTensor('axis_range', self._value, 'int32')
@@ -353,8 +359,8 @@ def parse_to_ast(expr):
   props['explicit_range'] = copy.deepcopy(explicit_range)
   return ast
 
-def const(other):
-  return OpTensor.parse(other)
+def const(other, dtype=None):
+  return OpTensor.parse(other, output_dtype=dtype)
 
 def f_op(func, *args):
   assert len(args) > 0
@@ -453,7 +459,7 @@ def walk_in_ast(parent, attr_id, func, args):
         _walk(ch, node._value['if'], i)
       _walk(node._value['true'], node._value, 'true')
       _walk(node._value['false'], node._value, 'false')
-    elif node._op in ['axis', 'const', 'axis_range']:
+    elif node._op in ['axis', 'const', 'axis_range', 'alter']:
       pass
     else:
       raise Exception('Unhandled node type in walk_in_ast(): %s' % node._op)
