@@ -129,7 +129,7 @@ float tanh_ex(float x) {
 #define tanh tanh_ex
 '''
     body = re.sub(r'\b__syncthreads\b', 'GroupMemoryBarrierWithGroupSync', body)
-    body = re.sub(r'\(signed char\)', '', body)
+    body = re.sub(r'\(char\)', '', body)
     body = re.sub(r'\(short\)', '(min16int)', body)
     body = re.sub(r'__float2half_rn', '', body)
     body = re.sub(r'__half2float_rn', '', body)
