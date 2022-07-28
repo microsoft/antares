@@ -307,6 +307,7 @@ def codegen(ast_seq, input_dict, output_dict, best_config, space_only=False):
     code = refactor_special_names(code, global_arg_props)
     tensors_pool = json.loads(os.environ.get('TENSORS_POOL', '{}'))
     kernel_slices = []
+    code = re.sub(r'\bsigned char\b', 'char', code)
     for kernel in ('\n' + code).split('\nextern ')[1:]:
       kernel = 'extern %s\n' % kernel[:kernel.index('\n}') + 2]
       idx = kernel.index(' void ') + 6
