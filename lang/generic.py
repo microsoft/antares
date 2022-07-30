@@ -13,6 +13,15 @@ import copy
 from antares.common import AntaresGlobal
 
 def einstein_v2(exprss, input_dict, extra_outputs=[], **kwargs):
+  for k in input_dict:
+    if isinstance(input_dict[k], str):
+      dtype, shapes = input_dict[k].strip()[:-1].split('[')
+      if not shapes.strip():
+        shapes = []
+      else:
+        shapes = [x.strip() for x in shapes.split(',')]
+        shapes = [int(x) if x.isdigit() else x for x in shapes]
+      input_dict[k] = {"dtype": dtype.strip(), "shape": shapes}
   if 'VAMAP_EXTRA' not in os.environ:
     vamap_extra = {}
     for key in input_dict:

@@ -352,13 +352,13 @@ struct ExecutionModule {
 };
 
 
-float fp16_to_fp32(unsigned short in) {
+inline float fp16_to_fp32(unsigned short in) {
     unsigned int f = ((in & 0x8000) << 16) | (((in & 0x7c00) + 0x1C000) << 13) | ((in & 0x03FF) << 13);
-    return *(float*)&f;
+    return *reinterpret_cast<float*>(&f);
 }
 
-unsigned short fp32_to_fp16(float in) {
-    unsigned int x = *((unsigned int*)&in);
+inline unsigned short fp32_to_fp16(float in) {
+    unsigned int x = *reinterpret_cast<unsigned int*>(&in);
     unsigned short h = ((x >> 16) & 0x8000) | ((((x & 0x7f800000) - 0x38000000) >> 13) & 0x7c00) | ((x >> 13) & 0x03ff);
     return h;
 }

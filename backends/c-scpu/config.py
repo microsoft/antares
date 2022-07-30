@@ -1,6 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
+import os
 import subprocess
 
 def to_search_space(ast_seq, input_dict, output_dict):
@@ -19,9 +20,15 @@ def get_execution_parallism():
 
 def do_native_translation_v2(codeset, **kwargs):
   kernel_name, in_args, out_args, body = codeset
-  s_in_args = [f'auto * {x[1]} = ({x[0]}* __restrict)__args[{i}];' for i, x in enumerate(in_args)]
-  s_out_args = [f'auto * {x[1]} = ({x[0]}*)__args[{i + len(in_args)}];' for i, x in enumerate(out_args)]
+  s_in_args = [f'auto* {x[1]} = ({x[0]}* __restrict)__args[{i}];' for i, x in enumerate(in_args)]
+  s_out_args = [f'auto* {x[1]} = ({x[0]}*)__args[{i + len(in_args)}];' for i, x in enumerate(out_args)]
   expand_args = ' '.join(s_in_args + s_out_args)
+  if 'VAMAP' in os.environ:
+    for i, x in enumerate(os.environ['VAMAP'].split(',')):
+      dtype, name = 'int', x.split(':')[0]
+      if '/_' in name:
+        dtype, name = name.split('/')
+      expand_args += f'auto {name} = *({dtype}*)&__args[{i + len(in_args) + len(out_args)}];'
 
   full_body = f'''
 #include <math.h>

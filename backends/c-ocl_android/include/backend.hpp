@@ -168,7 +168,7 @@ namespace ab {
     auto h2 = (std::chrono::high_resolution_clock::time_point*)hStop;
 
     double et = 1e-9 * std::chrono::duration_cast<std::chrono::nanoseconds>(*h2 - *h1).count();
-    delete h1, h2;
+    delete h1; delete h2;
     return std::max(et, 1e-9);
   }
 }
