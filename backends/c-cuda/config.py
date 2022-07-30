@@ -48,32 +48,10 @@ def do_native_translation_v2(codeset, **kwargs):
 #ifndef __CUDA_COMMON_MACRO__
 #define __CUDA_COMMON_MACRO__
 
-#define __ITEM_0_OF__(v) (v).x
-#define __ITEM_1_OF__(v) (v).y
-#define __ITEM_2_OF__(v) (v).z
-#define __ITEM_3_OF__(v) (v).w
-
-#define __STORE_ITEM_0__(t, out, ido, in, idi) *(t*)(out + ido) = *(t*)(in + idi)
-#define __STORE_ITEM_1__(t, out, ido, in, idi)
-#define __STORE_ITEM_2__(t, out, ido, in, idi)
-#define __STORE_ITEM_3__(t, out, ido, in, idi)
-
-#define MAKE_VEC4_OP(type) \\
-  __forceinline__ __device__ type operator+(const type &l, const type &r) {{ return make_##type(l.x + r.x, l.y + r.y, l.z + r.z, l.w + r.w); }} \\
-  __forceinline__ __device__ type operator-(const type &l, const type &r) {{ return make_##type(l.x - r.x, l.y - r.y, l.z - r.z, l.w - r.w); }} \\
-  __forceinline__ __device__ type operator*(const type &l, const type &r) {{ return make_##type(l.x * r.x, l.y * r.y, l.z * r.z, l.w * r.w); }} \\
-  __forceinline__ __device__ type operator/(const type &l, const type &r) {{ return make_##type(l.x / r.x, l.y / r.y, l.z / r.z, l.w / r.w); }} \\
-  __forceinline__ __device__ type operator%(const type &l, const type &r) {{ return make_##type(l.x % r.x, l.y % r.y, l.z % r.z, l.w % r.w); }}
-#define MAKE_VEC2_OP(type) \\
-  __forceinline__ __device__ type operator+(const type &l, const type &r) {{ return make_##type(l.x + r.x, l.y + r.y); }} \\
-  __forceinline__ __device__ type operator-(const type &l, const type &r) {{ return make_##type(l.x - r.x, l.y - r.y); }} \\
-  __forceinline__ __device__ type operator*(const type &l, const type &r) {{ return make_##type(l.x * r.x, l.y * r.y); }} \\
-  __forceinline__ __device__ type operator/(const type &l, const type &r) {{ return make_##type(l.x / r.x, l.y / r.y); }} \\
-  __forceinline__ __device__ type operator%(const type &l, const type &r) {{ return make_##type(l.x % r.x, l.y % r.y); }}
-
-MAKE_VEC4_OP(int4)
-MAKE_VEC2_OP(int2)
+#if (__CUDA_ARCH__ >= 600)
 {cuda_linux_half}
+#endif
+
 #endif
 {kwargs['attrs'].blend}
 

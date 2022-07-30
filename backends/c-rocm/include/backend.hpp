@@ -82,7 +82,14 @@ namespace ab {
       CHECK_OK(0 == cuDeviceGetAttribute(&minor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, _current_device));
       _gpu_arch = std::to_string(major * 10 + minor);
     }
-    std::vector<std::string> compile_args = {"/usr/local/cuda/bin/nvcc", path, "--fatbin", "-O2", "-gencode", ("arch=compute_" + _gpu_arch + ",code=sm_" + _gpu_arch), "-o", (path + ".out")};
+    std::vector<std::string> compile_args = {"/usr/local/cuda/bin/nvcc", path, "--fatbin", "-O2", "-o", (path + ".out")};
+    static std::vector<std::string> compat = {"52", "53", "60", "61", "62", "70", "72", "75", "80"};
+    if (getenv("CUDA_ALL_ARCH") == nullptr)
+      compat = { _gpu_arch };
+    for (int i = 0; i < compat.size(); ++i) {
+      compile_args.push_back("-gencode");
+      compile_args.push_back("arch=compute_" + compat[i] + ",code=sm_" + compat[i]);
+    }
 #else
     static std::string _gpu_arch;
     if (!_gpu_arch.size()) {
