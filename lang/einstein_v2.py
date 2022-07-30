@@ -190,6 +190,10 @@ class OpTensor:
     def call(self, func_name, others=None, output_dtype=None):
         if others is None:
           others = []
+        if isinstance(others, tuple):
+          others = list(others)
+        if not isinstance(others, list):
+          others = [others]
         for i in range(len(others)):
           others[i] = OpTensor.parse(others[i])
         if func_name == 'remainder' and len(others) == 0:

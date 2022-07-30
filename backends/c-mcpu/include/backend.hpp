@@ -178,13 +178,15 @@ namespace ab {
   }
 
   std::vector<void*> moduleGetFunction(const void *hModule, const std::string &fname, const std::unordered_map<std::string, int> &threads) {
-    return { dlsym((void*)hModule, fname.c_str()), (void*)(long)threads.find("__rank__")->second };
-  }
+    auto query = [&](const std::string &axis, long defval = 1) -> void* {
+      auto it = threads.find(axis);
+      if (it == threads.end())
+        return (void*)defval;
+      return (void*)(long)it->second;
+    };
 
-  void launchKernel(const std::vector<void*> &hFunction, const std::vector<void*> &krnl_args, void *stream) {
-    std::vector<void*> task = hFunction;
-    task.insert(task.end(), krnl_args.begin(), krnl_args.end());
-    _task_queue.push_back(std::move(task));
+    std::vector<void*> hfunc = { dlsym((void*)hModule, fname.c_str()), query("__rank__") };
+    return hfunc;
   }
 
   void synchronize(void *stream) {
@@ -206,6 +208,18 @@ namespace ab {
       }
       _task_queue.clear();
     }
+  }
+
+  void launchKernel(const std::vector<void*> &hFunction, const std::vector<void*> &krnl_args, void *stream) {
+#if defined(TORCH_API_INCLUDE_EXTENSION_H)
+    ab::init(0);
+#endif
+    std::vector<void*> task = hFunction;
+    task.insert(task.end(), krnl_args.begin(), krnl_args.end());
+    _task_queue.push_back(std::move(task));
+#if defined(TORCH_API_INCLUDE_EXTENSION_H)
+    synchronize(stream);
+#endif
   }
 
   void memcpyHtoD(void *dptr, void *hptr, size_t byteSize, void *stream) {
@@ -233,7 +247,7 @@ namespace ab {
     auto h2 = (std::chrono::high_resolution_clock::time_point*)hStop;
 
     double et = 1e-9 * std::chrono::duration_cast<std::chrono::nanoseconds>(*h2 - *h1).count();
-    delete h1, h2;
+    delete h1; delete h2;
     return std::max(et, 1e-9);
   }
 }
