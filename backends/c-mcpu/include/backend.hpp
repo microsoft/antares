@@ -152,9 +152,9 @@ namespace ab {
     auto path = tempfile.get_path();
 
     if (use_avx512)
-      ab_utils::Process({"clang++", path, "-std=c++17", "-ldl", "-lpthread", "-fPIC", "-shared", "-O3", "-o", path + ".out", "-ffast-math", "-march=skylake-avx512"}, 10);
+      ab_utils::Process({"clang++", path, "-std=c++17", "-ldl", "-lpthread", "-fPIC", "-shared", "-O2", "-o", path + ".out", "-ffast-math", "-march=skylake-avx512"}, 10);
     else
-      ab_utils::Process({"g++", path, "-std=c++17", "-ldl", "-lpthread", "-fPIC", "-shared", "-O3", "-o", path + ".out", "-ffast-math", "-march=native"}, 10);
+      ab_utils::Process({"g++", path, "-std=c++17", "-ldl", "-lpthread", "-fPIC", "-shared", "-O2", "-o", path + ".out", "-ffast-math"}, 10);
 
     path = (path[0] == '/' ? path : "./" + path) + ".out";
     return file_read(path.c_str());

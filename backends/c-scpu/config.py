@@ -33,6 +33,7 @@ def do_native_translation_v2(codeset, **kwargs):
   full_body = f'''
 #include <math.h>
 #include <algorithm>
+#include <regex>
 #define rsqrt(x)  (1.0f / sqrt(x))
 {kwargs['attrs'].blend}
 
