@@ -202,7 +202,7 @@ def code_suffix(tpr=-1.0, step_prod=0, step_plan=-1):
 
 def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True, expected_timeout=None):
   if verbose:
-    print("\n[EvalAgent] Evaluating Modules .. (with backend = %s)" % backend)
+    print("\n[EvalAgent] Evaluating Modules .. (for backend = %s)" % backend)
 
   def handle_result(result):
     correctness = None
@@ -237,6 +237,8 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
       kernel_path = codehub_db(os.environ['COMPUTE_V1'], source_code=device_source + code_suffix(tpr=t))
       print('  >> Update current code to codehub: %s' % kernel_path)
 
+  code_only = int(os.environ.get('CODE_ONLY', 0)) > 0
+
   def do_evaluate(expected_timeout):
     try:
       if expected_timeout is None:
@@ -249,7 +251,7 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
 
       results = eval_client.eval(kernel_path=local_get_dir_file('my_kernel.cc', dir_sid=dir_sid),
                   expected_timeout=expected_timeout,
-                  dev_id=(fix_device_id if fix_device_id >= 0 else dev_id), backend_root=backend_root
+                  dev_id=(fix_device_id if fix_device_id >= 0 else dev_id), backend_root=backend_root, compile=1 if code_only else 0
                 )
       return results
     except SystemExit:
@@ -263,7 +265,7 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
     results = do_evaluate(expected_timeout)
   except:
     results = None
-  if results is not None:
+  if results is not None and not code_only:
     handle_result(results)
   if results is None or results.get('K/0', False) is False:
     return None
