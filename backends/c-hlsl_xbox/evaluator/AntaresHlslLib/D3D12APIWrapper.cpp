@@ -303,7 +303,7 @@ void* dxShaderLoad_v2(const char* shader_src)
     if (!arr_params[0].size())
         in_params.clear();
 
-    auto parse_tensor = [&](const std::string & param) -> dx_tensor_t {
+    auto parse_tensor = [&](const std::string& param) -> dx_tensor_t {
         dx_tensor_t ret;
         if (legacy_format) {
             auto parts = ssplit(param, "/");
@@ -487,7 +487,7 @@ int dxStreamSubmit(void* hStream)
     if (pStream->state == dx_stream_t::State::INRECORD)
     {
         pStream->state = dx_stream_t::State::SUBMITTED;
-        
+
         // Resolve all query heaps when necessary
         for (auto q : pStream->queryHeapsNeedToResolve)
         {
@@ -498,7 +498,7 @@ int dxStreamSubmit(void* hStream)
         pStream->pCmdList->Close();
         ID3D12CommandList* cmdlists[] = { pStream->pCmdList.Get() };
         device->pCommandQueue->ExecuteCommandLists(1, cmdlists);
-       
+
         // Signal fence.
         pStream->fenceVal = device->SignalFence();
     }
@@ -551,7 +551,7 @@ int dxMemcpyDtoDAsync(void* dst, void* src, size_t bytes, void* hStream)
 }
 
 
-int dxMemcpyHtoDAsync(void* dst, void* src, size_t bytes, void *hStream)
+int dxMemcpyHtoDAsync(void* dst, void* src, size_t bytes, void* hStream)
 {
     DEBUG_PRINT(__func__);
 

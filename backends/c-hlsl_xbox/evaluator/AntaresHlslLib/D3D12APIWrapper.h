@@ -4,35 +4,40 @@
 #ifndef __ANTARES_D3D12_WRAPPER__
 #define __ANTARES_D3D12_WRAPPER__
 
-#define __EXPORT__ extern "C" __declspec(dllexport)
+#ifdef ANTARES_EXPORTS
+#define ANTARES_API __declspec(dllexport)
+#else
+#define ANTARES_API __declspec(dllimport)
+#endif
 
-__EXPORT__ int    dxInit(int flags);
-__EXPORT__ int    dxFinalize();
+extern "C" ANTARES_API	int		dxInit(int flags);
+extern "C" ANTARES_API	int		dxFinalize();
 
-__EXPORT__ void*  dxStreamCreate();
-__EXPORT__ int    dxStreamDestroy(void* hStream);
-__EXPORT__ int    dxStreamSubmit(void* hStream);
-__EXPORT__ int    dxStreamSynchronize(void* hStream);
+extern "C" ANTARES_API	void*	dxStreamCreate();
+extern "C" ANTARES_API	int		dxStreamDestroy(void* hStream);
+extern "C" ANTARES_API	int		dxStreamSubmit(void* hStream);
+extern "C" ANTARES_API	int		dxStreamSynchronize(void* hStream);
 
-__EXPORT__ void*  dxMemAlloc(size_t bytes);
-__EXPORT__ int    dxMemFree(void* dptr);
-__EXPORT__ int    dxMemcpyHtoDAsync(void* dst, void* src, size_t bytes, void* hStream);
-__EXPORT__ int    dxMemcpyDtoHAsync(void* dst, void* src, size_t bytes, void* hStream);
-__EXPORT__ int    dxMemcpyDtoDAsync(void* dst, void* src, size_t bytes, void* hStream);
+extern "C" ANTARES_API	void*	dxMemAlloc(size_t bytes);
+extern "C" ANTARES_API	int		dxMemFree(void* dptr);
+extern "C" ANTARES_API	int		dxMemcpyHtoDAsync(void* dst, void* src, size_t bytes, void* hStream);
+extern "C" ANTARES_API	int		dxMemcpyDtoHAsync(void* dst, void* src, size_t bytes, void* hStream);
+extern "C" ANTARES_API	int		dxMemcpyDtoDAsync(void* dst, void* src, size_t bytes, void* hStream);
 
-__EXPORT__ int    dxModuleSetCompat(const char* compat_name);
-__EXPORT__ void*  dxModuleLoad(const char* module_src);
-__EXPORT__ void*  dxModuleGetShader(void *hModule, const char* fname);
-__EXPORT__ void   dxModuleUnload(void* hModule);
+extern "C" ANTARES_API	int		dxModuleSetCompat(const char* compat_name);
+extern "C" ANTARES_API	void*	dxModuleLoad(const char* module_src);
+extern "C" ANTARES_API	void*	dxModuleGetShader(void* hModule, const char* fname);
+extern "C" ANTARES_API	void	dxModuleUnload(void* hModule);
 
-__EXPORT__ void*  dxShaderLoad_v2(const char* shader_src);
-__EXPORT__ int    dxShaderLaunchAsyncExt(void* hShader, void** buffers, int n, int blocks, void* hStream);
-__EXPORT__ int    dxShaderLaunchAsync(void* hShader, void** buffers, void* hStream);
-__EXPORT__ void   dxShaderUnload(void* hShader);
+extern "C" ANTARES_API	void*	dxShaderLoad_v2(const char* shader_src);
+extern "C" ANTARES_API	int		dxShaderLaunchAsyncExt(void* hShader, void** buffers, int n, int blocks, void* hStream);
+extern "C" ANTARES_API	int		dxShaderLaunchAsync(void* hShader, void** buffers, void* hStream);
+extern "C" ANTARES_API	void	dxShaderUnload(void* hShader);
 
-__EXPORT__ void*  dxEventCreate();
-__EXPORT__ int    dxEventRecord(void* hEvent, void* hStream);
-__EXPORT__ float  dxEventElapsedSecond(void* hStart, void* hStop);
-__EXPORT__ int    dxEventDestroy(void* hEvent);
+extern "C" ANTARES_API	void*	dxEventCreate();
+extern "C" ANTARES_API	int		dxEventRecord(void* hEvent, void* hStream);
+extern "C" ANTARES_API	float	dxEventElapsedSecond(void* hStart, void* hStop);
+extern "C" ANTARES_API	int		dxEventDestroy(void* hEvent);
+
 
 #endif
