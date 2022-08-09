@@ -673,8 +673,8 @@ def rest_service():
               code = main_compute(code_only=True)
               if duplicate_items:
                 code += code_suffix(tpr=-1.0, step_prod=0, step_plan=duplicate_items[0][0])
-            except:
-              print('>> Kernel code failed to generate.')
+            except Exception as ex:
+              print('>> Kernel code failed to generate:', ex)
               code = '[ERROR] ' + traceback.format_exc()
           elif '// Antares Tuning Completed in' not in code and not duplicate_items:
               code = code[:code.rindex('\n// Saved Perf')]
