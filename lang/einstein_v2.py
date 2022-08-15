@@ -9,9 +9,6 @@ import json
 # Tensor name: the first charactor must be lower case letter, and the following charactors must be within [a-zA-Z_]
 # Axis name: the first charactor must be upper case letter, and the following charactors must be within [a-zA-Z]
 
-full_tensor_dict = None
-explicit_range = None
-
 class OpTensor:
     @staticmethod
     def parse(other, output_dtype=None):
@@ -40,6 +37,7 @@ class OpTensor:
     def alter(self, name):
         assert self._op == 'const', "Only constant value is allowed for function alter()."
         self._op = 'alter'
+        explicit_range[name] = (name, int(self._value)) if self._dtype == 'int32' else (name, (self._value, self._dtype))
         self._alter_name = name
         return self
 
@@ -63,7 +61,9 @@ class OpTensor:
           key[i] = OpTensor.parse(key[i])
           it = key[i]
           if it._op == 'axis' and explicit_range[it._value] is None:
-            explicit_range[it._value] = full_tensor_dict[self._value]['shape'][i]
+            k = vamap_tensor[self._value][i]
+            v = full_tensor_dict[self._value]['shape'][i]
+            explicit_range[it._value] = (k, v)
         return OpTensor('get_item', {"tensor": self, "index": key}, self._dtype)
 
     # Calculation Ops
@@ -87,9 +87,9 @@ class OpTensor:
         if other._op == 'const' and other._value == 1:
             return self.cast(output_dtype)
         if other._op == 'const' and self._op == 'axis':
-            if self._value in explicit_range and explicit_range[self._value] is not None:
-                if op_name == '//' and explicit_range[self._value] < other._value:
-                    return OpTensor.parse(0, output_dtype)
+            const_value = (explicit_range.get(self._value) or (None,))[0]
+            if op_name == '//' and isinstance(const_value, int) and const_value <= other._value:
+                return OpTensor.parse(0, output_dtype)
         result = OpTensor('op', {"name": op_name, "inputs": [self, other]}, output_dtype)
         if 'float' in self._dtype and 'int' in other._dtype:
             result = result.cast(self._dtype)
@@ -114,7 +114,8 @@ class OpTensor:
             if other._value == 1:
                 return OpTensor.parse(0, self._dtype)
             if self._op == 'axis':
-                if (explicit_range.get(self._value) or other._value + 1) <= other._value:
+                const_value = (explicit_range.get(self._value) or (None,))[0]
+                if isinstance(const_value, int) and const_value <= other._value:
                     return self
         return OpTensor('op', {"name": "%", "inputs": [self, other]}, self._dtype)
 
@@ -236,7 +237,6 @@ def detach_where_clause(expr):
   else:
     range_desc = ''
 
-  vamap_axes = dict()
   range_items = dict()
   for x in range_desc.split(','):
     x = x.strip()
@@ -247,11 +247,10 @@ def detach_where_clause(expr):
     if ':' in v:
       n, v = v.split(':')
       v = int(v.strip())
-      vamap_axes[k] = (n.strip(), v)
+      range_items[k] = (n.strip(), v)
     else:
       v = int(v.strip())
-    range_items[k] = v
-  os.environ['VAMAP_AXES'] = json.dumps(vamap_axes)
+      range_items[k] = (v, v)
   return expr, range_items
 
 
@@ -296,7 +295,7 @@ def parse_to_ast(expr):
     while f'I{i}' in explicit_range:
       i += 1
     scale_ax_name = f'I{i}'
-    explicit_range[scale_ax_name] = 1
+    explicit_range[scale_ax_name] = (1, 1)
 
   # Init axis nodes
   exec("_id = OpTensor('axis', '_id', 'int32')")
@@ -341,8 +340,8 @@ def parse_to_ast(expr):
       raise Exception("The range of axis `%s` is undeterminzed, please use `where` clause to set the range explicitly." % x)
 
   # Collect output shape inferences
-  props['data_axes'] = [{'name': x, 'range': explicit_range[x]} for x in props['data_axes']]
-  props['reduce_axes'] = [{'name': x, 'range': explicit_range[x]} for x in props['reduce_axes']]
+  props['data_axes'] = [{'name': x, 'range': explicit_range[x][1]} for x in props['data_axes']]
+  props['reduce_axes'] = [{'name': x, 'range': explicit_range[x][1]} for x in props['reduce_axes']]
 
   output_name = lval[:lval.index('[')].strip()
   props['output_name'] = output_name
@@ -365,6 +364,10 @@ def parse_to_ast(expr):
 
 def const(other, dtype=None):
   return OpTensor.parse(other, output_dtype=dtype)
+
+def alter(other):
+  k, v = other.split(':')
+  return const(int(v)).alter(k)
 
 def f_op(func, *args):
   assert len(args) > 0
@@ -472,8 +475,21 @@ def walk_in_ast(parent, attr_id, func, args):
 
 def ir_graph_parser(exprss, input_dict, extra_outputs=[]):
   statements = [s_.strip() for s_ in exprss.split(';')]
-  global full_tensor_dict, explicit_range
-  full_tensor_dict, explicit_range = None, None
+
+  global full_tensor_dict, explicit_range, vamap_tensor
+
+  vamap_tensor = {}
+  for key in input_dict:
+    input_shape = input_dict[key]['shape']
+    vamap_tensor[key] = [None] * len(input_shape)
+    for i in range(len(input_shape)):
+      if isinstance(input_shape[i], str):
+        arg, val = input_shape[i].split(':')
+        assert re.match(r'[A-Za-z]+', arg), 'Invalid arg name setting: "%s"' % arg
+        vamap_tensor[key][i] = arg
+        input_shape[i] = int(val)
+      else:
+        vamap_tensor[key][i] = int(input_shape[i])
 
   visited_inputs = set()
   full_tensor_dict = copy.deepcopy(input_dict)
@@ -482,22 +498,28 @@ def ir_graph_parser(exprss, input_dict, extra_outputs=[]):
   for s in statements:
     if not s:
       continue
+    explicit_range = None
     ast = parse_to_ast(s)
+
     for x in ast['props']['input_dict']:
       if x in input_dict:
         visited_inputs.add(x)
 
     k = ast['props']['output_name']
-    ast_outputs_dict = {k: {"shape": [x['range'] for x in ast['props']['data_axes']], "dtype": ast['root']._dtype}}
-    full_tensor_dict[k] = ast_outputs_dict[k]
+    full_tensor_dict[k] = {"shape": [x['range'] for x in ast['props']['data_axes']], "dtype": ast['root']._dtype}
+
+    vamap_tensor[k] = [explicit_range[x['name']][0] for x in ast['props']['data_axes']]
+
     if k in extra_outputs:
-      output_dict[k] = ast_outputs_dict[k]
+      output_dict[k] = full_tensor_dict[k]
     ast_seq.append(ast)
+
+  os.environ['VAMAP_TENSOR'] = json.dumps(vamap_tensor)
   os.environ['TENSORS_POOL'] = json.dumps(full_tensor_dict)
 
   # Also include the last output
   if k not in extra_outputs:
-    output_dict[k] = ast_outputs_dict[k]
+    output_dict[k] = full_tensor_dict[k]
 
   input_dict = dict([(x, input_dict[x]) for x in visited_inputs])
 

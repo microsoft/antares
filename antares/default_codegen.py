@@ -49,7 +49,10 @@ def codegen(ast_seq, input_dict, output_dict, best_config, space_only=False):
     if node._op in ('const', 'alter'):
       return 'tvm.tir.const(%s, dtype="%s")' % (node._value, node._dtype)
     elif node._op == 'axis_range':
-      return 'tvm.tir.const(%s, dtype="%s")' % (props['explicit_range'][node._value], node._dtype)
+      for x in props['data_axes'] + props['reduce_axes']:
+        if x['name'] == node._value:
+          return 'tvm.tir.const(%s, dtype="%s")' % (x['range'], node._dtype)
+      raise Exception('axes_range for %s is not found.' % node._value)
     elif node._op == 'get_item':
       tensor = node._value['tensor']
       index = node._value['index']

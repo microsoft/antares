@@ -22,18 +22,6 @@ def einstein_v2(exprss, input_dict, extra_outputs=[], **kwargs):
         shapes = [x.strip() for x in shapes.split(',')]
         shapes = [int(x) if x.isdigit() else x for x in shapes]
       input_dict[k] = {"dtype": dtype.strip(), "shape": shapes}
-  if 'VAMAP_EXTRA' not in os.environ:
-    vamap_extra = {}
-    for key in input_dict:
-      input_shape = input_dict[key]['shape']
-      vamap_extra[key] = [None] * len(input_shape)
-      for i in range(len(input_shape)):
-        if isinstance(input_shape[i], str):
-          arg, val = input_shape[i].split(':')
-          assert re.match(r'[A-Za-z]+', arg), 'Invalid arg name setting: "%s"' % arg
-          vamap_extra[key][i] = '_' + arg
-          input_shape[i] = int(val)
-    os.environ['VAMAP_EXTRA'] = json.dumps(vamap_extra)
 
   if 'comments' in kwargs:
     os.environ['COMMENTS'] = json.dumps(kwargs['comments'])
