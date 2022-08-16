@@ -61,7 +61,10 @@ namespace ab {
       return dptr;
     }
     void *dptr = nullptr;
-    CHECK_OK(0 == cuMemAlloc((CUdeviceptr*)&dptr, byteSize));
+    if (byteSize)
+      CHECK_OK(0 == cuMemAlloc((CUdeviceptr*)&dptr, byteSize));
+    else
+      dptr = (void*)1LU;
     return dptr;
   }
 
