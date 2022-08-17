@@ -7,7 +7,7 @@
 #include <windows.h>
 #include <chrono>
 
-#define HLSL_LIBRARY_PATH R"(.\antares_hlsl_v0.3_x64.dll)"
+#define HLSL_LIBRARY_PATH R"(.\antares_hlsl_v0.3.1_x64.dll)"
 
 #define CHECK(stat, reason, ...)  ((stat) ? 1 : (fprintf(stderr, "[CheckFail] "), fprintf(stderr, reason, ##__VA_ARGS__), fprintf(stderr, "\n\n"), fflush(stderr), exit(1), 0))
 #define LOAD_ONCE(func, ftype)   static FARPROC __ ## func; if (!__ ## func) { __ ## func = GetProcAddress(hLibDll, #func); CHECK(__ ## func, "No such function symbol defined: %s()", #func); } auto func = (ftype)__ ## func;
@@ -114,7 +114,7 @@ namespace ab {
         attrs *= (*ptr + val - 1) / val;
       }
     }
-    CHECK(0 == dxShaderLaunchAsyncExt(hFunc[0], krnl_args.data(), krnl_args.size(), attrs, stream), "Failed to launch a shader.");
+    CHECK(0 == dxShaderLaunchAsyncExt(hFunc[0], krnl_args.data(), attrs, stream), "Failed to launch a shader.");
   }
 
   void memcpyHtoD(void *dptr, void *hptr, size_t byteSize, void *stream) {

@@ -21,7 +21,7 @@ namespace AntaresHelloWorldExample
 {
     class Program
     {
-        public const string HlslDllName = @"antares_hlsl_v0.3_x64.dll";
+        public const string HlslDllName = @"antares_hlsl_v0.3.1_x64.dll";
 
         [DllImport(HlslDllName, CallingConvention = CallingConvention.Cdecl)]
         public static extern int dxInit(int flags);

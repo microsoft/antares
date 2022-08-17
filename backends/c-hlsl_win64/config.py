@@ -10,7 +10,7 @@ local_dll_path = os.environ["ANTARES_DRIVER_PATH"]
 if not os.path.exists(f'{local_dll_path}/dxcompiler.dll'):
     print('\nDownload Microsoft DirectX Shader Compiler 6 ...')
     print('\nIf this is the first time to setup DirectX environment, please download and apply this file (https://github.com/microsoft/antares/releases/download/v0.1.0/antares_hlsl_tdr_v0.1.reg) into Windows Registry to avoid Blue Screen Issue triggered by default Windows TDR setting.\n')
-    os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.2.0/antares_hlsl_v0.3_x64.dll -o {local_dll_path}/antares_hlsl_v0.3_x64.dll')
+    os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.2.0/antares_hlsl_v0.3.1_x64.dll -o {local_dll_path}/antares_hlsl_v0.3.1_x64.dll')
     os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.2.0/dxil.dll -o {local_dll_path}/dxil.dll')
     os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.2.0/dxcompiler.dll -o {local_dll_path}/dxcompiler.dll')
 
@@ -36,6 +36,12 @@ def do_native_translation_v2(codeset, **kwargs):
       registers.append('StructuredBuffer<%s> %s: register(t%d);\n' % (buf[0], buf[1], i))
     for i, buf in enumerate(out_args):
       registers.append('RWStructuredBuffer<%s> %s: register(u%d);\n' % (buf[0], buf[1], i))
+
+    if 'VAMAP' in os.environ:
+      cb_args = [f'{x.split(":")[0].replace("/", " ")};\n' for i, x in enumerate(os.environ['VAMAP'].split(',')) if x.strip()]
+      registers += [f'cbuffer cbSettings: register(b0)\n{{\n{"".join(cb_args)}}}']
+    else:
+      cb_args = []
 
     def get_extent(key, defval=1):
       str_pat = f'// [thread_extent] {key} = '
@@ -137,15 +143,13 @@ float tanh_ex(float x) {
     registers = ''.join(registers)
 
     require_srv = f'SRV(t0, numDescriptors={len(in_args)}), ' if len(in_args) > 0 else ''
-
-    if 'VAMAP' in os.environ:
-      pre_defines = '\n'.join([f'#define {x.split(":")[0]} @{i}@' for i, x in enumerate(os.environ['VAMAP'].split(','))]) + f'\n{pre_defines}'
+    require_cbv = f', CBV(b0, numDescriptors={len(cb_args)})' if len(cb_args) > 0 else ''
 
     full_body = f'''
 {pre_defines}
 {lds}
 {registers}{kwargs['attrs'].blend}
-[RootSignature("DescriptorTable({require_srv}UAV(u0, numDescriptors={len(out_args)}))")]
+[RootSignature("DescriptorTable({require_srv}UAV(u0, numDescriptors={len(out_args)}){require_cbv})")]
 [numthreads({get_extent('threadIdx.x')}, {get_extent('threadIdx.y')}, {get_extent('threadIdx.z')})]
 void CSMain(uint3 threadIdx: SV_GroupThreadID, uint3 blockIdx: SV_GroupID) {{
   {body}
