@@ -85,7 +85,7 @@ namespace ab {
       CHECK_OK(0 == cuDeviceGetAttribute(&minor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, _current_device));
       _gpu_arch = std::to_string(major * 10 + minor);
     }
-    std::vector<std::string> compile_args = {"/usr/local/cuda/bin/nvcc", path, "--fatbin", "-O2", "-o", (path + ".out")};
+    std::vector<std::string> compile_args = {"/usr/local/cuda/bin/nvcc", path, "--fatbin", "-w", "-O2", "-o", (path + ".out")};
     static std::vector<std::string> compat = {"52", "53", "60", "61", "62", "70", "72", "75", "80"};
     if (getenv("CUDA_ALL_ARCH") == nullptr)
       compat = { _gpu_arch };
