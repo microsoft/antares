@@ -209,7 +209,7 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
       expected_results = [float(x) for x in os.environ['RESULT'].split(',')]
       for i, corr_result in enumerate(expected_results):
         this_result = result.get(f'K/{i}', None)
-        if this_result is None or abs(float(corr_result) / this_result - 1.0) > 1e-5:
+        if this_result is None or abs((float(corr_result) + 1e-8) / (this_result + 1e-8) - 1.0) > 1e-5:
           correctness = result[f'K/{i}'] = False
 
     if verbose:
