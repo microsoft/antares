@@ -139,6 +139,7 @@ float tanh_ex(float x) {
     body = re.sub(r'\(short\)', '(min16int)', body)
     body = re.sub(r'__float2half_rn', '', body)
     body = re.sub(r'__half2float_rn', '', body)
+    body = re.sub(r'\#pragma\ unroll\b', '[unroll]', body)
     lds = '\n'.join(lds)
     registers = ''.join(registers)
 
