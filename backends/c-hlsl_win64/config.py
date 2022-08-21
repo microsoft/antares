@@ -38,7 +38,7 @@ def do_native_translation_v2(codeset, **kwargs):
       registers.append('RWStructuredBuffer<%s> %s: register(u%d);\n' % (buf[0], buf[1], i))
 
     if 'VAMAP' in os.environ:
-      cb_args = [f'{x.split(":")[0].replace("/", " ")};\n' for i, x in enumerate(os.environ['VAMAP'].split(',')) if x.strip()]
+      cb_args = [f'  {x.split(":")[0].replace("/", " ")};\n' for i, x in enumerate(os.environ['VAMAP'].split(',')) if x.strip()]
       registers += [f'cbuffer cbSettings: register(b0)\n{{\n{"".join(cb_args)}}}']
     else:
       cb_args = []
