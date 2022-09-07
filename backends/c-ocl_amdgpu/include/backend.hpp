@@ -109,6 +109,7 @@ namespace ab {
         attrs *= (*ptr + val - 1) / val;
       }
       hFunc[1] = (void*)(size_t(hFunc[4]) * attrs);
+      if (!hFunc[1]) return;
     }
 
     auto kernel = (cl_kernel)hFunc[0];

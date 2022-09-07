@@ -113,6 +113,7 @@ namespace ab {
         auto ptr = (ssize_t*)&krnl_args[i - 3 + (ssize_t)hFunc[1]];
         attrs *= (*ptr + val - 1) / val;
       }
+      if (!attrs) return;
     }
     CHECK(0 == dxShaderLaunchAsyncExt(hFunc[0], krnl_args.data(), attrs, stream), "Failed to launch a shader.");
   }

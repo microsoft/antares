@@ -365,9 +365,11 @@ def parse_to_ast(expr):
 def const(other, dtype=None):
   return OpTensor.parse(other, output_dtype=dtype)
 
-def alter(other):
+def alter(other, dtype=None):
   k, v = other.split(':')
-  return const(int(v)).alter(k)
+  v = v.strip()
+  assert re.match(r'^[0-9\.]+$', v)
+  return const(eval(v), dtype=dtype).alter(k)
 
 def f_op(func, *args):
   assert len(args) > 0
