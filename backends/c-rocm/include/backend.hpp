@@ -155,6 +155,7 @@ namespace ab {
         attrs *= (*ptr + val - 1) / val;
       }
       hFunc[1] = (void*)attrs;
+      if (!hFunc[1]) return;
     }
 
     CHECK_OK(0 == cuLaunchKernel((CUfunction)hFunc[0], (long)hFunc[1], (long)hFunc[2], (long)hFunc[3], (long)hFunc[4], (long)hFunc[5], (long)hFunc[6],
