@@ -202,6 +202,11 @@ def evaluate_perf(kernel_path, dev_id, device_source, dir_sid=None, verbose=True
   if verbose:
     print("\n[EvalAgent] Evaluating Modules .. (for backend = %s)" % backend)
 
+  try:
+    os.remove(local_get_dir_file('result.txt', dir_sid=dir_sid))
+  except:
+    pass
+
   def handle_result(result):
     correctness = None
     if 'RESULT' in os.environ:
