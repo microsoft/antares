@@ -1102,6 +1102,7 @@ namespace antares {
             {
                 flags.push_back(L"-D__XBOX_MAX_VGPR_COUNT=" + std::to_wstring(vgprLimit));
             }
+            args_i.push_back(L"-D__SHADER_STAGE_COMPUTE=1");
             return flags;
         }
 #endif
@@ -1123,6 +1124,7 @@ namespace antares {
 #endif
             if (std::wstring(profile) != std::wstring(L"cs_6_0"))
                 args_i.push_back(L"-enable-16bit-types");
+            args_i.push_back(L"-D__SHADER_STAGE_COMPUTE=1");
             args_i.push_back(L"-O3");
             args_i.push_back(NULL);
             // Just set a random name "ShaderFile"

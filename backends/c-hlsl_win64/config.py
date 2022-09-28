@@ -10,7 +10,7 @@ local_dll_path = os.environ["ANTARES_DRIVER_PATH"]
 if not os.path.exists(f'{local_dll_path}/dxcompiler.dll'):
     print('\nDownload Microsoft DirectX Shader Compiler 6 ...')
     print('\nIf this is the first time to setup DirectX environment, please download and apply this file (https://github.com/microsoft/antares/releases/download/v0.1.0/antares_hlsl_tdr_v0.1.reg) into Windows Registry to avoid Blue Screen Issue triggered by default Windows TDR setting.\n')
-    os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.2.0/antares_hlsl_v0.3.1_x64.dll -o {local_dll_path}/antares_hlsl_v0.3.1_x64.dll')
+    os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.2.0/antares_hlsl_v0.3.2_x64.dll -o {local_dll_path}/antares_hlsl_v0.3.2_x64.dll')
     os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.2.0/dxil.dll -o {local_dll_path}/dxil.dll')
     os.system(f'curl -Ls https://github.com/microsoft/antares/releases/download/v0.2.0/dxcompiler.dll -o {local_dll_path}/dxcompiler.dll')
 
@@ -33,9 +33,9 @@ def do_native_translation_v2(codeset, **kwargs):
 
     registers = []
     for i, buf in enumerate(in_args):
-      registers.append('StructuredBuffer<%s> %s: register(t%d);\n' % (buf[0], buf[1], i))
-    for i, buf in enumerate(out_args):
       registers.append('RWStructuredBuffer<%s> %s: register(u%d);\n' % (buf[0], buf[1], i))
+    for i, buf in enumerate(out_args):
+      registers.append('RWStructuredBuffer<%s> %s: register(u%d);\n' % (buf[0], buf[1], i + len(in_args)))
 
     if 'VAMAP' in os.environ:
       cb_args = [f'  {x.split(":")[0].replace("/", " ")};\n' for i, x in enumerate(os.environ['VAMAP'].split(',')) if x.strip()]
@@ -74,7 +74,10 @@ def do_native_translation_v2(codeset, **kwargs):
 
           if line[-2:] != ');':
             return line
-          before = line.index(' = (')
+          try:
+            before = line.index(' = (')
+          except:
+            return line
           pos = line.index(' ? ', before)
           after = line.index(' : ', pos)
           output = line[0:before].lstrip()
@@ -143,17 +146,20 @@ float tanh_ex(float x) {
     lds = '\n'.join(lds)
     registers = ''.join(registers)
 
-    require_srv = f'SRV(t0, numDescriptors={len(in_args)}), ' if len(in_args) > 0 else ''
-    require_cbv = f', CBV(b0, numDescriptors={len(cb_args)})' if len(cb_args) > 0 else ''
+    require_cbv = ''
+    if len(cb_args) > 0:
+      require_cbv = f', RootConstants(num32BitConstants={get_extent("cbuffers")}, b0)'
 
     full_body = f'''
 {pre_defines}
 {lds}
 {registers}{kwargs['attrs'].blend}
-[RootSignature("DescriptorTable({require_srv}UAV(u0, numDescriptors={len(out_args)}){require_cbv})")]
+[RootSignature("DescriptorTable(UAV(u0, numDescriptors={len(in_args) + len(out_args)})){require_cbv}")]
 [numthreads({get_extent('threadIdx.x')}, {get_extent('threadIdx.y')}, {get_extent('threadIdx.z')})]
 void CSMain(uint3 threadIdx: SV_GroupThreadID, uint3 blockIdx: SV_GroupID) {{
   {body}
 }}
 '''
+    if re.search(r'\bchar\b', full_body):
+      full_body = re.sub(r'\bchar\b', 'bool', full_body)
     return full_body
