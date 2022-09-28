@@ -28,6 +28,7 @@ int main(int argc, char** argv)
         return 1;
       }
     }
+    typedef long long llong;
 
 #if !defined(_WIN64) || defined(__MINGW64__)
     pthread_t p_timeout_monitor;
@@ -77,7 +78,7 @@ int main(int argc, char** argv)
           ((short*)hptr.data())[x] = 0;
       } else if (it.dtype == "int64") {
         for (size_t x = 0; x < size; ++x)
-          ((long*)hptr.data())[x] = 0;
+          ((llong*)hptr.data())[x] = 0;
       } else if (it.dtype == "float16") {
         for (size_t x = 0; x < size; ++x)
           ((unsigned short*)hptr.data())[x] = fp32_to_fp16((x + i + 1) % 71);
@@ -134,6 +135,9 @@ int main(int argc, char** argv)
       if (it.dtype == "int32") {
         for (size_t x = 0; x < byte_size / sizeof(int); ++x)
           digest += (x + 1) % 83 * ((int*)hptr.data())[x];
+      } else if (it.dtype == "int64") {
+        for (size_t x = 0; x < byte_size / sizeof(llong); ++x)
+          digest += (x + 1) % 83 * ((llong*)hptr.data())[x];
       } else if (it.dtype == "float16") {
         for (size_t x = 0; x < byte_size / sizeof(unsigned short); ++x)
           digest += (x + 1) % 83 * fp16_to_fp32(((unsigned short*)hptr.data())[x]);
