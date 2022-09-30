@@ -43,14 +43,20 @@ namespace ab_utils {
 
   public:
     TempFile(const std::string &extension_name, const std::string &file_content, bool auto_delete = true): auto_delete(auto_delete) {
-      // FIXME: Be careful it's not thread-safe in shared context. Fortunately, no shared context used in current version.
       static unsigned int k_count = 0;
-      this->file_path = ".antares-module-tempfile." + std::to_string(__sync_add_and_fetch(&k_count, 1)) + "." + extension_name;
+      char temp[4096];
 #if defined(_WIN64)
-      static char temp[4096];
       GetTempPath(sizeof(temp), temp);
-      this->file_path = std::string(temp) + "\\" + this->file_path;
+      strcat(temp, "\\");
+#else
+      strcpy(temp, "/tmp/");
 #endif
+      do {
+        this->file_path = std::string(temp) + ".antares-module-tempfile." + std::to_string(__sync_add_and_fetch(&k_count, 1)) + "." + extension_name;
+        FILE *fp = fopen(this->file_path.c_str(), "rb");
+        if (!fp) break;
+        fclose(fp);
+      } while (1);
 
       FILE *fp = fopen(this->file_path.c_str(), "w");
       CHECK_OK(fp != nullptr);

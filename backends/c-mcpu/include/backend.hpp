@@ -98,11 +98,11 @@ private:
 
 namespace ab {
 
-  static std::unordered_map<size_t, std::vector<void*>> _cached_memory;
+  static thread_local std::unordered_map<size_t, std::vector<void*>> _cached_memory;
   static bool use_avx512;
 
-  static std::shared_ptr<ThreadPool> _thread_pool;
-  static std::vector<std::vector<void*>> _task_queue;
+  static thread_local std::shared_ptr<ThreadPool> _thread_pool;
+  static thread_local std::vector<std::vector<void*>> _task_queue;
 
   void init(int dev) {
     static bool inited = false;
