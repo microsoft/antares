@@ -57,9 +57,9 @@ namespace AntaresHelloWorldExample
             var antares_code = @"
 // LOCAL: template_op_kernel0 -- input0:float32[524288], input1:float32[524288] -> output0:float32[524288]
 
-StructuredBuffer<float> input0: register(t0);
-StructuredBuffer<float> input1: register(t1);
-RWStructuredBuffer<float> output0: register(u0);
+RWStructuredBuffer<float> input0: register(u0);
+RWStructuredBuffer<float> input1: register(u1);
+RWStructuredBuffer<float> output0: register(u2);
 
 [numthreads(1, 1, 1)]
 void CSMain(uint3 threadIdx: SV_GroupThreadID, uint3 blockIdx: SV_GroupID, uint3 dispatchIdx: SV_DispatchThreadID) {
