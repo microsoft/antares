@@ -51,6 +51,9 @@ namespace ab_utils {
 #else
       strcpy(temp, "/tmp/");
 #endif
+      if (auto_delete)
+        *temp = 0;
+
       do {
         this->file_path = std::string(temp) + ".antares-module-tempfile." + std::to_string(__sync_add_and_fetch(&k_count, 1)) + "." + extension_name;
         FILE *fp = fopen(this->file_path.c_str(), "rb");
