@@ -46,8 +46,9 @@ def init(**kwargs):
               eval_flags += ' -lpthread'
             break
 
-      compile_flags = f'-D__BACKEND__=\\"{backend}\\" -D__BACKEND_{backend[backend.index("-")+1:]}__ -I{backend_root}/include -std=c++17 -Wno-string-compare -Wno-unused-result -Wno-unused-value {eval_flags}'
+      compile_flags = f'-D__BACKEND__=\\"{backend}\\" -D__BACKEND_{backend[backend.index("-")+1:]}__ -std=c++17 -Wno-string-compare -Wno-unused-result -Wno-unused-value {eval_flags}'
       EVAL_PROPERTIES['compiler'], EVAL_PROPERTIES['compile_flags'] = compiler, compile_flags
+      compile_flags += f' -I{backend_root}/include'
 
       if 0 != os.system(f"diff {backend_root}/include/backend.hpp {os.environ['ANTARES_DRIVER_PATH']}/backend.hpp_{backend} >/dev/null 2>&1"):
         error_info = f"SDK for `{backend}` is not configured correctly, please look into the error messages and reconfigure the corresponding environment."
