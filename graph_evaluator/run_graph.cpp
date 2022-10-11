@@ -8,7 +8,7 @@ int main(int argc, char** argv)
     float expected_timeout = -1;
     use_progress = 0;
     int dev = 0, compile = 0;
-    std::string vamap;
+    std::string vamap, value_absdir;
 
     for (int i = 2; i < argc; ++i) {
       if (!strcmp(argv[i], "--progress"))
@@ -19,7 +19,11 @@ int main(int argc, char** argv)
         compile = 1;
       else if (!strcmp(argv[i], "--timeout"))
         expected_timeout = std::atof(argv[++i]);
-      else if (!strcmp(argv[i], "--vamap"))
+      else if (!strcmp(argv[i], "--value_absdir")) {
+        value_absdir = argv[++i];
+        if (value_absdir.size() > 0 && value_absdir.back() != '/' && value_absdir.back() != '\\')
+          value_absdir += "/";
+      } else if (!strcmp(argv[i], "--vamap"))
         vamap = argv[++i];
       else if (!strcmp(argv[i], "--dev"))
         dev = std::atoi(argv[++i]);
@@ -69,8 +73,23 @@ int main(int argc, char** argv)
       global_args.push_back(dptr);
 
       std::vector<char> hptr(it.mem_size());
+
+      FILE *fp = nullptr;
+      if (value_absdir.size() > 0) {
+        std::string name = value_absdir + it.name;
+        fp = fopen(name.c_str(), "rb");
+      }
+
       size_t size = it.element_size();
-      if (it.dtype == "int32") {
+      if (fp != nullptr) {
+        fseek(fp, 0, SEEK_END);
+        size_t fbytes = ftell(fp);
+        fseek(fp, 0, SEEK_SET);
+        fread(hptr.data(), 1, std::min(it.mem_size(), fbytes), fp);
+        for (int i = fbytes; i < it.mem_size(); ++i)
+          hptr[i] = hptr[i - fbytes];
+        fclose(fp);
+      } else if (it.dtype == "int32") {
         for (size_t x = 0; x < size; ++x)
           ((int*)hptr.data())[x] = 0;
       } else if (it.dtype == "int16") {
