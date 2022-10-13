@@ -204,6 +204,8 @@ class OpTensor:
         if func_name == 'ceil' and len(others) == 0:
           floor_op = self.cast('int64' if self._dtype == 'float64' else 'int32')
           return floor_op.when(self == floor_op, floor_op + const(1).cast(floor_op._dtype))
+        if func_name in ('exp', 'sqrt', 'max', 'min') and self._dtype == 'float16':
+          func_name = f'h{func_name}'
         if output_dtype is None:
           output_dtype = self._dtype
         return OpTensor('call', {"name": func_name, "inputs": [self] + others}, output_dtype)

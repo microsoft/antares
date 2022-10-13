@@ -37,8 +37,8 @@ def do_native_translation_v2(codeset, **kwargs):
 
   cuda_linux_half = ''
   if '_win64' not in backend:
-    cuda_linux_half += '\n__forceinline__ __device__ __half max(const __half &a, const __half &b) {{ return a > b ? a : b; }}'
-    cuda_linux_half += '\n__forceinline__ __device__ __half min(const __half &a, const __half &b) {{ return a < b ? a : b; }}\n'
+    cuda_linux_half += '\n__forceinline__ __device__ __half hmax(const __half &a, const __half &b) { return a > b ? a : b; }'
+    cuda_linux_half += '\n__forceinline__ __device__ __half hmin(const __half &a, const __half &b) { return a < b ? a : b; }\n'
 
   full_body = f'''
 #include <cuda_runtime.h>
@@ -49,7 +49,7 @@ def do_native_translation_v2(codeset, **kwargs):
 #define __CUDA_COMMON_MACRO__
 
 #if (__CUDA_ARCH__ >= 600)
-{cuda_linux_half}
+{cuda_linux_half.strip()}
 #endif
 
 #endif
@@ -59,6 +59,7 @@ extern "C" __global__ __launch_bounds__({launch_bounds}) void {kernel_name}({exp
   {body}
 }}
 '''
-  if kwargs['attrs'].backend.endswith('_win64'):
-    full_body = re.sub(r'\bint64_t\b', '__int64', full_body)
+
+  full_body = re.sub(r'\bint64_t\b', 'long long', full_body)
+  full_body = re.sub(r'\buint64_t\b', 'unsigned long long', full_body)
   return full_body

@@ -41,10 +41,6 @@ def do_native_translation_v2(codeset, **kwargs):
     amdgfx = kwargs['attrs'].device_props.compute_version.split('.')
     amdgfx = 'gfx%d%02x' % (int(amdgfx[0]), int(amdgfx[1]))
 
-  body = re.sub(r'\bhmax\b', 'hip_max', body)
-  body = re.sub(r'\bhmin\b', 'hip_min', body)
-  body = re.sub(r'\bmax\b', 'hip_max', body)
-  body = re.sub(r'\bmin\b', 'hip_min', body)
   launch_bounds = get_extent('threadIdx.x') * get_extent('threadIdx.y') * get_extent('threadIdx.z')
 
   full_body = f'''
@@ -66,8 +62,8 @@ def do_native_translation_v2(codeset, **kwargs):
 
 #define __AMDGFX__ {amdgfx}
 
-template<class T> __forceinline__ __device__ T hip_max(const T &x, const T &y) {{ return x > y ? x : y; }}
-template<class T> __forceinline__ __device__ T hip_min(const T &x, const T &y) {{ return x < y ? x : y; }}
+__forceinline__ __device__ __half hmax(const __half &a, const __half &b) {{ return a > b ? a : b; }}
+__forceinline__ __device__ __half hmin(const __half &a, const __half &b) {{ return a < b ? a : b; }}
 
 #endif
 {kwargs['attrs'].blend}

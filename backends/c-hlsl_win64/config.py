@@ -151,6 +151,11 @@ float tanh_ex(float x) {
       require_cbv = f', RootConstants(num32BitConstants={get_extent("cbuffers")}, b0)'
 
     full_body = f'''
+#define hsqrt(x)    sqrt(x)
+#define hexp(x)     exp(x)
+#define hmax(x, y)  max(x, y)
+#define hmin(x, y)  min(x, y)
+
 {pre_defines}
 {lds}
 {registers}{kwargs['attrs'].blend}
