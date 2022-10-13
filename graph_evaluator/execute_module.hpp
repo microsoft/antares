@@ -137,11 +137,7 @@ inline static void file_write(const char *path, const std::string &code) {
   CHECK_OK(code.size() == fwrite((void*)code.data(), 1, code.size(), fp));
   fclose(fp);
 }
-}
 
-#include "backend.hpp"
-
-namespace {
 std::string get_between(const std::string &str, const std::string &begin, const std::string &end, int start_idx = 0, const std::string &def_ret = "") {
     if (start_idx < 0)
         return def_ret;
@@ -167,7 +163,11 @@ std::vector<std::string> ssplit(const std::string &str, const std::string &sub, 
         ret.push_back(str.substr(it));
     return ret;
 }
+} // namespace
 
+#include "backend.hpp"
+
+namespace {
 struct tensor_property {
     std::string name, dtype;
     std::vector<size_t> shape;

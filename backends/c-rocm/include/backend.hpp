@@ -100,7 +100,12 @@ namespace ab {
       CHECK_OK(0 == hipGetDeviceProperties(&prop, _current_device));
       _gpu_arch = std::to_string(prop.gcnArch);
     }
-    std::vector<std::string> compile_args = {"/opt/rocm/bin/hipcc", path, "--genco", "-O2", ("--amdgpu-target=gfx" + _gpu_arch), "-Wno-ignored-attributes", "-o", (path + ".out")};
+
+    auto code = get_between(source, "\n#define __AMDGFX__ ", "\n");
+    if (code.size() == 0)
+      code = "gfx" + _gpu_arch;
+
+    std::vector<std::string> compile_args = {"/opt/rocm/bin/hipcc", path, "--genco", "-O2", ("--amdgpu-target=" + code), "-Wno-ignored-attributes", "-o", (path + ".out")};
 #endif
 
     ab_utils::Process(compile_args, 30);
