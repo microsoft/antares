@@ -114,7 +114,7 @@ namespace ab {
 
     auto kernel = (cl_kernel)hFunc[0];
     for (int i = 0; i < krnl_args.size(); ++i) {
-      if (i >= (long)hFunc[7])
+      if (hFunc.size() > 7 && i >= (long)hFunc[7])
         CHECK_OK(0 == clSetKernelArg(kernel, i, sizeof(cl_uint), (void*)&krnl_args[i]));
       else
         CHECK_OK(0 == clSetKernelArg(kernel, i, sizeof(cl_mem), (void*)&krnl_args[i]));
