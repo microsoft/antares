@@ -9,11 +9,11 @@
 #if !defined(__HIPCC__)
 #include <cuda.h>
 #include <cuda_runtime_api.h>
-#define Q(attr_key) ((0 == cuDeviceGetAttribute(&val, (CUdevice_attribute_enum)cudaDevAttr ## attr_key, 0)) ? printf("%s: %d\n", #attr_key, val) : (exit(1), 0))
+#define Q(attr_key) ((0 == cuDeviceGetAttribute(&val, (CUdevice_attribute_enum)cudaDevAttr ## attr_key, dev)) ? printf("%s: %d\n", #attr_key, val) : (exit(1), 0))
 #define CHECK_ENV() (0 == cuInit(0) || (exit(1), 0));
 #else
 #include <hip/hip_runtime.h>
-#define Q(attr_key) ((0 == hipDeviceGetAttribute_(&val, hipDeviceAttribute ## attr_key, 0)) ? printf("%s: %d\n", #attr_key, val) : (exit(1), 0))
+#define Q(attr_key) ((0 == hipDeviceGetAttribute_(&val, hipDeviceAttribute ## attr_key, dev)) ? printf("%s: %d\n", #attr_key, val) : (exit(1), 0))
 #define hipDeviceAttributeMultiProcessorCount hipDeviceAttributeMultiprocessorCount
 #define hipDeviceAttributeGlobalMemoryBusWidth hipDeviceAttributeMemoryBusWidth
 #define CHECK_ENV() (0 == hipInit(0) || (exit(1), 0));
@@ -33,7 +33,7 @@ inline hipError_t hipDeviceGetAttribute_(int *val, hipDeviceAttribute_t attr, in
 #endif
 
 int main() {
-  int val = -1;
+  int val = -1, dev = getenv("DEVICE_ID") ? atoi(getenv("DEVICE_ID")) : 0;
   CHECK_ENV();
 
   Q(MaxThreadsPerBlock);
