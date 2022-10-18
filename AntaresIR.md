@@ -232,5 +232,8 @@ COMPUTE_V1='- einstein_v2("temp0[K, N] = input0[N, K] + 100; output0[N, M] +=! t
 # ConvBiasRelu Tail Fusion
 COMPUTE_V1='- einstein_v2("conv_out[N, F, HO, WO] +=! input0[N, C, HO + KH, WO + KW] * input1[KH, KW, C, F] where HO in 256, WO in 256; conv_bias[N, F, HO, WO] = conv_out[N, F, HO, WO] + input2[0, 0, 0, F]; output0[N, F, HO, WO] = conv_bias[N, F, HO, WO].when(conv_bias[N, F, HO, WO] > 0.0, 0.0)", input_dict={"input0": {"dtype": "float32", "shape": [1, 16, 256, 256]}, "input1": {"dtype": "float32", "shape": [1, 1, 16, 16]}, "input2": {"dtype": "float32", "shape": [1, 1, 1, 16]}})' antares
 
+# Instance Norm
+COMPUTE_V1='- einstein_v2("mediate0[N, C] +=! input0[N, C, I]; mediate1[N, C] +=! (input0[N, C, I] * input0[N, C, I]); output0[N, C, I] = input2[C] + input1[C] * (input0[N, C, I] * I.val() - mediate0[N, C]) / (mediate1[N, C] * I.val() - mediate0[N, C] * mediate0[N, C]).call(`sqrt`)", input_dict={"input0" : { "dtype" : "float32", "shape" : [2, 32, 40960]} ,  "input1" : { "dtype" : "float32", "shape" : [32]} ,  "input2" : { "dtype" : "float32", "shape" : [32]}})' antares
+
 # Scatter4D
 COMPUTE_V1='- _B, _M = 2, 8; einstein_v2("data[indices[B, 0], indices[B, 1], indices[B, 2], indices[B, 3], M] =. updates[B, M]", input_dict={"data": {"dtype": "float32", "shape": [32, 32, 32, 32, _M]}, "indices": {"dtype": "int32", "shape": [_B, 4]}, "updates": {"dtype": "float32", "shape": [_B, _M]}})' antares
