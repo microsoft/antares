@@ -218,7 +218,13 @@ COMPUTE_V1='- einstein_v2("output0[ON, OC] = input0[ON % 2, OC % 16] where ON in
 COMPUTE_V1='- einstein_v2("temp0[N] >=! input0[N, C]; temp1[N] +=! (input0[N, C] - temp0[N]).call(`exp`); output0[N, C] = (input0[N, C] - temp0[N]).call(`exp`) / temp1[N]", { "input0": {"dtype": "float32", "shape": [32, 1024]} })' antares
 
 # BatchNorm Inference
-COMPUTE_V1='- einstein_v2("output0[N, C, H, W] = bias[C] + scale[C] * (input0[N, C, H, W] - mean[C]) / (1e-5 + variance[C]).call(`sqrt`)", input_dict={"input0": {"dtype": "float32", "shape": [16, 256, 16, 16]}, "mean": {"dtype": "float32", "shape": [256]}, "variance": {"dtype": "float32", "shape": [256]}, "scale": {"dtype": "float32", "shape": [256]}, "bias": {"dtype": "float32", "shape": [256]} })' antares
+COMPUTE_V1='- einstein_v2("output0[N, C, H, W] = bias[C] + scale[C] * (input0[N, C, H, W] - mean[C]) * (variance[C] + 1e-5).call(`rsqrt`)", input_dict={"input0": {"dtype": "float32", "shape": [16, 256, 16, 16]}, "mean": {"dtype": "float32", "shape": [256]}, "variance": {"dtype": "float32", "shape": [256]}, "scale": {"dtype": "float32", "shape": [256]}, "bias": {"dtype": "float32", "shape": [256]} })' antares
+
+# LayerNorm
+COMPUTE_V1='- einstein_v2("temp0[N] +=! input0[N, C]; temp1[N] +=! input0[N, C] * input0[N, C]; output0[N, C] = (input0[N, C] * C.val() - temp0[N]) * (temp1[N] * C.val() - temp0[N] * temp0[N] + 1e-5).call(`rsqrt`)", { "input0": {"dtype": "float32", "shape": [32, 1024]} })' antares
+
+# InstanceNorm
+COMPUTE_V1='- einstein_v2("mediate0[N, C] +=! input0[N, C, I]; mediate1[N, C] +=! input0[N, C, I] * input0[N, C, I]; output0[N, C, I] = input2[C] + input1[C] * (input0[N, C, I] * I.val() - mediate0[N, C]) / (mediate1[N, C] * I.val() - mediate0[N, C] * mediate0[N, C] + 1e-5).call(`sqrt`)", input_dict={"input0" : { "dtype" : "float32", "shape" : [2, 32, 40960]} ,  "input1" : { "dtype" : "float32", "shape" : [32]} ,  "input2" : { "dtype" : "float32", "shape" : [32]}})' antares
 
 # Logical Bool Operation
 COMPUTE_V1='- einstein_v2("output0[N, M] = input0[N, M] & ~input1[N, M]", { "input0": {"dtype": "int8", "shape": [1024, 512]}, "input1": {"dtype": "int8", "shape": [1024, 512]} })' antares
@@ -231,9 +237,6 @@ COMPUTE_V1='- einstein_v2("temp0[K, N] = input0[N, K] + 100; output0[N, M] +=! t
 
 # ConvBiasRelu Tail Fusion
 COMPUTE_V1='- einstein_v2("conv_out[N, F, HO, WO] +=! input0[N, C, HO + KH, WO + KW] * input1[KH, KW, C, F] where HO in 256, WO in 256; conv_bias[N, F, HO, WO] = conv_out[N, F, HO, WO] + input2[0, 0, 0, F]; output0[N, F, HO, WO] = conv_bias[N, F, HO, WO].when(conv_bias[N, F, HO, WO] > 0.0, 0.0)", input_dict={"input0": {"dtype": "float32", "shape": [1, 16, 256, 256]}, "input1": {"dtype": "float32", "shape": [1, 1, 16, 16]}, "input2": {"dtype": "float32", "shape": [1, 1, 1, 16]}})' antares
-
-# Instance Norm
-COMPUTE_V1='- einstein_v2("mediate0[N, C] +=! input0[N, C, I]; mediate1[N, C] +=! (input0[N, C, I] * input0[N, C, I]); output0[N, C, I] = input2[C] + input1[C] * (input0[N, C, I] * I.val() - mediate0[N, C]) / (mediate1[N, C] * I.val() - mediate0[N, C] * mediate0[N, C]).call(`sqrt`)", input_dict={"input0" : { "dtype" : "float32", "shape" : [2, 32, 40960]} ,  "input1" : { "dtype" : "float32", "shape" : [32]} ,  "input2" : { "dtype" : "float32", "shape" : [32]}})' antares
 
 # Scatter4D
 COMPUTE_V1='- _B, _M = 2, 8; einstein_v2("data[indices[B, 0], indices[B, 1], indices[B, 2], indices[B, 3], M] =. updates[B, M]", input_dict={"data": {"dtype": "float32", "shape": [32, 32, 32, 32, _M]}, "indices": {"dtype": "int32", "shape": [_B, 4]}, "updates": {"dtype": "float32", "shape": [_B, _M]}})' antares
