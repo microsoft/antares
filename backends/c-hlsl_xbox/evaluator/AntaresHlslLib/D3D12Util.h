@@ -1102,7 +1102,6 @@ namespace antares {
             {
                 flags.push_back(L"-D__XBOX_MAX_VGPR_COUNT=" + std::to_wstring(vgprLimit));
             }
-            args_i.push_back(L"-D__SHADER_STAGE_COMPUTE=1");
             return flags;
         }
 #endif
