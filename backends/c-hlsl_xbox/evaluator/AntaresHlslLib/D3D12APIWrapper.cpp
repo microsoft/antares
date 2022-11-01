@@ -653,6 +653,25 @@ int dxMemcpyHtoDAsync(void* dst, void* src, size_t bytes, void *hStream)
     return dxStreamSynchronize(hStream);
 }
 
+void* dxMemHostRegister(void* dptr, unsigned int subres) {
+    auto deviceIter = map_device_ptr(dptr);
+    UINT64 offset = static_cast<char*>(dptr) - static_cast<char*>(deviceIter->first);
+    auto src_buffer = (dx_buffer_t*)(deviceIter->second);
+    void* result = nullptr;
+    D3D12_RANGE range = { 0, static_cast<SIZE_T>(src_buffer->size) };
+    src_buffer->handle->Map(subres, &range, &result);
+    return ((char*)result) + offset;
+}
+
+void dxMemHostUnregister(void* dptr, unsigned int subres) {
+    auto deviceIter = map_device_ptr(dptr);
+    UINT64 offset = static_cast<char*>(dptr) - static_cast<char*>(deviceIter->first);
+    auto src_buffer = (dx_buffer_t*)(deviceIter->second);
+    void* result = nullptr;
+    D3D12_RANGE range = { 0, static_cast<SIZE_T>(src_buffer->size) };
+    src_buffer->handle->Unmap(subres, &range);
+}
+
 int dxMemcpyDtoHAsync(void* dst, void* src, size_t bytes, void* hStream)
 {
     DEBUG_PRINT(__func__);

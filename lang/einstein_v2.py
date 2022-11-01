@@ -60,6 +60,8 @@ class OpTensor:
         for i in range(len(key)):
           key[i] = OpTensor.parse(key[i])
           it = key[i]
+          if int(os.environ.get('CHECK', 0)) == 2 and it._op == 'get_item':
+            os.environ.pop('CHECK')
           if it._op == 'axis' and explicit_range[it._value] is None:
             k = vamap_tensor[self._value][i]
             v = full_tensor_dict[self._value]['shape'][i]

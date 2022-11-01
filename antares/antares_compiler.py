@@ -450,7 +450,7 @@ def main_compute(code_only=False):
 
   num_trials = int(os.environ['STEP']) if 'STEP' in os.environ else 0
 
-  if 'RESULT' not in os.environ and int(os.environ.get('CHECK', 0)) == 1:
+  if 'RESULT' not in os.environ and int(os.environ.get('CHECK', 0)) > 0:
     reference_result_path = local_get_dir_file('result.txt', prefix='ref')
     try:
       os.remove(reference_result_path)
