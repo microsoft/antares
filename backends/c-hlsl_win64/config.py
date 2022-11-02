@@ -139,7 +139,6 @@ float tanh_ex(float x) {
 '''
     body = re.sub(r'\b__syncthreads\b', 'GroupMemoryBarrierWithGroupSync', body)
     body = re.sub(r'\(char\)', '', body)
-    body = re.sub(r'\(short\)', '(min16int)', body)
     body = re.sub(r'__float2half_rn', '', body)
     body = re.sub(r'__half2float_rn', '', body)
     body = re.sub(r'\#pragma\ unroll\b', '[unroll]', body)
@@ -165,6 +164,6 @@ void CSMain(uint3 threadIdx: SV_GroupThreadID, uint3 blockIdx: SV_GroupID) {{
   {body}
 }}
 '''
-    if re.search(r'\bchar\b', full_body):
-      full_body = re.sub(r'\bchar\b', 'bool', full_body)
+    full_body = re.sub(r'\bshort\b', 'min16int', full_body)
+    full_body = re.sub(r'\bchar\b', 'bool', full_body)
     return full_body
