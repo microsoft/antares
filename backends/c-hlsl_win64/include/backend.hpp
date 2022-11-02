@@ -25,7 +25,7 @@ namespace ab {
     CHECK(0 == dxInit(0), "Failed initialize DirectX12 device.");
 
     LOAD_ONCE(dxModuleSetCompat, int (*)(const char*));
-    CHECK(0 == dxModuleSetCompat("cs_6_2"), "Failed to call dxModuleSetCompat(). Try `antares clean` to synchronize latest HLSL library.");
+    CHECK(0 == dxModuleSetCompat("cs_6_5"), "Failed to call dxModuleSetCompat(). Try `antares clean` to synchronize latest HLSL library.");
 
     LOAD_ONCE(dxEventCreate, void* (*)());
     LOAD_ONCE(dxEventRecord, int (*)(void*, void*));
