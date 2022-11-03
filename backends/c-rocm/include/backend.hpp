@@ -98,14 +98,16 @@ namespace ab {
     if (!_gpu_arch.size()) {
       hipDeviceProp_t prop;
       CHECK_OK(0 == hipGetDeviceProperties(&prop, _current_device));
-      _gpu_arch = std::to_string(prop.gcnArch);
+      _gpu_arch = "gfx" + std::to_string(prop.gcnArch);
     }
 
-    auto code = get_between(source, "\n#define __AMDGFX__ ", "\n");
-    if (code.size() == 0)
-      code = "gfx" + _gpu_arch;
+    std::vector<std::string> codes = { get_between(source, "\n#define __AMDGFX__ ", "\n") };
+    if (codes[0].size() == 0)
+      codes[0] = _gpu_arch;
 
-    std::vector<std::string> compile_args = {"/opt/rocm/bin/hipcc", path, "--genco", "-O2", ("--amdgpu-target=" + code), "-Wno-ignored-attributes", "-o", (path + ".out")};
+    std::vector<std::string> compile_args = {"/opt/rocm/bin/hipcc", path, "--genco", "-O2", "-Wno-ignored-attributes", "-o", (path + ".out")};
+    for (auto &code: codes)
+      compile_args.push_back("--amdgpu-target=" + code);
 #endif
 
     ab_utils::Process(compile_args, 30);
