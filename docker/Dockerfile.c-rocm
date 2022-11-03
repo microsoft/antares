@@ -19,13 +19,14 @@ RUN apt-get update && apt install -y --no-install-recommends git ca-certificates
 
 
 RUN curl -L https://repo.radeon.com/rocm/rocm.gpg.key | apt-key add -
-RUN printf "deb [arch=amd64] http://repo.radeon.com/rocm/apt/4.2/ xenial main" | tee /etc/apt/sources.list.d/rocm_hip.list && \
+RUN printf "deb [arch=amd64] http://repo.radeon.com/rocm/apt/5.3/ ubuntu main" | tee /etc/apt/sources.list.d/rocm_hip.list && \
     apt update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     rocm-dev rocblas hipsparse rccl rocfft hipfft rocrand miopen-hip rocthrust hip-rocclr && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN /bin/echo -e "set backspace=indent,eol,start\nset nocompatible\nset ts=4" > /etc/vim/vimrc.tiny
 
-RUN pip3 install --upgrade antares && mkdir -p /root/.local/antares && ln -s $(antares pwd)/../3rdparty /root/.local/antares/3rdparty
+RUN pip3 install --upgrade antares && mkdir -p /root/.local/antares && mv $(antares pwd)/../3rdparty /root/.local/antares/3rdparty && pip3 uninstall antares -y
+RUN echo 'exec /antares/main.py "$@"' > /usr/local/bin/antares && chmod a+x /usr/local/bin/antares
 
 # OpenCL has been included in ROCm already
 RUN rm -rf /usr/lib/x86_64-linux-gnu/libOpenCL.so.1*
