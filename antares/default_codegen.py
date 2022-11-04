@@ -113,6 +113,8 @@ def codegen(ast_seq, input_dict, output_dict, best_config, space_only=False):
       reduce_maps = {'+': 'tvm.te.sum', '>': 'tvm.te.max', '<': 'tvm.te.min'}
       if props['reduce_type'] in reduce_maps:
         reduce_func = reduce_maps[props['reduce_type']]
+      elif props['reduce_type'] == '*':
+        reduce_func = 'tvm.te.comm_reducer(lambda x, y: x * y, lambda min_t: tvm.tir.const(1, dtype=min_t))'
       else:
         reduce_func = 'tvm.te.comm_reducer(lambda x, y: tvm.tir.call_pure_extern(x.dtype, "%s", x, y), lambda min_t: tvm.tir.const(0, dtype=min_t), name="%s")' % (props['reduce_type'], props['reduce_type'])
       reduce_pattern = '%s(' % reduce_func + '%s' + ', axis=[%s])' % ', '.join(reduce_set)
