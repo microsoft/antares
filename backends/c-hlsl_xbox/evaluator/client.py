@@ -22,6 +22,7 @@ def eval(kernel_path, **kwargs):
     req = urllib.request.Request(tune_agent_url, headers={
       'ET': str(kwargs['expected_timeout']),
       'OT': os.environ.get('AGENT_OT', '5'),
+      'SPECIAL': os.environ.get('SPECIAL', '0'),
       'DEV': str(kwargs['dev_id']),
     }, data=kernel_data, method='PUT')
     with urllib.request.urlopen(req) as fp:
