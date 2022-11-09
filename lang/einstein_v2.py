@@ -145,6 +145,14 @@ class OpTensor:
         other = OpTensor.parse(other)
         return other.__sub__(self)
 
+    def __rshift__(self, other):
+        other = OpTensor.parse(other)
+        return OpTensor('op', {"name": ">>", "inputs": [self, other]}, self._dtype)
+
+    def __lshift__(self, other):
+        other = OpTensor.parse(other)
+        return OpTensor('op', {"name": "<<", "inputs": [self, other]}, self._dtype)
+
     def __neg__(self):
         return OpTensor.parse(0, self._dtype).__sub__(self)
 

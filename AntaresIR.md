@@ -240,3 +240,6 @@ COMPUTE_V1='- einstein_v2("conv_out[N, F, HO, WO] +=! input0[N, C, HO + KH, WO +
 
 # Scatter4D
 COMPUTE_V1='- _B, _M = 2, 8; einstein_v2("data[indices[B, 0], indices[B, 1], indices[B, 2], indices[B, 3], M] =. updates[B, M]", input_dict={"data": {"dtype": "float32", "shape": [32, 32, 32, 32, _M]}, "indices": {"dtype": "int32", "shape": [_B, 4]}, "updates": {"dtype": "float32", "shape": [_B, _M]}})' antares
+
+# Vectorized Boolean Check
+COMPUTE_V1='- einstein_v2("output0[N] = ((input0[N, 0] == 0).cast(`int32`) << 24) + ((input0[N, 1] == 0).cast(`int32`) << 16) + ((input0[N, 2] == 0).cast(`int32`) << 8) + (input0[N, 3] == 0).cast(`int32`)", { "input0": {"dtype": "int32", "shape": [1000, 4]} })' antares

@@ -167,10 +167,8 @@ int main(int argc, char** argv)
         for (size_t x = 0; x < byte_size / sizeof(double); ++x)
           digest += (x + 1) % 83 * ((double*)hptr.data())[x];
       } else {
-        for (size_t x = 0; x < byte_size / sizeof(float); ++x)
-          digest += (x + 1) % 83 * ((float*)hptr.data())[x];
-        for (size_t x = byte_size - byte_size % sizeof(int); x < byte_size; x++)
-          digest += ((char*)hptr.data())[x];
+        for (size_t x = 0; x < byte_size; ++x)
+          digest += (x + 1) % 83 * ((unsigned char*)hptr.data())[x];
       }
       printf("\n- K/%d: %.10e\n", i, digest), fflush(stdout);
       fprintf(fp, "\n- K/%d: %.10e\n", i, digest), fflush(fp);
