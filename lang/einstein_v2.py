@@ -319,7 +319,7 @@ def parse_to_ast(expr):
   # Parse formal set-op, l-val and r-val
   at_index = expr.find('=')
   if expr[at_index - 1] != ' ':
-    if expr[at_index - 1] in ('<', '>', '+', ':', '_'):
+    if expr[at_index - 1] in ('<', '>', '+', ':', '_', '*'):
       props['reduce_type'] = expr[at_index - 1]
       lval = expr[:at_index - 1].strip()
     else:

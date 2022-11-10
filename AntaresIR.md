@@ -232,6 +232,9 @@ COMPUTE_V1='- einstein_v2("output0[N, M] = input0[N, M] & ~input1[N, M]", { "inp
 # Sigmoid
 COMPUTE_V1='- einstein_v2("output0[N, M] = 1.0 / (1.0 + (-input0[N, M]).call(`exp`))", { "input0": {"dtype": "float32", "shape": [1024, 512]} })' antares
 
+# Conv2D Transpose
+COMPUTE_V1='- _N, _CI, _CO, _H, _W, _KH, _KW, _PH, _PW = 1, 4, 8, 5, 5, 3, 3, 0, 0; _HO, _WO = (_H + _KH - _PH * 2) - 1, (_W + _KW - _PW * 2) - 1; ACCESS_H, ACCESS_W = f"((HO - KH) + {_PH})", f"((WO - KW) + {_PW})"; einstein_v2(f"output0[N, F, HO, WO] +=! input0[N, C, {ACCESS_H}, {ACCESS_W}].when([{ACCESS_H} >= 0, {ACCESS_H} < {_H}, {ACCESS_W} >= 0, {ACCESS_W} < {_W}], const(0, input0.dtype())) * input1[C, F, KH, KW] where HO in {_HO}, WO in {_WO}", { "input0": {"dtype": "float32", "shape": [_N, _CI, _H, _W]}, "input1": {"dtype": "float32", "shape": [_CI, _CO, _KH, _KW]}})' antares
+
 # AddMatMul Head Fusion
 COMPUTE_V1='- einstein_v2("temp0[K, N] = input0[N, K] + 100; output0[N, M] +=! temp0[K, N] * input1[K, M] where K in 10", { "input0": {"dtype": "float32", "shape": [1024, 512]}, "input1": {"dtype": "float32", "shape": [512, 512]}})' antares
 

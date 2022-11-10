@@ -50,7 +50,7 @@ def init(**kwargs):
       EVAL_PROPERTIES['compiler'], EVAL_PROPERTIES['compile_flags'] = compiler, compile_flags
       compile_flags += f' -I{backend_root}/include'
 
-      if 0 != os.system(f"diff {backend_root}/include/backend.hpp {os.environ['ANTARES_DRIVER_PATH']}/backend.hpp__{backend} >/dev/null 2>&1"):
+      if 0 != os.system(f"diff {backend_root}/include/backend.hpp {os.environ['ANTARES_DRIVER_PATH']}/backend.hpp@{backend} >/dev/null 2>&1"):
         error_info = f"SDK for `{backend}` is not configured correctly, please look into the error messages and reconfigure the corresponding environment."
         compile_cmd = f'{compiler} {source_root}/run_graph.cpp -o {evaluator_path}.tmp {compile_flags}'
         sys.stdout.write('\033[91m')
@@ -58,7 +58,7 @@ def init(**kwargs):
         compile_stat = os.system(f'timeout 30s {compile_cmd}')
         sys.stdout.write('\033[0m\n')
         assert compile_stat == 0, error_info
-        os.system(f"cp {backend_root}/include/backend.hpp {os.environ['ANTARES_DRIVER_PATH']}/backend.hpp__{backend}")
+        os.system(f"cp {backend_root}/include/backend.hpp {os.environ['ANTARES_DRIVER_PATH']}/backend.hpp@{backend}")
         os.system(f'mv {evaluator_path}.tmp {evaluator_path} >/dev/null 2>&1')
         is_wsl = 1 if (os.environ.get('IS_WSL', '0') == '1') else 0
 
@@ -88,8 +88,9 @@ def eval(kernel_path, **kwargs):
       flags += ['--dev', str(dev_id)]
       if int(os.environ.get('PROGRESS', 0)) > 0:
         flags += ['--progress']
-      if int(os.environ.get('AB_DEBUG', 0)) > 0:
-        flags += ['--debug']
+      debug_cnt = int(os.environ.get('AB_DEBUG', 0))
+      if debug_cnt > 0:
+        flags += ['--debug', str(debug_cnt)]
       value_absdir = os.environ.get('VALUE_PATH', '').strip()
       if value_absdir:
         flags += ['--value_absdir', value_absdir]

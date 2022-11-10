@@ -14,7 +14,7 @@ int main(int argc, char** argv)
       if (!strcmp(argv[i], "--progress"))
         use_progress = 1;
       else if (!strcmp(argv[i], "--debug"))
-        debug_output = 1;
+        debug_output = std::atoi(argv[++i]);
       else if (!strcmp(argv[i], "--compile"))
         compile = 1;
       else if (!strcmp(argv[i], "--timeout"))
