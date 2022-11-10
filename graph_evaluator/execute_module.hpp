@@ -35,6 +35,17 @@ namespace {
 
 static int use_progress = 0;
 
+inline float fp16_to_fp32(unsigned short in) {
+    unsigned int f = ((in & 0x8000) << 16) | (((in & 0x7c00) + 0x1C000) << 13) | ((in & 0x03FF) << 13);
+    return *reinterpret_cast<float*>(&f);
+}
+
+inline unsigned short fp32_to_fp16(float in) {
+    unsigned int x = *reinterpret_cast<unsigned int*>(&in);
+    unsigned short h = ((x >> 16) & 0x8000) | ((((x & 0x7f800000) - 0x38000000) >> 13) & 0x7c00) | ((x >> 13) & 0x03ff);
+    return h;
+}
+
 namespace ab_utils {
 
   class TempFile {
@@ -337,40 +348,41 @@ struct ExecutionModule {
           ab::release(tensor_memory[it->in_args[i]], local_tensors[it->in_args[i]].mem_size());
         }
 
-      if (debug_output) {
+      if (debug_output > 0) {
         for (auto &arg: it->out_args) {
-          char d[32];
-          ab::memcpyDtoH(d, tensor_memory[arg], sizeof(d), stream);
+          std::vector<char> d_output(local_tensors[arg].mem_size());
+          ab::memcpyDtoH(d_output.data(), tensor_memory[arg], d_output.size(), stream);
           ab::synchronize(stream);
-          if (local_tensors[arg].dtype == "float32")
-            fprintf(stderr, "[DEBUG] %s(%s) = %g, %g, %g, %g ..\n", arg.c_str(), local_tensors[arg].dtype.c_str(), ((float*)d)[0], ((float*)d)[1], ((float*)d)[2], ((float*)d)[3]);
-          else if (local_tensors[arg].dtype == "float64")
-            fprintf(stderr, "[DEBUG] %s(%s) = %g, %g, %g, %g ..\n", arg.c_str(), local_tensors[arg].dtype.c_str(), ((double*)d)[0], ((double*)d)[1], ((double*)d)[2], ((double*)d)[3]);
-          else if (local_tensors[arg].dtype == "int32")
-            fprintf(stderr, "[DEBUG] %s(%s) = %d, %d, %d, %d ..\n", arg.c_str(), local_tensors[arg].dtype.c_str(), ((int*)d)[0], ((int*)d)[1], ((int*)d)[2], ((int*)d)[3]);
-          else
-            fprintf(stderr, "[DEBUG] %s(%s) = %016x, %016x, %016x, %016x ..\n", arg.c_str(), local_tensors[arg].dtype.c_str(), ((int*)d)[0], ((int*)d)[1], ((int*)d)[2], ((int*)d)[3]);
+          fprintf(stderr, "[DEBUG] %s(%s[", arg.c_str(), local_tensors[arg].dtype.c_str());
+          for (int i = 0; i < local_tensors[arg].shape.size(); ++i)
+            fprintf(stderr, "%llu,", (long long)(local_tensors[arg].shape[i]));
+          fprintf(stderr, "]) =");
+          void *hptr = d_output.data();
+          for (int i = 0; i < local_tensors[arg].element_size(); ++i)
+            if (local_tensors[arg].dtype == "int32")
+              fprintf(stderr, " %d", ((int*)hptr)[i]);
+            else if (local_tensors[arg].dtype == "int16")
+              fprintf(stderr, " %u", ((unsigned short*)hptr)[i]);
+            else if (local_tensors[arg].dtype == "int8")
+              fprintf(stderr, " %u", ((unsigned char*)hptr)[i]);
+            else if (local_tensors[arg].dtype == "int64")
+              fprintf(stderr, " %lld", ((long long*)hptr)[i]);
+            else if (local_tensors[arg].dtype == "float32")
+              fprintf(stderr, " %g", ((float*)hptr)[i]);
+            else if (local_tensors[arg].dtype == "float64")
+              fprintf(stderr, " %g", ((double*)hptr)[i]);
+            else if (local_tensors[arg].dtype == "float16")
+              fprintf(stderr, " %g", fp16_to_fp32(((unsigned short*)hptr)[i]));
+          fprintf(stderr, "\n");
         }
       }
     }
-    if (debug_output)
-      fprintf(stderr, "[DEBUG] =======================\n");
+    if (debug_output > 0)
+      fprintf(stderr, "[DEBUG] =======================\n"), --debug_output;
 
     return 0;
   }
 };
-
-
-inline float fp16_to_fp32(unsigned short in) {
-    unsigned int f = ((in & 0x8000) << 16) | (((in & 0x7c00) + 0x1C000) << 13) | ((in & 0x03FF) << 13);
-    return *reinterpret_cast<float*>(&f);
-}
-
-inline unsigned short fp32_to_fp16(float in) {
-    unsigned int x = *reinterpret_cast<unsigned int*>(&in);
-    unsigned short h = ((x >> 16) & 0x8000) | ((((x & 0x7f800000) - 0x38000000) >> 13) & 0x7c00) | ((x >> 13) & 0x03ff);
-    return h;
-}
 
 } // namespace
 #endif // __EXECUTION_MODULE__
