@@ -61,8 +61,8 @@ namespace ab {
       it.pop_back();
       return dptr;
     }
-    if (__BACKEND__ == "c-sycl_intel")
-      return memalign(sysconf(_SC_PAGESIZE), byteSize);
+    // if (__BACKEND__ == "c-sycl_intel")
+    //   return memalign(sysconf(_SC_PAGESIZE), byteSize);
     return sycl::malloc_device(byteSize, _sycl_queue);
   }
 
@@ -80,7 +80,7 @@ namespace ab {
     auto path = tempfile.get_path();
 
     if (__BACKEND__ == "c-sycl_intel")
-      ab_utils::Process({"dpcpp", path, "-std=c++17", "-lpthread", "-fPIC", "-shared", "-Wno-pass-failed", "-O3", "-ffast-math", "-march=skylake-avx512", "-o", path + ".out"}, 10);
+      ab_utils::Process({"dpcpp", path, "-std=c++17", "-lpthread", "-fPIC", "-shared", "-Wno-pass-failed", "-O3", "-ffast-math", "-march=native", "-o", path + ".out"}, 10);
     else {
       std::string gpu_arch = "50"; // Corresponds to the back-end default.
 #ifdef SYCL_CUDA
@@ -103,7 +103,7 @@ namespace ab {
 
   void launchKernel(const std::vector<void*> &hFunction, const std::vector<void*> &krnl_args, void *stream) {
     ((void(*)(void*, void* const*))hFunction[0])(&_sycl_queue, krnl_args.data());
-    _sycl_queue.wait();
+    // _sycl_queue.wait();
   }
 
   void synchronize(void *stream) {
