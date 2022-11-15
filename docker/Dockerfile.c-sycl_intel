@@ -16,6 +16,7 @@ RUN apt-get update && apt install -y --no-install-recommends git ca-certificates
 
 RUN /bin/echo -e "set backspace=indent,eol,start\nset nocompatible\nset ts=4" > /etc/vim/vimrc.tiny
 
-RUN pip3 install --upgrade antares && mkdir -p /root/.local/antares && ln -s $(antares pwd)/../3rdparty /root/.local/antares/3rdparty
+RUN pip3 install --upgrade antares && mkdir -p /root/.local/antares && mv $(antares pwd)/../3rdparty /root/.local/antares/3rdparty && pip3 uninstall antares -y && echo 'exec /antares/main.py "$@"' > /usr/local/bin/antares && chmod a+x /usr/local/bin/antares
 
+RUN python3 -m pip install --user torch==1.10.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
 # RUN python3 -m pip install --upgrade intel-tensorflow && python3 -m pip install --upgrade numpy mpi4py

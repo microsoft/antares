@@ -111,7 +111,12 @@ def codegen(ast_seq, input_dict, output_dict, best_config, space_only=False):
         reduce_set.append(axis_name)
         reduce_body += '%s = tvm.te.reduce_axis((0, %d), name="%s")\n' % (axis_name, x['range'], axis_name)
       reduce_maps = {'+': 'tvm.te.sum', '>': 'tvm.te.max', '<': 'tvm.te.min'}
-      if props['reduce_type'] in reduce_maps:
+      if ast['root'].dtype() == 'float16' and props['reduce_type'] in ('>', '<'):
+        if props['reduce_type'] == '>':
+          reduce_func = 'tvm.te.comm_reducer(lambda x, y: tvm.tir.call_pure_extern(x.dtype, "hmax", x, y), lambda init_t: tvm.tir.const(-65504, dtype=init_t))'
+        else:
+          reduce_func = 'tvm.te.comm_reducer(lambda x, y: tvm.tir.call_pure_extern(x.dtype, "hmin", x, y), lambda init_t: tvm.tir.const(65504, dtype=init_t))'
+      elif props['reduce_type'] in reduce_maps:
         reduce_func = reduce_maps[props['reduce_type']]
       elif props['reduce_type'] == '*':
         reduce_func = 'tvm.te.comm_reducer(lambda x, y: x * y, lambda min_t: tvm.tir.const(1, dtype=min_t))'

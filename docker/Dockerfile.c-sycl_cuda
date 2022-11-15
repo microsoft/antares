@@ -1,4 +1,5 @@
-FROM mehdigoli/dpcpp-workshop@sha256:4c278e57e7304a85b0b33632a59142292c035a6770c4ebb62650c3bc93e0e86c
+FROM mehdigoli/dpcpp-workshop
+# FROM mehdigoli/dpcpp-workshop@sha256:4c278e57e7304a85b0b33632a59142292c035a6770c4ebb62650c3bc93e0e86c
 
 ENV DEBIAN_FRONTEND noninteractive
 ENV PYTHONDONTWRITEBYTECODE 1
@@ -6,6 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE 1
 RUN env > /etc/environment
 
 RUN sed -i 's/^#deb /deb /g' /etc/apt/sources.list
+RUN rm -f /etc/apt/sources.list.d/*
 
 RUN apt-get update && apt install -y --no-install-recommends git ca-certificates \
     vim-tiny less netcat-openbsd inetutils-ping curl patch iproute2 \
@@ -16,6 +18,6 @@ RUN apt-get update && apt install -y --no-install-recommends git ca-certificates
 
 RUN /bin/echo -e "set backspace=indent,eol,start\nset nocompatible\nset ts=4" > /etc/vim/vimrc.tiny
 
-RUN pip3 install --upgrade antares && mkdir -p /root/.local/antares && ln -s $(antares pwd)/../3rdparty /root/.local/antares/3rdparty
+RUN pip3 install --upgrade antares && mkdir -p /root/.local/antares && mv $(antares pwd)/../3rdparty /root/.local/antares/3rdparty && pip3 uninstall antares -y && echo 'exec /antares/main.py "$@"' > /usr/local/bin/antares && chmod a+x /usr/local/bin/antares
 
 RUN [ -e /usr/lib/x86_64-linux-gnu/libcuda.so.1 ] || ln -s /host/usr/lib/x86_64-linux-gnu/libcuda.so.1 /usr/lib/x86_64-linux-gnu

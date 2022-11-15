@@ -29,6 +29,8 @@ def do_native_translation_v2(codeset, **kwargs):
   expand_outs = [f'auto* {x[1]} = ({x[0]}* __restrict)__args[{i + len(in_args)}];' for i, x in enumerate(out_args)]
   expand_args = ' '.join(expand_ins + expand_outs)
   expand_accs = expand_ptrs = ''
+  if 'VAMAP' in os.environ:
+    expand_args += '\n' + '\n'.join(['  auto ' + x.split(":")[0].split('/')[-1] + ' = (' + x.split("/")[0] + f')(long long)__args[{len(in_args) + len(out_args) + i}];' for i, x in enumerate(os.environ['VAMAP'].split(','))])
 
   def get_extent(key, defval=1):
     str_pat = f'// [thread_extent] {key} = '
