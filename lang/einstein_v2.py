@@ -219,6 +219,8 @@ class OpTensor:
           return floor_op.when(self == floor_op, floor_op + const(1).cast(floor_op._dtype))
         if func_name in ('exp', 'sqrt', 'max', 'min') and self._dtype == 'float16':
           func_name = f'h{func_name}'
+        if func_name == 'abs' and self._dtype == 'float16':
+          func_name = f'__h{func_name}'
         if output_dtype is None:
           output_dtype = self._dtype
         return OpTensor('call', {"name": func_name, "inputs": [self] + others}, output_dtype)

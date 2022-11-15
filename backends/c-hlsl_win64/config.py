@@ -154,6 +154,7 @@ float tanh_ex(float x) {
 #define hexp(x)     exp(x)
 #define hmax(x, y)  max(x, y)
 #define hmin(x, y)  min(x, y)
+#define __habs(x)     abs(x)
 
 {pre_defines}
 {lds}
