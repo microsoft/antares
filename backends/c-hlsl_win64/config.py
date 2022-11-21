@@ -142,6 +142,13 @@ float tanh_ex(float x) {
     body = re.sub(r'__float2half_rn', '', body)
     body = re.sub(r'__half2float_rn', '', body)
     body = re.sub(r'\#pragma\ unroll\b', '[unroll]', body)
+
+    body = re.sub(r'\bhexp\b', 'exp', body)
+    body = re.sub(r'\bhsqrt\b', 'sqrt', body)
+    body = re.sub(r'\bhmin\b', 'min', body)
+    body = re.sub(r'\bhmax\b', 'max', body)
+    body = re.sub(r'\bhlog\b', 'log', body)
+
     lds = '\n'.join(lds)
     registers = ''.join(registers)
 
@@ -149,13 +156,7 @@ float tanh_ex(float x) {
     if len(cb_args) > 0:
       require_cbv = f', RootConstants(num32BitConstants={get_extent("cbuffers")}, b0)'
 
-    full_body = f'''
-#define hsqrt(x)    sqrt(x)
-#define hexp(x)     exp(x)
-#define hmax(x, y)  max(x, y)
-#define hmin(x, y)  min(x, y)
-
-{pre_defines}
+    full_body = f'''{pre_defines}
 {lds}
 {registers}{kwargs['attrs'].blend}
 [RootSignature("DescriptorTable(UAV(u0, numDescriptors={len(in_args) + len(out_args)})){require_cbv}")]
