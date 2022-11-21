@@ -198,6 +198,13 @@ class OpTensor:
           return self
         return OpTensor('cast', {"inputs": [self]}, output_dtype)
 
+    def up_cast(self):
+        if self._dtype in ('int8', 'int16',):
+          return self.cast('int32')
+        if self._dtype in ('float16',):
+          return self.cast('float32')
+        return self
+
     def call(self, func_name, others=None, output_dtype=None):
         if others is None:
           others = []
@@ -217,8 +224,10 @@ class OpTensor:
         if func_name == 'ceil' and len(others) == 0:
           floor_op = self.cast('int64' if self._dtype == 'float64' else 'int32')
           return floor_op.when(self == floor_op, floor_op + const(1).cast(floor_op._dtype))
-        if func_name in ('exp', 'sqrt', 'max', 'min') and self._dtype == 'float16':
+        if func_name in ('exp', 'sqrt', 'max', 'min', 'log') and self._dtype == 'float16':
           func_name = f'h{func_name}'
+        if func_name in ('pow', 'abs'):
+          return OpTensor('call', {"name": func_name, "inputs": [OpTensor.parse(x).up_cast() for x in [self] + others]}, self.up_cast().dtype()).cast(self._dtype)
         if output_dtype is None:
           output_dtype = self._dtype
         return OpTensor('call', {"name": func_name, "inputs": [self] + others}, output_dtype)
