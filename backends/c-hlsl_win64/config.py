@@ -138,16 +138,9 @@ float tanh_ex(float x) {
 #define tanh tanh_ex
 '''
     body = re.sub(r'\b__syncthreads\b', 'GroupMemoryBarrierWithGroupSync', body)
-    body = re.sub(r'\(char\)', '', body)
     body = re.sub(r'__float2half_rn', '', body)
     body = re.sub(r'__half2float_rn', '', body)
     body = re.sub(r'\#pragma\ unroll\b', '[unroll]', body)
-
-    body = re.sub(r'\bhexp\b', 'exp', body)
-    body = re.sub(r'\bhsqrt\b', 'sqrt', body)
-    body = re.sub(r'\bhmin\b', 'min', body)
-    body = re.sub(r'\bhmax\b', 'max', body)
-    body = re.sub(r'\bhlog\b', 'log', body)
 
     lds = '\n'.join(lds)
     registers = ''.join(registers)
@@ -166,5 +159,7 @@ void CSMain(uint3 threadIdx: SV_GroupThreadID, uint3 blockIdx: SV_GroupID) {{
 }}
 '''
     full_body = re.sub(r'\bshort\b', 'min16int', full_body)
+    full_body = re.sub(r'\(char\)', '', full_body)
     full_body = re.sub(r'\bchar\b', 'bool', full_body)
+    full_body = re.sub(r'\bfp16_', '', full_body)
     return full_body

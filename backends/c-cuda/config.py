@@ -62,4 +62,5 @@ extern "C" __global__ __launch_bounds__({launch_bounds}) void {kernel_name}({exp
 
   full_body = re.sub(r'\bint64_t\b', 'long long', full_body)
   full_body = re.sub(r'\buint64_t\b', 'unsigned long long', full_body)
+  full_body = re.sub(r'\bfp16_', 'h', full_body)
   return full_body

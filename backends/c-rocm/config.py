@@ -75,4 +75,5 @@ extern "C" __global__ __launch_bounds__({launch_bounds}) void {kernel_name}({exp
   {body}
 }}
 '''
+  full_body = re.sub(r'\bfp16_', 'h', full_body)
   return full_body
