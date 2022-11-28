@@ -223,7 +223,7 @@ class OpTensor:
           func_name = func_name[1:]
         if func_name in ('exp', 'sqrt', 'max', 'min', 'log', 'sin', 'cos', 'floor', 'ceil') and self._dtype == 'float16':
           func_name = f'fp16_{func_name}'
-        if func_name in ('pow', 'abs', 'tan', 'tanh', 'normcdf'):
+        if func_name in ('pow', 'abs', 'tan', 'tanh', 'normcdf', 'erf'):
           return OpTensor('call', {"name": func_name, "inputs": [OpTensor.parse(x).up_cast() for x in [self] + others]}, self.up_cast().dtype()).cast(self._dtype)
         if output_dtype is None:
           output_dtype = self._dtype
