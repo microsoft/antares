@@ -21,7 +21,7 @@ RUN bash -c 'rm -rf ~/.local/antares/3rdparty/tvm/build/{CMake*,Makefile,cmake_i
 RUN bash -c 'rm -rf ~/.local/antares/3rdparty/tvm/{src,include,golang,tests,3rdparty,device-stub,apps,conda,docker,docs,gallery,jvm,nnvm,rust,vta,web,cmake,.??*}'
 RUN echo '' > ~/.local/antares/3rdparty/tvm/python/tvm/relay/__init__.py
 
-ENV ANTARES_VERSION 0.3.20.10
+ENV ANTARES_VERSION 0.3.20.11
 
 RUN cd ~ && git clone https://github.com/microsoft/antares --branch latest --single-branch --depth 1 antares_core && mv ~/.local/antares/3rdparty antares_core
 RUN cd ~ && sed -i "s/@VERSION@/${ANTARES_VERSION}/g" /antares/engine/dist-info/METADATA && cp -r /antares/engine/dist-info ~/antares-${ANTARES_VERSION}.dist-info
