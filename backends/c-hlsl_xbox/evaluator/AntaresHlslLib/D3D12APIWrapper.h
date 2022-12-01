@@ -12,7 +12,7 @@
 
 #define __EXPORT__ extern "C"
 
-__EXPORT__ ANTARES_API int    dxInit(int flags);
+__EXPORT__ ANTARES_API int    dxInit(int flags, int ord);
 __EXPORT__ ANTARES_API int    dxFinalize();
 
 __EXPORT__ ANTARES_API void*  dxStreamCreate();
