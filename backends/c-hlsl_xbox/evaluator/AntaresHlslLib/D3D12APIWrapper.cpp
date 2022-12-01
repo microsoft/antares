@@ -199,7 +199,7 @@ namespace {
 }
 
 
-int dxInit(int flags)
+int dxInit(int flags, int ord = 0)
 {
     DEBUG_PRINT(__func__);
 
@@ -221,7 +221,7 @@ int dxInit(int flags)
             fprintf(stderr, "[INFO] D3D12: Descriptor heap is to be enabled.\n\n"), flags = 1;
         _USE_DESCRIPTOR_HEAP_ = flags;
 
-        device->Init();
+        device->Init(ord);
         defaultStream = (void*)1LU;
         defaultStream = dxStreamCreate();
     }

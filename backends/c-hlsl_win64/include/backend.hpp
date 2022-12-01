@@ -7,7 +7,7 @@
 #include <windows.h>
 #include <chrono>
 
-#define HLSL_LIBRARY_PATH R"(.\antares_hlsl_v0.3.2_x64.dll)"
+#define HLSL_LIBRARY_PATH R"(.\antares_hlsl_v0.3.3_x64.dll)"
 
 #define CHECK(stat, reason, ...)  ((stat) ? 1 : (fprintf(stderr, "[CheckFail] "), fprintf(stderr, reason, ##__VA_ARGS__), fprintf(stderr, "\n\n"), fflush(stderr), exit(1), 0))
 #define LOAD_ONCE(func, ftype)   static FARPROC __ ## func; if (!__ ## func) { __ ## func = GetProcAddress(hLibDll, #func); CHECK(__ ## func, "No such function symbol defined: %s()", #func); } auto func = (ftype)__ ## func;
@@ -21,8 +21,8 @@ namespace ab {
     ab::hLibDll = LoadLibrary(HLSL_LIBRARY_PATH);
     CHECK(hLibDll, "Failed to load `" HLSL_LIBRARY_PATH "`, please download these libraries first!\n");
 
-    LOAD_ONCE(dxInit, int (*)(int));
-    CHECK(0 == dxInit(0), "Failed initialize DirectX12 device.");
+    LOAD_ONCE(dxInit, int (*)(int, int));
+    CHECK(0 == dxInit(0, dev), "Failed initialize DirectX12 device.");
 
     LOAD_ONCE(dxModuleSetCompat, int (*)(const char*));
     CHECK(0 == dxModuleSetCompat("cs_6_5"), "Failed to call dxModuleSetCompat(). Try `antares clean` to synchronize latest HLSL library.");

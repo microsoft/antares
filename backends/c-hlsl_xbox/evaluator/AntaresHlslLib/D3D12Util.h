@@ -688,9 +688,6 @@ namespace antares {
 
     struct D3DDevice
     {
-#ifndef _GAMING_XBOX_SCARLETT
-        ComPtr<IDXGIFactory5> pDxgiFactory;
-#endif
         ComPtr<ID3D12Device1> pDevice;
         ComPtr<ID3D12CommandQueue> pCommandQueue;
         ComPtr<ID3D12CommandAllocator> pCommandAllocator;
@@ -720,16 +717,35 @@ namespace antares {
             bEnableDebugLayer = EnableDebugLayer;
             bEnableGPUValidation = EnableGPUValidation;
         }
-        void InitD3DDevice()
+
+        bool GetHardwareAdapter(int adapterIndex, IDXGIFactory4* pFactory, IDXGIAdapter1** ppAdapter)
+        {
+            *ppAdapter = nullptr;
+            {
+                IDXGIAdapter1* pAdapter = nullptr;
+                HRESULT hr = pFactory->EnumAdapters1(adapterIndex, &pAdapter);
+                if (hr == DXGI_ERROR_NOT_FOUND)
+                  IFE(hr);
+
+                if (SUCCEEDED(
+                    D3D12CreateDevice(pAdapter, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&pDevice))))
+                {
+                    *ppAdapter = pAdapter;
+                    return true;
+                }
+                pAdapter->Release();
+            }
+            return false;
+        }
+
+        void InitD3DDevice(int ord)
         {
 #ifndef _GAMING_XBOX_SCARLETT
-            IFE(CreateDXGIFactory1(IID_PPV_ARGS(&pDxgiFactory)));
-
-            if (D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&pDevice)))
-            {
-                ComPtr<IDXGIAdapter3> pAdapter;
-                IFE(pDxgiFactory->EnumWarpAdapter(IID_PPV_ARGS(&pAdapter)));
-                IFE(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&pDevice)));
+            ComPtr<IDXGIFactory4> factory;
+            ComPtr<IDXGIAdapter1> hardwareAdapter;
+            IFE(CreateDXGIFactory1(IID_PPV_ARGS(&factory)));
+            if (!GetHardwareAdapter(ord, factory.Get(), &hardwareAdapter)) {
+                IFE(D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&pDevice)));
             }
 #else
             // Create the DX12 API device object.
@@ -751,7 +767,7 @@ namespace antares {
 #endif
         }
 
-        void Init()
+        void Init(int ord)
         {
 #ifndef _GAMING_XBOX_SCARLETT
             // Enable debug layer
@@ -768,7 +784,7 @@ namespace antares {
             }
 #endif
 
-            InitD3DDevice();
+            InitD3DDevice(ord);
 
             // Create a command queue
             D3D12_COMMAND_QUEUE_DESC commandQueueDesc = D3D12CommandQueueDesc(CommandListType);
