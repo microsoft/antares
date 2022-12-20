@@ -3,6 +3,7 @@
 
 //; eval_flags(c-ocl_amdgpu): -I/opt/rocm/opencl/include -L/opt/rocm/opencl/lib -lOpenCL -DCL_TARGET_OPENCL_VERSION=120
 //; eval_flags(c-ocl_nvidia): -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -lOpenCL
+//; eval_flags(c-ocl_intel): -I/opt/intel/oneapi/compiler/latest/linux/include/sycl -L/opt/intel/oneapi/compiler/latest/linux/lib -lOpenCL -Wno-deprecated-declarations
 
 #include <CL/cl.h>
 
