@@ -214,6 +214,8 @@ class OpTensor:
           others = [others]
         for i in range(len(others)):
           others[i] = OpTensor.parse(others[i])
+        if func_name == 'sigmoid' and len(others) == 0:
+          return 1 / (self.call('exp') + 1)
         if func_name == 'remainder' and len(others) == 0:
           return self - self.call('rfloor')
         if func_name in ('floor', 'ceil') and len(others) == 0:
