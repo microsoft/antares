@@ -61,13 +61,16 @@ def implement_builtins(name, args):
   elif name == '__builtin_add':
     assert len(args) == 2
     return f'atomicAdd(&({args[0]}), ({args[1]}))'
+  elif name == '__builtin_cond_set':
+    assert len(args) == 3
+    return f'{{ if ({args[1]}) ({args[0]}) = ({args[2]}); }}'
   else:
     raise Exception(f'Builtin function with {name} is not handled.')
 
 def refactor_builtins(code):
   result_lines = []
   for line in code.split('\n'):
-    at = re.search(r'\b__builtin_[a-z]+\(', line)
+    at = re.search(r'\b__builtin_[a-z_]+\(', line)
     while at is not None:
       start, stop, cnt = at.start(), at.end(), 0
       bname, arg_list = line[start:stop-1], []
@@ -76,13 +79,13 @@ def refactor_builtins(code):
           cnt += 1
         elif line[i] in (')', ']'):
           cnt -= 1
-        if cnt <= 0 and line[i] in (',', ')'):
+        if (cnt == 0 and line[i] == ',') or (cnt < 0 and line[i] == ')'):
           arg_list.append(line[stop:i].strip())
           stop = i + 1
           if line[i] == ')':
             line = line[:start] + implement_builtins(bname, arg_list) + line[stop:]
             break
-      at = re.search(r'\b__builtin_set\(', line)
+      at = re.search(r'\b__builtin_[a-z_]+\(', line)
     result_lines.append(line)
   return '\n'.join(result_lines)
 
