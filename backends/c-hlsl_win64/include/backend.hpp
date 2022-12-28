@@ -22,7 +22,7 @@ namespace ab {
     CHECK(hLibDll, "Failed to load `" HLSL_LIBRARY_PATH "`, please download these libraries first!\n");
 
     LOAD_ONCE(dxInit, int (*)(int, int));
-    CHECK(0 == dxInit(0, dev), "Failed initialize DirectX12 device.");
+    CHECK(0 == dxInit(1, dev), "Failed initialize DirectX12 device.");
 
     LOAD_ONCE(dxModuleSetCompat, int (*)(const char*));
     CHECK(0 == dxModuleSetCompat("cs_6_5"), "Failed to call dxModuleSetCompat(). Try `antares clean` to synchronize latest HLSL library.");
