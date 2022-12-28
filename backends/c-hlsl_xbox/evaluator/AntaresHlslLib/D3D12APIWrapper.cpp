@@ -199,7 +199,7 @@ namespace {
 }
 
 
-int dxInit(int flags, int ord = 0)
+int dxInit(int flags = 1, int ord = 0)
 {
     DEBUG_PRINT(__func__);
 
@@ -209,19 +209,17 @@ int dxInit(int flags, int ord = 0)
 #else
         device = std::make_shared<antares::D3DDevice>(false, false);
 #endif
-    }
+        device->Init(ord);
 
-    if (!defaultStream)
-    {
         // flags = 1: enable descriptor heap, no logging
         // flags = 0: disable descriptor heap, no logging
         // flags = -1: enable descriptor heap, with logging
-
         if (flags == -1)
             fprintf(stderr, "[INFO] D3D12: Descriptor heap is to be enabled.\n\n"), flags = 1;
         _USE_DESCRIPTOR_HEAP_ = flags;
 
-        device->Init(ord);
+        if (defaultStream != nullptr)
+            throw std::runtime_error("Unexpected initialization of defaultStream.");
         defaultStream = (void*)1LU;
         defaultStream = dxStreamCreate();
     }
@@ -265,7 +263,7 @@ void* dxMemAlloc(size_t bytes)
 {
     DEBUG_PRINT(__func__);
 
-    if (dxInit(0) != 0)
+    if (dxInit() != 0)
         return nullptr;
 
     auto slot_id = compute_slotsize(bytes);
@@ -308,7 +306,7 @@ void* dxShaderLoad_v2(const char* shader_src)
 {
     DEBUG_PRINT(__func__);
 
-    if (dxInit(0) != 0)
+    if (dxInit() != 0)
         return nullptr;
 
     std::string source = shader_src;
@@ -498,7 +496,7 @@ void* dxStreamCreate()
 {
     DEBUG_PRINT(__func__);
 
-    if (dxInit(0) != 0)
+    if (dxInit() != 0)
         return nullptr;
 
     dx_stream_t* pStream = new dx_stream_t;
@@ -871,7 +869,7 @@ void* dxEventCreate()
 {
     DEBUG_PRINT(__func__);
 
-    if (dxInit(0) != 0)
+    if (dxInit() != 0)
         return nullptr;
 
     // Return available query slots.
