@@ -141,6 +141,12 @@ COMPUTE_V1='- einstein_v2("output0[N] +=! input0[N, C]", input_dict={"input0": {
 # ReduceMin
 COMPUTE_V1='- einstein_v2("output0[N] <=! input0[N, C]", input_dict={"input0": {"dtype": "float32", "shape": [32, 1024]}})' antares
 
+# ReduceAll
+COMPUTE_V1='- einstein_v2("output0[N] &=! input0[N, C]", input_dict={"input0": {"dtype": "int8", "shape": [32, 1024]}})' antares
+
+# ReduceAny
+COMPUTE_V1='- einstein_v2("output0[N] |=! input0[N, C]", input_dict={"input0": {"dtype": "int8", "shape": [32, 1024]}})' antares
+
 # Cast
 COMPUTE_V1='- einstein_v2("output0[N] = N.cast(`float32`) where N in 1024", {})' antares
 
