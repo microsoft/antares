@@ -41,9 +41,15 @@ class OpTensor:
         self._alter_name = name
         return self
 
-    def val(self):
-        assert self._op == 'axis', "Only axis op can support value fetch for its range."
-        return OpTensor('axis_range', self._value, 'int32')
+    def val(self, dim=None):
+        if self._op == 'tensor':
+          size = vamap_tensor[self._value][dim]
+          if isinstance(size, str):
+            return const(full_tensor_dict[self._value]['shape'][dim]).alter(size)
+          return size
+        if self._op == 'axis':
+          return OpTensor('axis_range', self._value, 'int32')
+        raise Exception("Only tensor/axis objects have val property, get: %s" % self._op)
 
     def __init__(self, _op, _value, _dtype):
         self._op = _op
