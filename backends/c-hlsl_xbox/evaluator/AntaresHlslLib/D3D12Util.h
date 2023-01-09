@@ -718,6 +718,7 @@ namespace antares {
             bEnableGPUValidation = EnableGPUValidation;
         }
 
+#ifndef _GAMING_XBOX_SCARLETT
         bool GetHardwareAdapter(int adapterIndex, IDXGIFactory4* pFactory, IDXGIAdapter1** ppAdapter)
         {
             *ppAdapter = nullptr;
@@ -737,6 +738,7 @@ namespace antares {
             }
             return false;
         }
+#endif
 
         void InitD3DDevice(int ord)
         {
