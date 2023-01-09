@@ -19,7 +19,7 @@ namespace ab {
 
   void init(int dev) {
     ab::hLibDll = LoadLibrary(HLSL_LIBRARY_PATH);
-    CHECK(hLibDll, "Failed to load `" HLSL_LIBRARY_PATH "`, please download these libraries first!\n");
+    CHECK(hLibDll, "Failed to load `" HLSL_LIBRARY_PATH "`, please download these libraries first: antares clean && antares\n");
 
     LOAD_ONCE(dxInit, int (*)(int, int));
     CHECK(0 == dxInit(1, dev), "Failed initialize DirectX12 device.");
@@ -60,6 +60,9 @@ namespace ab {
     LOAD_ONCE(dxMemFree, int (*)(void* dptr));
     CHECK(0 == dxMemFree(dptr), "Failed to free device pointer.");
   }
+
+  void* memAlloc(size_t byteSize) { return alloc(byteSize, {}, "", ""); }
+  void memFree(void *dptr) { return release(dptr, 0); }
 
   std::string moduleCompile(const std::string &source) {
     return source;
@@ -155,7 +158,9 @@ namespace ab {
 
       double et = 1e-9 * std::chrono::duration_cast<std::chrono::nanoseconds>(*h2 - *h1).count();
       delete h1; delete h2;
-      return std::max(et, 1e-9);
+      if (et < 1e-9)
+        et = 1e-9;
+      return et;
     }
     ab::synchronize(nullptr);
     LOAD_ONCE(dxEventElapsedSecond, float (*)(void*, void*));
