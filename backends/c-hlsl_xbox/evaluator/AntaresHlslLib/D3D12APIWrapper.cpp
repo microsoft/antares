@@ -106,13 +106,14 @@ namespace {
 
     struct dx_shader_t
     {
-        int block[3], thread[3];
+        unsigned block[3], thread[3];
         std::vector<int> cbuffer_sizes;
         std::vector<dx_tensor_t> inputs, outputs;
         std::string source;
-        ComPtr<ID3D12PipelineState> pPSO_ht;
+        std::vector<char> bytecode;
 
         // Added D3D12 resource ptr.
+        ComPtr<ID3D12PipelineState> pPSO_ht;
         ComPtr<ID3D12RootSignature> pRootSignature;
     };
 
@@ -302,6 +303,14 @@ int dxMemFree(void* virtualPtr)
     return 0;
 }
 
+static std::wstring default_compat = L"cs_6_0";
+
+int dxModuleSetCompat(const char* compat_name) {
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+    ::default_compat = converter.from_bytes(compat_name);
+    return 0;
+}
+
 void* dxShaderLoad_v2(const char* shader_src)
 {
     DEBUG_PRINT(__func__);
@@ -431,6 +440,26 @@ void* dxShaderLoad_v2(const char* shader_src)
 
     IFE(D3DX12SerializeVersionedRootSignature(&computeRootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1_1, &signature, &error));
     IFE(device->pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_GRAPHICS_PPV_ARGS(m_computeRootSignature.ReleaseAndGetAddressOf())));
+
+
+    std::string src = hd->source;
+    CD3DX12_SHADER_BYTECODE bytecode = {};
+#ifdef _USE_DXC_
+    // Use cs_6_0 since dxc only supports cs_6_0 or higher shader models.
+    auto computeShader = antares::DXCompiler::Get()->Compile(src.data(), (uint32_t)src.size(), L"CSMain", default_compat.c_str());
+    if (computeShader != nullptr)
+        bytecode = CD3DX12_SHADER_BYTECODE(computeShader->GetBufferPointer(), computeShader->GetBufferSize());
+#else
+    ComPtr<ID3DBlob> computeShader = nullptr, errMsg = nullptr;
+    if (D3DCompile(source.data(), source.size(), NULL, NULL, NULL, "CSMain", "cs_5_1", 0, 0, &computeShader, &errMsg) >= 0 && computeShader != nullptr)
+        bytecode = CD3DX12_SHADER_BYTECODE(computeShader.Get());
+#endif
+    if (bytecode.pShaderBytecode == nullptr) {
+        //delete handle;
+        IFE(-1);
+    }
+    hd->bytecode.resize(bytecode.BytecodeLength);
+    memcpy(hd->bytecode.data(), bytecode.pShaderBytecode, bytecode.BytecodeLength);
     return handle;
 }
 
@@ -710,14 +739,6 @@ int dxMemcpyDtoHAsync(void* dst, void* src, size_t bytes, void* hStream)
     return dxStreamSynchronize(hStream);
 }
 
-static std::wstring default_compat = L"cs_6_0";
-
-int dxModuleSetCompat(const char* compat_name) {
-    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-    ::default_compat = converter.from_bytes(compat_name);
-    return 0;
-}
-
 int dxShaderLaunchAsyncExt(void* hShader, void** buffers, int blocks, void* hStream)
 {
     DEBUG_PRINT(__func__);
@@ -729,24 +750,8 @@ int dxShaderLaunchAsyncExt(void* hShader, void** buffers, int blocks, void* hStr
     assert(pStream->state == dx_stream_t::State::INRECORD);
 
     if (hd->pPSO_ht == nullptr) {
-        std::string src = hd->source;
-        CD3DX12_SHADER_BYTECODE bytecode;
-#ifdef _USE_DXC_
-        // Use cs_6_0 since dxc only supports cs_6_0 or higher shader models.
-        auto computeShader = antares::DXCompiler::Get()->Compile(src.data(), (uint32_t)src.size(), L"CSMain", default_compat.c_str());
-        if (computeShader != nullptr)
-            bytecode = CD3DX12_SHADER_BYTECODE(computeShader->GetBufferPointer(), computeShader->GetBufferSize());
-#else
-        ComPtr<ID3DBlob> computeShader = nullptr, errMsg = nullptr;
-        if (D3DCompile(source.data(), source.size(), NULL, NULL, NULL, "CSMain", "cs_5_1", 0, 0, &computeShader, &errMsg) >= 0 && computeShader != nullptr)
-            bytecode = CD3DX12_SHADER_BYTECODE(computeShader.Get());
-#endif
-        if (computeShader == nullptr) {
-            //delete handle;
-            IFE(-1);
-        }
-
         D3D12_COMPUTE_PIPELINE_STATE_DESC computePsoDesc{};
+        CD3DX12_SHADER_BYTECODE bytecode(hd->bytecode.data(), hd->bytecode.size());
         computePsoDesc.CS = bytecode;
         computePsoDesc.pRootSignature = hd->pRootSignature.Get();
         IFE(device->pDevice->CreateComputePipelineState(&computePsoDesc, IID_GRAPHICS_PPV_ARGS(hd->pPSO_ht.ReleaseAndGetAddressOf())));
