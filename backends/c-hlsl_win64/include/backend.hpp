@@ -6,6 +6,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <chrono>
+#include <stdlib.h>
 
 #define HLSL_LIBRARY_PATH R"(.\antares_hlsl_v0.3.3_x64.dll)"
 
@@ -18,14 +19,19 @@ namespace ab {
   static bool cpu_timing = false;
 
   void init(int dev) {
+    if (ab::hLibDll != nullptr)
+      return;
     ab::hLibDll = LoadLibrary(HLSL_LIBRARY_PATH);
     CHECK(hLibDll, "Failed to load `" HLSL_LIBRARY_PATH "`, please download these libraries first: antares clean && antares\n");
 
+    int mode = getenv("DXINIT") ? atoi(getenv("DXINIT")) : 1;
+    const char *compat = getenv("DXCOMPAT") ? getenv("DXCOMPAT") : "cs_6_5";
+
     LOAD_ONCE(dxInit, int (*)(int, int));
-    CHECK(0 == dxInit(1, dev), "Failed initialize DirectX12 device.");
+    CHECK(0 == dxInit(mode, dev), "Failed initialize DirectX12 device.");
 
     LOAD_ONCE(dxModuleSetCompat, int (*)(const char*));
-    CHECK(0 == dxModuleSetCompat("cs_6_5"), "Failed to call dxModuleSetCompat(). Try `antares clean` to synchronize latest HLSL library.");
+    CHECK(0 == dxModuleSetCompat(compat), "Failed to call dxModuleSetCompat(). Try `antares clean` to synchronize latest HLSL library.");
 
     LOAD_ONCE(dxEventCreate, void* (*)());
     LOAD_ONCE(dxEventRecord, int (*)(void*, void*));
