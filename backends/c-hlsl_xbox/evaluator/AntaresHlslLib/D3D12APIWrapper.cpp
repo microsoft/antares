@@ -26,7 +26,7 @@
 #endif
 
 namespace {
-    static bool _USE_DESCRIPTOR_HEAP_ = false;
+    static int _USE_DESCRIPTOR_HEAP_ = 0;
 
     struct dx_buffer_t
     {
@@ -216,7 +216,7 @@ int dxInit(int flags = 1, int ord = 0)
         // flags = 0: disable descriptor heap, no logging
         // flags = -1: enable descriptor heap, with logging
         if (flags == -1)
-            fprintf(stderr, "[INFO] D3D12: Descriptor heap is to be enabled.\n\n"), flags = 1;
+            fprintf(stderr, "[INFO] D3D12: Descriptor heap is to be enabled.\n\n"), flags = 2;
         _USE_DESCRIPTOR_HEAP_ = flags;
 
         if (defaultStream != nullptr)
@@ -820,7 +820,10 @@ int dxShaderLaunchAsyncExt(void* hShader, void** buffers, int blocks, void* hStr
             uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
             assert(offsets[i] % (uint32_t)hd->inputs[i].TypeSize() == 0);
             uavDesc.Buffer.FirstElement = offsets[i] / (uint32_t)hd->inputs[i].TypeSize();
-            uavDesc.Buffer.NumElements = (uint32_t)hd->inputs[i].NumElements();
+            if (_USE_DESCRIPTOR_HEAP_ != 2)
+                uavDesc.Buffer.NumElements = hd->inputs[i].NumElements();
+            else
+                uavDesc.Buffer.NumElements = ((dx_buffer_t*)devicePtrs[i])->size / (uint32_t)hd->inputs[i].TypeSize() - uavDesc.Buffer.FirstElement;
             uavDesc.Buffer.StructureByteStride = (uint32_t)hd->inputs[i].TypeSize();
             device->pDevice->CreateUnorderedAccessView(((dx_buffer_t*)devicePtrs[i])->handle.Get(), nullptr, &uavDesc, handleCPU);
             handleCPU.ptr += nStep;
@@ -833,7 +836,10 @@ int dxShaderLaunchAsyncExt(void* hShader, void** buffers, int blocks, void* hStr
             uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
             assert(offsets[hd->inputs.size() + i] % (uint32_t)hd->outputs[i].TypeSize() == 0);
             uavDesc.Buffer.FirstElement = offsets[hd->inputs.size() + i] / (uint32_t)hd->outputs[i].TypeSize();
-            uavDesc.Buffer.NumElements = (uint32_t)hd->outputs[i].NumElements();
+            if (_USE_DESCRIPTOR_HEAP_ != 2)
+                uavDesc.Buffer.NumElements = (uint32_t)hd->outputs[i].NumElements();
+            else
+                uavDesc.Buffer.NumElements = ((dx_buffer_t*)devicePtrs[hd->inputs.size() + i])->size / (uint32_t)hd->outputs[i].TypeSize() - uavDesc.Buffer.FirstElement;
             uavDesc.Buffer.StructureByteStride = (uint32_t)hd->outputs[i].TypeSize();
             device->pDevice->CreateUnorderedAccessView(((dx_buffer_t*)devicePtrs[hd->inputs.size() + i])->handle.Get(), nullptr, &uavDesc, handleCPU);
             handleCPU.ptr += nStep;
