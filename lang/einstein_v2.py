@@ -379,9 +379,10 @@ def parse_to_ast(expr):
 
   input_names = set()
   def scan_items(root, ancestor, input_names):
-    if root._op != 'get_item':
-      return
-    input_names.add(root._value['tensor']._value)
+    if root._op == 'tensor':
+      input_names.add(root._value)
+    elif root._op == 'get_item':
+      input_names.add(root._value['tensor']._value)
   walk_in_ast(ast, 'root', scan_items, [input_names,])
 
   local_input_dict = {}
@@ -497,7 +498,7 @@ def walk_in_ast(parent, attr_id, func, args):
         _walk(ch, node._value['if'], i)
       _walk(node._value['true'], node._value, 'true')
       _walk(node._value['false'], node._value, 'false')
-    elif node._op in ['axis', 'const', 'axis_range', 'alter']:
+    elif node._op in ['axis', 'const', 'axis_range', 'alter', 'tensor']:
       pass
     else:
       raise Exception('Unhandled node type in walk_in_ast(): %s' % node._op)
