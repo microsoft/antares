@@ -25,7 +25,7 @@ namespace ab {
     CHECK(hLibDll, "Failed to load `" HLSL_LIBRARY_PATH "`, please download these libraries first: antares clean && antares\n");
 
     int mode = getenv("DXINIT") ? atoi(getenv("DXINIT")) : 1;
-    const char *compat = getenv("DXCOMPAT") ? getenv("DXCOMPAT") : "cs_6_5";
+    const char *compat = getenv("DXCOMPAT") ? getenv("DXCOMPAT") : "*";
 
     LOAD_ONCE(dxInit, int (*)(int, int));
     CHECK(0 == dxInit(mode, dev), "Failed initialize DirectX12 device.");

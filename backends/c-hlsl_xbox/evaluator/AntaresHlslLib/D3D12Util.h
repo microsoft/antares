@@ -1139,13 +1139,14 @@ namespace antares {
                 args_i.push_back(args[i].c_str());
             }
 #endif
-            if (std::wstring(profile) != std::wstring(L"cs_6_0"))
+            if (std::wstring(profile) > std::wstring(L"cs_6_0"))
                 args_i.push_back(L"-enable-16bit-types");
-            args_i.push_back(L"-D__SHADER_STAGE_COMPUTE=1");
+            if (std::wstring(profile) >= std::wstring(L"cs_6_5"))
+                args_i.push_back(L"-enable-templates");
+            args_i.push_back(L"-D__HLSL_SHADER_COMPUTE=1");
             // args_i.push_back(L"-O3");
             args_i.push_back(NULL);
-            // Just set a random name "ShaderFile"
-            // const WCHAR* args[] = { L"-enable-templates", L"-enable-16bit-types", NULL }; // TODO: will be supported in HLSL 2021 & cs_6_2
+
             std::string errStr;
             if (SUCCEEDED(m_pCompiler->Compile(pSrcBlob.Get(), L"ShaderFile", entryName, profile, args_i.data(), args_i.size() - 1, NULL, 0, NULL, &pResult)))
             {

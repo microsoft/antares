@@ -17,7 +17,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
@@ -55,9 +55,10 @@
       <EnableUAC>false</EnableUAC>
     </Link>
     <PostBuildEvent>
+<!--
       <Command>copy "$(WindowsSdkDir)Redist\D3D\$(PlatformTarget)\dxcompiler.dll" "$(TargetDir)" /Y
 copy "$(WindowsSdkDir)Redist\D3D\$(PlatformTarget)\dxil.dll" "$(TargetDir)" /Y
-</Command>
+</Command> -->
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
