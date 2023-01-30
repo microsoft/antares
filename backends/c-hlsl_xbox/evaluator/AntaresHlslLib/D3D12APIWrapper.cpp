@@ -212,11 +212,17 @@ int dxInit(int flags = 1, int ord = 0)
 #endif
         device->Init(ord);
 
-        // flags = 1: enable descriptor heap, no logging
-        // flags = 0: disable descriptor heap, no logging
-        // flags = -1: enable descriptor heap, with logging
-        if (flags == -1)
-            fprintf(stderr, "[INFO] D3D12: Descriptor heap is to be enabled.\n\n"), flags = 2;
+        // flags = -1: MODE-0 for xbox and MODE-1 for others
+        // flags = 0: MODE-0 - disable descriptor heap
+        // flags = 1: MODE-1 - enable descriptor heap for concrete shape (by default)
+        // flags = 2: MODE-2 - enable descriptor heap, with maximum address boundary setting
+        if (flags == -1) {
+#ifdef _GAMING_XBOX_SCARLETT
+            flags = 0;
+#else
+            flags = 1;
+#endif
+        }
         _USE_DESCRIPTOR_HEAP_ = flags;
 
         if (defaultStream != nullptr)
@@ -306,6 +312,15 @@ int dxMemFree(void* virtualPtr)
 static std::wstring default_compat = L"cs_6_0";
 
 int dxModuleSetCompat(const char* compat_name) {
+    if (*compat_name == '*') {
+#ifdef _GAMING_XBOX_SCARLETT
+        ::default_compat = L"cs_6_6";
+#else
+        ::default_compat = L"cs_6_5";
+#endif
+        return 0;
+    }
+
     std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
     ::default_compat = converter.from_bytes(compat_name);
     return 0;
