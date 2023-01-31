@@ -52,7 +52,8 @@ using namespace Microsoft::WRL;
 
 string error_string(HRESULT x, string FILE, int LINE)
 {
-    string e_str = "Error-line: (" + FILE + ") " + std::to_string(LINE) + "\n\n";
+    static string e_str;
+    e_str = "Error-line: (" + FILE + ") " + std::to_string(LINE) + "\n\n";
     if (x == D3D12_ERROR_ADAPTER_NOT_FOUND) e_str += "Reason: The specified cached PSO was created on a different adapter and cannot be reused on the current adapter.\n";
     else if (x == D3D12_ERROR_DRIVER_VERSION_MISMATCH) e_str += "Reason: The specified cached PSO was created on a different driver version and cannot be reused on the current adapter.\n";
     else if (x == DXGI_ERROR_INVALID_CALL) e_str += "Reason: The method call is invalid. For example, a method's parameter may not be a valid pointer.\n";
@@ -73,7 +74,7 @@ string error_string(HRESULT x, string FILE, int LINE)
     return e_str;
 }
 
-#define IFE(x)  ((FAILED(x)) ? (printf(error_string(x, __FILE__, __LINE__).c_str()), abort(), 0): 1)
+#define IFE(x)  ((FAILED(x)) ? (fprintf(stderr, error_string(x, __FILE__, __LINE__).c_str()), abort(), 0): 1)
 
 namespace {
 

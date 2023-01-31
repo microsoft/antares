@@ -71,7 +71,13 @@ namespace ab {
   void memFree(void *dptr) { return release(dptr, 0); }
 
   std::string moduleCompile(const std::string &source) {
-    return source;
+    LOAD_ONCE(dxModuleCompile, const char* (*)(const char*, long long *));
+    long long size = 0;
+    auto data = dxModuleCompile(source.c_str(), &size);
+    std::string binary;
+    binary.resize(size);
+    memcpy((void*)binary.c_str(), data, size);
+    return binary;
   }
 
   void* moduleLoad(const std::string &binary) {
