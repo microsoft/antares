@@ -154,6 +154,8 @@ float tanh_ex(float x) {
     full_body = f'''{pre_defines}
 {lds}
 {registers}{kwargs['attrs'].blend}
+#define ATOMIC_ADD(x, y) {{ ((x) += (y)); }} // TODO: InterlockedAdd(x, y)
+
 [RootSignature("DescriptorTable(UAV(u0, numDescriptors={len(in_args) + len(out_args)})){require_cbv}")]
 [numthreads({get_extent('threadIdx.x')}, {get_extent('threadIdx.y')}, {get_extent('threadIdx.z')})]
 void CSMain(uint3 threadIdx: SV_GroupThreadID, uint3 blockIdx: SV_GroupID) {{
