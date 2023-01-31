@@ -70,6 +70,7 @@ __forceinline__ __device__ __half hmin(const __half &a, const __half &b) {{ retu
 
 #endif
 {kwargs['attrs'].blend}
+#define ATOMIC_ADD(x, y) {{ atomicAdd(&(x), y); }}
 
 extern "C" __global__ __launch_bounds__({launch_bounds}) void {kernel_name}({expand_args}) {{
   {body}

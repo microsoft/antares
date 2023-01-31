@@ -60,7 +60,7 @@ def implement_builtins(name, args):
     return f'(({args[0]}) = ({args[1]}))'
   elif name == '__builtin_add':
     assert len(args) == 2
-    return f'atomicAdd(&({args[0]}), ({args[1]}))'
+    return f'ATOMIC_ADD({args[0]}, {args[1]})'
   elif name == '__builtin_cond_set':
     assert len(args) == 3
     return f'{{ if ({args[1]}) ({args[0]}) = ({args[2]}); }}'
