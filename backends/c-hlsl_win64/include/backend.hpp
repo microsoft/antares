@@ -12,22 +12,22 @@
 #define HLSL_LIBRARY_PATH_XBOX R"(.\antares_hlsl_xbox_v0.3.4_x64.dll)"
 
 #define CHECK(stat, reason, ...)  ((stat) ? 1 : (fprintf(stderr, "[CheckFail] "), fprintf(stderr, reason, ##__VA_ARGS__), fprintf(stderr, "\n\n"), fflush(stderr), exit(1), 0))
-#define LOAD_ONCE(func, ftype)   static FARPROC __ ## func; if (!__ ## func) { __ ## func = GetProcAddress(hLibDll, #func); CHECK(__ ## func, "No such function symbol defined: %s()", #func); } auto func = (ftype)__ ## func;
+#define LOAD_ONCE(func, ftype)   static FARPROC __ ## func; if (!__ ## func) { __ ## func = GetProcAddress(ab::hLibDll, #func); CHECK(__ ## func, "No such function symbol defined: %s()", #func); } auto func = (ftype)__ ## func;
 
 namespace ab {
 
   static HMODULE hLibDll;
-  static bool cpu_timing = false;
+  static bool cpu_timing = false, is_xbox = false;
 
   void init(int dev) {
     if (ab::hLibDll != nullptr)
       return;
     ab::hLibDll = LoadLibrary(HLSL_LIBRARY_PATH);
     if (ab::hLibDll == nullptr)
-      ab::hLibDll = LoadLibrary(HLSL_LIBRARY_PATH_XBOX);
+      ab::hLibDll = LoadLibrary(HLSL_LIBRARY_PATH_XBOX), is_xbox = true;
     CHECK(hLibDll, "Failed to load `" HLSL_LIBRARY_PATH "`, please download these libraries first: antares clean && antares\n");
 
-    int mode = getenv("DXINIT") ? atoi(getenv("DXINIT")) : -1;
+    int mode = getenv("DXINIT") ? atoi(getenv("DXINIT")) : 0;
     const char *compat = getenv("DXCOMPAT") ? getenv("DXCOMPAT") : "*";
 
     LOAD_ONCE(dxInit, int (*)(int, int));
