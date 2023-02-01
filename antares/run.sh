@@ -6,6 +6,7 @@ ANTARES_ROOT=$(pwd)
 bash -e ./engine/check_environ.sh
 
 export ANTARES_DRIVER_PATH=${ANTARES_DRIVER_PATH:-${HOME}/.cache/antares}
+export BACKEND=$(./antares/get_backend.sh)
 
 if [[ "$@" == "clean" ]]; then
   set -x
@@ -14,6 +15,9 @@ if [[ "$@" == "clean" ]]; then
 elif [[ "$@" == "rest-server" ]]; then
   export HTTP_SERVICE=1
   shift
+elif [[ "$@" == "check-backend" ]]; then
+  echo $BACKEND
+  exit 0
 elif [[ "$@" == "backends" ]]; then
   ls -1 ./backends | grep -v c-base
   exit 0
@@ -49,8 +53,6 @@ fi
 if [[ "$COMPUTE_V1" == "" ]]; then
   export COMPUTE_V1='- einstein_v2("output0[N, M] = input0[N, M] + input1[N, M]", input_dict={"input0": {"dtype": "float32", "shape": [1024, 512]}, "input1": {"dtype": "float32", "shape": [1024, 512]}})'
 fi
-
-export BACKEND=$(./antares/get_backend.sh)
 
 mkdir -p ${ANTARES_DRIVER_PATH}
 
