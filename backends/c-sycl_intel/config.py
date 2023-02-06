@@ -4,6 +4,7 @@
 import subprocess, os
 from common import backend
 
+
 def to_search_space(ast_seq, input_dict, output_dict):
   from antares.default_codegen import codegen
   from antares.common import AntaresGlobal
@@ -55,7 +56,7 @@ def do_native_translation_v2(codeset, **kwargs):
   del parsed_lines
 
   body = body.replace('Idx.', 'Idx_')
-  body = body.replace('__syncthreads()', '_item.barrier(cl::sycl::access::fence_space::local_space);').replace('\n', '\n    ')
+  body = body.replace('__syncthreads()', '_item.barrier(cl::sycl::access::fence_space::local_space)').replace('\n', '\n    ')
 
   # Reversed order in dim configs
   index_str = 'const int blockIdx_x = _item.get_group(2), blockIdx_y = _item.get_group(1), blockIdx_z = _item.get_group(0), threadIdx_x = _item.get_local_id(2), threadIdx_y = _item.get_local_id(1), threadIdx_z = _item.get_local_id(0);'
@@ -85,7 +86,7 @@ def do_native_translation_v2(codeset, **kwargs):
 
 #endif
 
-extern "C" void {kernel_name}(sycl::queue* q, void **__args) {{
+extern "C" void {kernel_name}(sycl::queue* q, int blks, void **__args) {{
   {expand_args}
 
   using namespace cl::sycl;
@@ -93,7 +94,7 @@ extern "C" void {kernel_name}(sycl::queue* q, void **__args) {{
   q->submit([&](auto &cgh) {{
     {group_shared}
     {expand_accs}
-    cgh.parallel_for(cl::sycl::nd_range<3>(cl::sycl::range<3>({str(gds)[1:-1]}), cl::sycl::range<3>({str(lds)[1:-1]})), [=](cl::sycl::nd_item<3> _item) {{
+    cgh.parallel_for(cl::sycl::nd_range<3>(cl::sycl::range<3>({gds[0]}, {gds[1]}, blks * {lds[2]}), cl::sycl::range<3>({str(lds)[1:-1]})), [=](cl::sycl::nd_item<3> _item) {{
       {expand_ptrs}
       {index_str}
 

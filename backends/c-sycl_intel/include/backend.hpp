@@ -1,10 +1,10 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-//; eval_flags(c-sycl_intel): [dpcpp] -ldl -lpthread
+//; eval_flags(c-sycl_intel): -I/opt/intel/oneapi/compiler/latest/linux/include -lsycl -ldl -lpthread -Wno-deprecated-declarations
 //; eval_flags(c-sycl_cuda): [/usr/local/dpcpp-cuda/bin/clang++] -ldl -I/usr/local/dpcpp-cuda/include/sycl -L/usr/local/dpcpp-cuda/lib -lsycl -fsycl -fsycl-targets=nvptx64-nvidia-cuda-sycldevice -fsycl-unnamed-lambda -lpthread -iquote/usr/local/cuda/include -L/usr/local/cuda/lib64 -L/usr/local/cuda/lib64/stubs -lcuda -DSYCL_CUDA
 
-#include <CL/sycl.hpp>
+#include <sycl/CL/sycl.hpp>
 #include <dlfcn.h>
 #include <pthread.h>
 #include <malloc.h>
@@ -72,11 +72,7 @@ namespace ab {
   }
 
   std::string moduleCompile(const std::string &source) {
-    return source;
-  }
-
-  void* moduleLoad(const std::string &binary) {
-    ab_utils::TempFile tempfile("cpp", binary);
+    ab_utils::TempFile tempfile("cpp", source);
     auto path = tempfile.get_path();
 
     if (__BACKEND__ == "c-sycl_intel")
@@ -91,18 +87,61 @@ namespace ab {
 #endif
       ab_utils::Process({"/usr/local/dpcpp-cuda/bin/clang++", path, "-std=c++17", "-ldl", "-fPIC", "-shared", "-O2", "-I/usr/local/dpcpp-cuda/include/sycl", "-L/usr/local/dpcpp-cuda/lib", "-lsycl", "-fsycl", "-fsycl-targets=nvptx64-nvidia-cuda-sycldevice", "-fsycl-unnamed-lambda", "-Wno-unknown-cuda-version", "-Xsycl-target-backend=nvptx64-nvidia-cuda --cuda-gpu-arch=sm_" + gpu_arch, "-o", path + ".out"}, 20);
     }
-    path = (path[0] == '/' ? path : "./" + path) + ".out";
+
+    std::ifstream t(path + ".out", std::ios_base::binary);
+    std::string _((std::istreambuf_iterator<char>(t)), std::istreambuf_iterator<char>());
+    return _;
+  }
+
+  void* moduleLoad(const std::string &binary) {
+    ab_utils::TempFile tempfile("out", binary);
+    auto path = tempfile.get_path();
+    if (path[0] != '/')
+      path = "./" + path;
     void* hmod = dlopen(path.c_str(), RTLD_NOW | RTLD_GLOBAL);
     CHECK_OK(hmod != nullptr);
     return hmod;
   }
 
   std::vector<void*> moduleGetFunction(const void *hModule, const std::string &fname, const std::unordered_map<std::string, int> &threads) {
-    return { dlsym((void*)hModule, fname.c_str()) };
+    auto query = [&](const std::string &axis, long defval = 1) -> void* {
+      auto it = threads.find(axis);
+      if (it == threads.end())
+        return (void*)defval;
+      return (void*)(long)it->second;
+    };
+
+    std::vector<void*> fdata = { dlsym((void*)hModule, fname.c_str()), query("blockIdx_x") };
+    void *item = (void*)query("$", 0);
+    if (item) {
+      fdata.push_back(item);
+      fdata.push_back(query("$$", 1));
+
+      for (int i = 0; ; ++i) {
+        void *item = (void*)query("$" + std::to_string(i), 0);
+        if (!item)
+          break;
+        fdata.push_back(item);
+      }
+    }
+    return fdata;
   }
 
-  void launchKernel(const std::vector<void*> &hFunction, const std::vector<void*> &krnl_args, void *stream) {
-    ((void(*)(void*, void* const*))hFunction[0])(&_sycl_queue, krnl_args.data());
+  void launchKernel(const std::vector<void*> &hFunc, const std::vector<void*> &krnl_args, void *stream) {
+    long attrs = (long)hFunc[1];
+    if (hFunc.size() > 2) {
+      attrs = (long)hFunc[3];
+      for (int i = 4; i < hFunc.size(); ++i) {
+        long val = (long)hFunc[i];
+        if (val < 0) continue;
+
+        auto ptr = (long*)krnl_args[i - 4 + (long)hFunc[2]];
+        attrs *= (*ptr + val - 1) / val;
+      }
+      if (!attrs) return;
+    }
+
+    ((void(*)(void*, long, void* const*))hFunc[0])(&_sycl_queue, attrs, krnl_args.data());
     // _sycl_queue.wait();
   }
 
@@ -113,13 +152,11 @@ namespace ab {
   void memcpyHtoD(void *dptr, void *hptr, size_t byteSize, void *stream) {
     ab::synchronize(stream);
     _sycl_queue.memcpy(dptr, hptr, byteSize);
-    return;
   }
 
   void memcpyDtoH(void *hptr, void *dptr, size_t byteSize, void *stream) {
     ab::synchronize(stream);
     _sycl_queue.memcpy(hptr, dptr, byteSize);
-    return;
   }
 
   void* recordTime(void *stream) {

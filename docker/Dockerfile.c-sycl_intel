@@ -1,4 +1,4 @@
-FROM intel/oneapi-hpckit:latest
+FROM intel/oneapi-hpckit:2023.0.0-devel-ubuntu20.04
 
 ENV DEBIAN_FRONTEND noninteractive
 ENV PYTHONDONTWRITEBYTECODE 1
@@ -15,8 +15,10 @@ RUN apt-get update && apt install -y --no-install-recommends git ca-certificates
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN /bin/echo -e "set backspace=indent,eol,start\nset nocompatible\nset ts=4" > /etc/vim/vimrc.tiny
+RUN cp -r /opt/intel/oneapi/compiler/latest/linux/include/sycl/CL /opt/intel/oneapi/compiler/latest/linux/include/
 
+RUN apt update && apt-get install -y python3-pip
 RUN pip3 install --upgrade antares && mkdir -p /root/.local/antares && mv $(antares pwd)/../3rdparty /root/.local/antares/3rdparty && pip3 uninstall antares -y && echo 'exec /antares/main.py "$@"' > /usr/local/bin/antares && chmod a+x /usr/local/bin/antares
 
-RUN python3 -m pip install --user torch==1.10.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+# RUN python3 -m pip install --user torch==1.10.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
 # RUN python3 -m pip install --upgrade intel-tensorflow && python3 -m pip install --upgrade numpy mpi4py
