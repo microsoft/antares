@@ -46,6 +46,12 @@ def do_native_translation_v2(codeset, **kwargs):
 
   launch_bounds = get_extent('threadIdx.x') * get_extent('threadIdx.y') * get_extent('threadIdx.z')
 
+  blend = kwargs['attrs'].blend
+  if re.search(fr'\bATOMIC_ADD\b', body):
+    blend += '#define ATOMIC_ADD(x, y) atomicAdd(&(x), y)\n'
+  if re.search(fr'\bATOMIC_MAX\b', body):
+    blend += '#define ATOMIC_MAX(x, y) atomicMax(&(x), y)\n'
+
   full_body = f'''
 #include <hip/hip_runtime.h>
 #include <hip/hip_fp16.h>
@@ -69,8 +75,7 @@ __forceinline__ __device__ __half hmax(const __half &a, const __half &b) {{ retu
 __forceinline__ __device__ __half hmin(const __half &a, const __half &b) {{ return a < b ? a : b; }}
 
 #endif
-{kwargs['attrs'].blend}
-#define ATOMIC_ADD(x, y) {{ atomicAdd(&(x), y); }}
+{blend}
 
 extern "C" __global__ __launch_bounds__({launch_bounds}) void {kernel_name}({expand_args}) {{
   {body}

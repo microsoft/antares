@@ -135,14 +135,15 @@ namespace ab {
         long val = (long)hFunc[i];
         if (val < 0) continue;
 
-        auto ptr = (long*)krnl_args[i - 4 + (long)hFunc[2]];
-        attrs *= (*ptr + val - 1) / val;
+        auto ptr = (size_t)krnl_args[i - 4 + (long)hFunc[2]];
+        attrs *= (ptr + val - 1) / val;
       }
       if (!attrs) return;
     }
 
     ((void(*)(void*, long, void* const*))hFunc[0])(&_sycl_queue, attrs, krnl_args.data());
-    // _sycl_queue.wait();
+    if (__BACKEND__ == "c-sycl_intel") // have to sync unlike CUDA
+       _sycl_queue.wait();
   }
 
   void synchronize(void *stream) {
