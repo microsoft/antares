@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-import subprocess, os
+import subprocess, os, re
 from common import backend
 
 
@@ -26,7 +26,7 @@ def get_execution_parallism():
 def do_native_translation_v2(codeset, **kwargs):
   kernel_name, in_args, out_args, body = codeset
 
-  expand_ins = [f'const auto* {x[1]} = ({x[0]}* __restrict)__args[{i}];' for i, x in enumerate(in_args)]
+  expand_ins = [f'auto* {x[1]} = ({x[0]}* __restrict)__args[{i}];' for i, x in enumerate(in_args)]
   expand_outs = [f'auto* {x[1]} = ({x[0]}* __restrict)__args[{i + len(in_args)}];' for i, x in enumerate(out_args)]
   expand_args = ' '.join(expand_ins + expand_outs)
   expand_accs = expand_ptrs = ''
@@ -58,6 +58,12 @@ def do_native_translation_v2(codeset, **kwargs):
   body = body.replace('Idx.', 'Idx_')
   body = body.replace('__syncthreads()', '_item.barrier(cl::sycl::access::fence_space::local_space)').replace('\n', '\n    ')
 
+  blend = kwargs['attrs'].blend
+  if re.search(fr'\bATOMIC_ADD\b', body):
+    blend += '#define ATOMIC_ADD(x, y) sycl::atomic_fetch_add(sycl::atomic<std::remove_reference<decltype(x)>::type>(sycl::global_ptr<std::remove_reference<decltype(x)>::type>(&(x))), y)\n'
+  if re.search(fr'\bATOMIC_MAX\b', body):
+    blend += '#define ATOMIC_MAX(x, y) sycl::atomic_fetch_max(sycl::atomic<std::remove_reference<decltype(x)>::type>(sycl::global_ptr<std::remove_reference<decltype(x)>::type>(&(x))), y)\n'
+
   # Reversed order in dim configs
   index_str = 'const int blockIdx_x = _item.get_group(2), blockIdx_y = _item.get_group(1), blockIdx_z = _item.get_group(0), threadIdx_x = _item.get_local_id(2), threadIdx_y = _item.get_local_id(1), threadIdx_z = _item.get_local_id(0);'
   lds = [get_extent('threadIdx_z'), get_extent('threadIdx_y'), get_extent('threadIdx_x')]
@@ -66,7 +72,7 @@ def do_native_translation_v2(codeset, **kwargs):
   full_body = f'''#include <math.h>
 #include <algorithm>
 #include <CL/sycl.hpp>
-{kwargs['attrs'].blend}
+{blend}
 
 #ifndef __SYCL_COMMON_MACRO__
 #define __SYCL_COMMON_MACRO__

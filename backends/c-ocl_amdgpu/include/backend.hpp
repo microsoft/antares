@@ -3,7 +3,7 @@
 
 //; eval_flags(c-ocl_amdgpu): -I/opt/rocm/opencl/include -L/opt/rocm/opencl/lib -lOpenCL -DCL_TARGET_OPENCL_VERSION=120
 //; eval_flags(c-ocl_nvidia): -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -lOpenCL
-//; eval_flags(c-ocl_intel): -I/opt/intel/oneapi/compiler/latest/linux/include/sycl -L/opt/intel/oneapi/compiler/latest/linux/lib -lOpenCL -Wno-deprecated-declarations
+//; eval_flags(c-ocl_intel): -I/opt/intel/oneapi/compiler/latest/linux/include -L/opt/intel/oneapi/compiler/latest/linux/lib -lOpenCL -Wno-deprecated-declarations
 
 #include <CL/cl.h>
 
@@ -116,7 +116,7 @@ namespace ab {
     auto kernel = (cl_kernel)hFunc[0];
     for (int i = 0; i < krnl_args.size(); ++i) {
       if (hFunc.size() > 7 && i >= (long)hFunc[7])
-        CHECK_OK(0 == clSetKernelArg(kernel, i, sizeof(cl_uint), (void*)&krnl_args[i]));
+        CHECK_OK(0 == clSetKernelArg(kernel, i, sizeof(cl_uint), (void*)&krnl_args[i]) || i + 1 == krnl_args.size());
       else
         CHECK_OK(0 == clSetKernelArg(kernel, i, sizeof(cl_mem), (void*)&krnl_args[i]));
     }

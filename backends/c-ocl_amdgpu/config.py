@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-import subprocess, os
+import subprocess, os, re
 from common import backend
 
 def to_search_space(ast_seq, input_dict, output_dict):
@@ -67,4 +67,5 @@ __kernel void {kernel_name}({expand_args}) {{{pre_defines}
   {body}
 }}
 '''
+  full_body = re.sub(fr'\bint64_t\b', 'long', full_body)
   return full_body

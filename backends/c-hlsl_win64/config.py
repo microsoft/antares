@@ -147,14 +147,19 @@ float tanh_ex(float x) {
     lds = '\n'.join(lds)
     registers = ''.join(registers)
 
+    blend = kwargs['attrs'].blend
+    if re.search(fr'\bATOMIC_ADD\b', body):
+      blend += 'template <class X, class Y, class Z> Z ATOMIC_ADD(X x, Y y) { Z z; InterlockedAdd(x, y, &z); return z; }\n'
+    if re.search(fr'\bATOMIC_MAX\b', body):
+      blend += 'template <class X, class Y, class Z> Z ATOMIC_MAX(X x, Y y) { Z z; InterlockedMax(x, y, &z); return z; }\n'
+
     require_cbv = ''
     if len(cb_args) > 0:
       require_cbv = f', RootConstants(num32BitConstants={get_extent("cbuffers")}, b0)'
 
     full_body = f'''{pre_defines}
 {lds}
-{registers}{kwargs['attrs'].blend}
-#define ATOMIC_ADD(x, y) {{ ((x) += (y)); }} // TODO: InterlockedAdd(x, y)
+{registers}{blend}
 
 [RootSignature("DescriptorTable(UAV(u0, numDescriptors={len(in_args) + len(out_args)})){require_cbv}")]
 [numthreads({get_extent('threadIdx.x')}, {get_extent('threadIdx.y')}, {get_extent('threadIdx.z')})]
