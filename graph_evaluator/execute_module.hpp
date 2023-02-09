@@ -244,7 +244,7 @@ struct ExecutionModule {
   std::unordered_map<std::string, tensor_property> local_tensors;
   std::vector<kernel_property> local_kernels;
 
-  std::string backend;
+  std::string backend, vamap;
 
   void *hModule;
 
@@ -266,6 +266,7 @@ struct ExecutionModule {
   ExecutionModule(std::string source, int dev = 0) {
     ab::init(dev);
     source = ExecutionModule::load_source(source);
+    vamap = get_between(source, "// VAMAP: ", "\n");
 
     auto encoded_params = get_between(source, "// GLOBALS: ", "\n");
     auto params = ssplit(encoded_params, " -> ", true);
