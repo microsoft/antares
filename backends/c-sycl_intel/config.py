@@ -60,9 +60,9 @@ def do_native_translation_v2(codeset, **kwargs):
 
   blend = kwargs['attrs'].blend
   if re.search(fr'\bATOMIC_ADD\b', body):
-    blend += '#define ATOMIC_ADD(x, y) sycl::atomic_fetch_add(sycl::atomic<std::remove_reference<decltype(x)>::type>(sycl::global_ptr<std::remove_reference<decltype(x)>::type>(&(x))), y)\n'
+    blend += '#define ATOMIC_ADD(x, y, z) sycl::atomic_fetch_add(sycl::atomic<std::remove_reference<decltype(x)>::type>(sycl::global_ptr<std::remove_reference<decltype(x)>::type>(&(x[y]))), z)\n'
   if re.search(fr'\bATOMIC_MAX\b', body):
-    blend += '#define ATOMIC_MAX(x, y) sycl::atomic_fetch_max(sycl::atomic<std::remove_reference<decltype(x)>::type>(sycl::global_ptr<std::remove_reference<decltype(x)>::type>(&(x))), y)\n'
+    blend += '#define ATOMIC_MAX(x, y, z) sycl::atomic_fetch_max(sycl::atomic<std::remove_reference<decltype(x)>::type>(sycl::global_ptr<std::remove_reference<decltype(x)>::type>(&(x[y]))), z)\n'
 
   # Reversed order in dim configs
   index_str = 'const int blockIdx_x = _item.get_group(2), blockIdx_y = _item.get_group(1), blockIdx_z = _item.get_group(0), threadIdx_x = _item.get_local_id(2), threadIdx_y = _item.get_local_id(1), threadIdx_z = _item.get_local_id(0);'

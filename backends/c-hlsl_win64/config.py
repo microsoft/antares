@@ -149,9 +149,9 @@ float tanh_ex(float x) {
 
     blend = kwargs['attrs'].blend
     if re.search(fr'\bATOMIC_ADD\b', body):
-      blend += 'template <class X, class Y, class Z> Z ATOMIC_ADD(X x, Y y) { Z z; InterlockedAdd(x, y, &z); return z; }\n'
+      blend += '\ntemplate <class X, class Y, class Z> Z ATOMIC_ADD(X x, Y y, Z z) { Z w; InterlockedAdd(x[y], z, w); return w; }'
     if re.search(fr'\bATOMIC_MAX\b', body):
-      blend += 'template <class X, class Y, class Z> Z ATOMIC_MAX(X x, Y y) { Z z; InterlockedMax(x, y, &z); return z; }\n'
+      blend += '\ntemplate <class X, class Y, class Z> Z ATOMIC_MAX(X x, Y y, Z z) { Z w; InterlockedMax(x[y], z, w); return w; }'
 
     require_cbv = ''
     if len(cb_args) > 0:

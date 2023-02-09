@@ -42,9 +42,9 @@ def do_native_translation_v2(codeset, **kwargs):
 
   blend = kwargs['attrs'].blend
   if re.search(fr'\bATOMIC_ADD\b', body):
-    blend += '#define ATOMIC_ADD(x, y) atomicAdd(&(x), y)\n'
+    blend += '#define ATOMIC_ADD(x, y, z) atomicAdd(&(x[y]), z)\n'
   if re.search(fr'\bATOMIC_MAX\b', body):
-    blend += '#define ATOMIC_MAX(x, y) atomicMax(&(x), y)\n'
+    blend += '#define ATOMIC_MAX(x, y, z) atomicMax(&(x[y]), z)\n'
 
   full_body = f'''
 #include <cuda_runtime.h>
