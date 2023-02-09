@@ -27,6 +27,9 @@ def eval(kernel_path, **kwargs):
   if rev_port:
     with open(kernel_path, 'rb') as fp:
       kernel_data = fp.read()
+    if int(kwargs.get('compile', 0)):
+      import binascii
+      return {'HEX': '@' + binascii.hexlify(kernel_data).decode('utf-8') + '@'}
     def receive(s, size):
       buff = b''
       while size > 0:

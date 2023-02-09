@@ -288,11 +288,11 @@ def dump_binaries(path, hex_code, properties):
   try:
     shutil.copyfile(f'{compiler_path}/../backends/{backend}/include/backend.hpp', f'{path}/backend.hpp')
   except:
-    return False
+    pass
   shutil.copyfile(f'{compiler_path}/../graph_evaluator/execute_module.hpp', f'{path}/execute_module.hpp')
 
   with open(f'{path}/Makefile', 'w') as fp:
-    fp.write('main:\n\t%s main.cpp -o main.exe %s\n\t./main.exe\n' % (properties['compiler'], properties['compile_flags']))
+    fp.write('main:\n\t%s main.cpp -o main.exe %s\n\t./main.exe\n' % (properties.get('compiler', 'g++'), properties.get('compile_flags', '-O2 -static')))
 
   input_list = AntaresGlobal.global_arg_props['_in']
   output_list = AntaresGlobal.global_arg_props['_out']

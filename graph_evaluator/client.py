@@ -13,19 +13,18 @@ def init(**kwargs):
     backend = os.path.basename(backend_root)
     source_root = f'{backend_root}/../../graph_evaluator'
 
-    if not os.path.exists(f'{backend_root}/include/backend.hpp'):
-      global eval_client
-      try:
-        import importlib
-        eval_client = importlib.import_module('backends.%s.evaluator.client' % backend)
-      except ModuleNotFoundError:
-        print('\n[EvalAgent] Evaluator for backend `%s` not found, skipping evaluation.' % backend)
-        exit(1)
-      except:
-        traceback.print_exc()
-        exit(1)
+    global eval_client
+    try:
+      import importlib
+      eval_client = importlib.import_module('backends.%s.evaluator.client' % backend)
       return eval_client.init(**kwargs)
+    except ModuleNotFoundError:
+      pass
+    except:
+      traceback.print_exc()
+      exit(1)
 
+    assert os.path.exists(f'{backend_root}/include/backend.hpp')
     evaluator_path = '%s/evaluator.%s' % (os.environ['ANTARES_DRIVER_PATH'], backend)
 
     if backend_root:
