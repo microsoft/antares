@@ -5,12 +5,45 @@ import json
 import os
 import urllib.request
 
+rev_port = int(os.environ.get('REV', 0))
+rev_state = {}
+
 def init(**kwargs):
-  if not os.environ.get('AGENT_URL', ''):
+  if rev_port:
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    print(f"\n>> Waiting for peer to connect to port: {rev_port} ..")
+    s.bind(('0.0.0.0', rev_port))
+    s.listen()
+    conn, addr = s.accept()
+    rev_state["s"], rev_state["conn"] = s, conn
+    print(f"Received connection from peer.")
+  elif not os.environ.get('AGENT_URL', ''):
     print("Skipping evaluation: environment variable `AGENT_URL` not specified (required: e.g. export AGENT_URL=<win10-ip-addr>)")
     exit(1)
 
 def eval(kernel_path, **kwargs):
+  if rev_port:
+    with open(kernel_path, 'rb') as fp:
+      kernel_data = fp.read()
+    def receive(s, size):
+      buff = b''
+      while size > 0:
+        data = s.recv(size)
+        if not data:
+            return b''
+        size -= len(data)
+        buff += data
+      return buff
+
+    conn = rev_state["conn"]
+    conn.sendall(('%08u' % len(kernel_data)).encode('utf-8'))
+    conn.sendall(kernel_data)
+    nbytes = int(receive(conn, 8))
+    resp = json.loads(receive(conn, nbytes))
+    return resp
+
   url_with_port = os.environ['AGENT_URL'].strip()
   if ':' not in url_with_port and not url_with_port.endswith('/'):
     url_with_port += ':8860'
