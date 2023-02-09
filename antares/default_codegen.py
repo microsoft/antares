@@ -113,9 +113,9 @@ def codegen(ast_seq, input_dict, output_dict, best_config, space_only=False):
       reduce_maps = {'+': 'tvm.te.sum', '>': 'tvm.te.max', '<': 'tvm.te.min'}
       if ast['root'].dtype() == 'float16' and props['reduce_type'] in ('>', '<'):
         if props['reduce_type'] == '>':
-          reduce_func = 'tvm.te.comm_reducer(lambda x, y: tvm.tir.call_pure_extern(x.dtype, "hmax", x, y), lambda init_t: tvm.tir.const(-65504, dtype=init_t))'
+          reduce_func = 'tvm.te.comm_reducer(lambda x, y: tvm.tir.call_pure_extern(x.dtype, "fp16_max", x, y), lambda init_t: tvm.tir.const(-65504, dtype=init_t))'
         else:
-          reduce_func = 'tvm.te.comm_reducer(lambda x, y: tvm.tir.call_pure_extern(x.dtype, "hmin", x, y), lambda init_t: tvm.tir.const(65504, dtype=init_t))'
+          reduce_func = 'tvm.te.comm_reducer(lambda x, y: tvm.tir.call_pure_extern(x.dtype, "fp16_min", x, y), lambda init_t: tvm.tir.const(65504, dtype=init_t))'
       elif props['reduce_type'] in reduce_maps:
         reduce_func = reduce_maps[props['reduce_type']]
       elif props['reduce_type'] == '*':
