@@ -8,7 +8,7 @@ int main(int argc, char** argv)
     float expected_timeout = -1;
     use_progress = 0;
     int dev = 0, compile = 0;
-    std::string vamap, value_absdir;
+    std::string value_absdir;
 
     for (int i = 2; i < argc; ++i) {
       if (!strcmp(argv[i], "--progress"))
@@ -23,9 +23,7 @@ int main(int argc, char** argv)
         value_absdir = argv[++i];
         if (value_absdir.size() > 0 && value_absdir.back() != '/' && value_absdir.back() != '\\')
           value_absdir += "/";
-      } else if (!strcmp(argv[i], "--vamap"))
-        vamap = argv[++i];
-      else if (!strcmp(argv[i], "--dev"))
+      } else if (!strcmp(argv[i], "--dev"))
         dev = std::atoi(argv[++i]);
       else {
         fprintf(stderr, "[Error] Unrecognized keyword: %s\n", argv[i]);
@@ -126,8 +124,8 @@ int main(int argc, char** argv)
       ab::synchronize(nullptr);
     }
     int expanded_args = 0;
-    if (vamap.size() > 0) {
-      char *p = strtok((char*)vamap.data(), ",");
+    if (gm.vamap.size() > 0) {
+      char *p = strtok((char*)gm.vamap.data(), ",");
       while (p) {
         p = strchr(p, ':') + 1;
         global_args.push_back((void*)(size_t)std::atoi(p));

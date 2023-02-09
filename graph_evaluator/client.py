@@ -50,7 +50,7 @@ def init(**kwargs):
       EVAL_PROPERTIES['compiler'], EVAL_PROPERTIES['compile_flags'] = compiler, compile_flags
       compile_flags += f' -I{backend_root}/include'
 
-      if 0 != os.system(f"diff {backend_root}/include/backend.hpp {os.environ['ANTARES_DRIVER_PATH']}/backend.hpp@{backend} >/dev/null 2>&1"):
+      if 0 != os.system(f"diff {backend_root}/include/backend.hpp {os.environ['ANTARES_DRIVER_PATH']}/backend.hpp_@{backend} >/dev/null 2>&1"):
         error_info = f"SDK for `{backend}` is not configured correctly, please look into the error messages and reconfigure the corresponding environment."
         compile_cmd = f'{compiler} {source_root}/run_graph.cpp -o {evaluator_path}.tmp {compile_flags}'
         sys.stdout.write('\033[91m')
@@ -58,7 +58,7 @@ def init(**kwargs):
         compile_stat = os.system(f'timeout 30s {compile_cmd}')
         sys.stdout.write('\033[0m\n')
         assert compile_stat == 0, error_info
-        os.system(f"cp {backend_root}/include/backend.hpp {os.environ['ANTARES_DRIVER_PATH']}/backend.hpp@{backend}")
+        os.system(f"cp {backend_root}/include/backend.hpp {os.environ['ANTARES_DRIVER_PATH']}/backend.hpp_@{backend}")
         os.system(f'mv {evaluator_path}.tmp {evaluator_path} >/dev/null 2>&1')
         is_wsl = 1 if (os.environ.get('IS_WSL', '0') == '1') else 0
 
@@ -99,9 +99,6 @@ def eval(kernel_path, **kwargs):
         flags += ['--timeout', timeout]
     else:
       flags += ['--compile']
-
-    if 'VAMAP' in os.environ:
-      flags += ['--vamap', os.environ['VAMAP']]
 
     flags = ' '.join(flags)
     exec_cmd = f'sh -c "cd {os.path.dirname(kernel_path)} && BACKEND={backend} {launcher} {evaluator_path} my_kernel.cc {flags}" || true'
