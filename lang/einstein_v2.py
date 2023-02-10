@@ -242,7 +242,7 @@ class OpTensor:
         assert self._dtype == other._dtype or '@' in self._dtype or '@' in other._dtype, "Conditional true and false values must have same datatype (%s v.s. %s)" % (self._dtype, other._dtype)
         conditions = conditions if isinstance(conditions, list) else [conditions]
         for cond in conditions:
-          assert cond._dtype == 'int8', 'Each condition in when statement must be boolean(int8) type, get: %s' % cond._dtype
+          assert cond._dtype.startswith('int'), 'Each condition in when statement must be integer type, get: %s' % cond._dtype
         return OpTensor('when', {"if": conditions, "true": self, "false": other, "merge_op": merge_op}, self._dtype)
 
 def get_valid_axis(expr):
