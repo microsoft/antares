@@ -19,6 +19,8 @@
 #include <functional>
 #include <numeric>
 
+#include <malloc.h>
+
 #if defined(_WIN64)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>

@@ -3,6 +3,27 @@
 
 #include "execute_module.hpp"
 
+static void *memory_alloc(size_t length)
+{
+#if defined(HLSL_LIBRARY_PATH)
+    void *data_ptr = (void*)GlobalAlloc(0, length);
+#else
+    void *data_ptr = (void*)memalign(256, length);
+#endif
+    return data_ptr;
+}
+
+static void memory_free(void *data_ptr)
+{
+    if (!data_ptr)
+        return;
+#if defined(HLSL_LIBRARY_PATH)
+    GlobalFree(data_ptr);
+#else
+    free(data_ptr);
+#endif
+}
+
 int main(int argc, char** argv)
 {
     float expected_timeout = -1;
@@ -70,8 +91,7 @@ int main(int argc, char** argv)
       void *dptr = allocate_tensor(it);
       global_args.push_back(dptr);
 
-      std::vector<char> hptr(it.mem_size());
-
+      void *data_ptr = memory_alloc(it.mem_size());
       FILE *fp = nullptr;
       if (value_absdir.size() > 0) {
         std::string name = value_absdir + it.name;
@@ -83,45 +103,48 @@ int main(int argc, char** argv)
         fseek(fp, 0, SEEK_END);
         size_t fbytes = ftell(fp);
         fseek(fp, 0, SEEK_SET);
-        fread(hptr.data(), 1, std::min(it.mem_size(), fbytes), fp);
+        fread(data_ptr, 1, std::min(it.mem_size(), fbytes), fp);
         for (int i = fbytes; i < it.mem_size(); ++i)
-          hptr[i] = hptr[i - fbytes];
+          ((char*)data_ptr)[i] = ((char*)data_ptr)[i - fbytes];
         fclose(fp);
       } else if (it.dtype == "int32") {
         for (size_t x = 0; x < size; ++x)
-          ((int*)hptr.data())[x] = 0;
+          ((int*)data_ptr)[x] = 0;
       } else if (it.dtype == "int16") {
         for (size_t x = 0; x < size; ++x)
-          ((short*)hptr.data())[x] = 0;
+          ((short*)data_ptr)[x] = 0;
       } else if (it.dtype == "int64") {
         for (size_t x = 0; x < size; ++x)
-          ((llong*)hptr.data())[x] = 0;
+          ((llong*)data_ptr)[x] = 0;
       } else if (it.dtype == "float16") {
         for (size_t x = 0; x < size; ++x)
-          ((unsigned short*)hptr.data())[x] = fp32_to_fp16((x + i + 1) % 71);
+          ((unsigned short*)data_ptr)[x] = fp32_to_fp16((x + i + 1) % 71);
       } else if (it.dtype == "float32") {
         for (size_t x = 0; x < size; ++x)
-          ((float*)hptr.data())[x] = (x + i + 1) % 71;
+          ((float*)data_ptr)[x] = (x + i + 1) % 71;
       } else if (it.dtype == "float64") {
         for (size_t x = 0; x < size; ++x)
-          ((double*)hptr.data())[x] = (x + i + 1) % 71;
+          ((double*)data_ptr)[x] = (x + i + 1) % 71;
       } else {
         size_t byte_size = size * it.type_size();
         for (size_t x = 0; x < byte_size / sizeof(int); ++x)
-          ((int*)hptr.data())[x] = (x + i + 1) % 71;
+          ((int*)data_ptr)[x] = (x + i + 1) % 71;
         for (size_t x = byte_size - byte_size % sizeof(int); x < byte_size; x++)
-          ((char*)hptr.data())[x] = 1;
+          ((char*)data_ptr)[x] = 1;
       }
-      ab::memcpyHtoD(dptr, hptr.data(), hptr.size(), nullptr);
+      ab::memcpyHtoD(dptr, data_ptr, it.mem_size(), nullptr);
       ab::synchronize(nullptr);
+      memory_free(data_ptr);
     }
     for (auto &it: gm.global_outputs) {
       void *dptr = allocate_tensor(it);
       global_args.push_back(dptr);
 
-      std::vector<char> hptr(it.mem_size(), 0);
-      ab::memcpyHtoD(dptr, hptr.data(), hptr.size(), nullptr);
+      void *data_ptr = memory_alloc(it.mem_size());
+      memset(data_ptr, 0, it.mem_size());
+      ab::memcpyHtoD(dptr, data_ptr, it.mem_size(), nullptr);
       ab::synchronize(nullptr);
+      memory_free(data_ptr);
     }
     int expanded_args = 0;
     if (gm.vamap.size() > 0) {
@@ -143,33 +166,34 @@ int main(int argc, char** argv)
       auto &it = gm.global_outputs[i];
       void *dptr = global_args[gm.global_inputs.size() + i];
 
-      std::vector<char> hptr(it.mem_size());
-      ab::memcpyDtoH(hptr.data(), dptr, hptr.size(), nullptr);
+      void *data_ptr = memory_alloc(it.mem_size());
+      ab::memcpyDtoH(data_ptr, dptr, it.mem_size(), nullptr);
       ab::synchronize(nullptr);
 
       size_t byte_size = it.mem_size();
       double digest = 0.0;
       if (it.dtype == "int32") {
         for (size_t x = 0; x < byte_size / sizeof(int); ++x)
-          digest += (x + 1) % 83 * ((int*)hptr.data())[x];
+          digest += (x + 1) % 83 * ((int*)data_ptr)[x];
       } else if (it.dtype == "int64") {
         for (size_t x = 0; x < byte_size / sizeof(llong); ++x)
-          digest += (x + 1) % 83 * ((llong*)hptr.data())[x];
+          digest += (x + 1) % 83 * ((llong*)data_ptr)[x];
       } else if (it.dtype == "float16") {
         for (size_t x = 0; x < byte_size / sizeof(unsigned short); ++x)
-          digest += (x + 1) % 83 * fp16_to_fp32(((unsigned short*)hptr.data())[x]);
+          digest += (x + 1) % 83 * fp16_to_fp32(((unsigned short*)data_ptr)[x]);
       } else if (it.dtype == "float32") {
         for (size_t x = 0; x < byte_size / sizeof(float); ++x)
-          digest += (x + 1) % 83 * ((float*)hptr.data())[x];
+          digest += (x + 1) % 83 * ((float*)data_ptr)[x];
       } else if (it.dtype == "float64") {
         for (size_t x = 0; x < byte_size / sizeof(double); ++x)
-          digest += (x + 1) % 83 * ((double*)hptr.data())[x];
+          digest += (x + 1) % 83 * ((double*)data_ptr)[x];
       } else {
         for (size_t x = 0; x < byte_size; ++x)
-          digest += (x + 1) % 83 * ((unsigned char*)hptr.data())[x];
+          digest += (x + 1) % 83 * ((unsigned char*)data_ptr)[x];
       }
       printf("\n- K/%d: %.10e\n", i, digest), fflush(stdout);
       fprintf(fp, "\n- K/%d: %.10e\n", i, digest), fflush(fp);
+      memory_free(data_ptr);
     }
 
     do {
