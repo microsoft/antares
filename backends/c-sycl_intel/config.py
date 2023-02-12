@@ -60,9 +60,9 @@ def do_native_translation_v2(codeset, **kwargs):
 
   blend = kwargs['attrs'].blend
   if re.search(fr'\bATOMIC_ADD\b', body):
-    blend += '#define ATOMIC_ADD(x, y, z) sycl::atomic_fetch_add(sycl::atomic<std::remove_reference<decltype(x)>::type>(sycl::global_ptr<std::remove_reference<decltype(x)>::type>(&(x[y]))), z)\n'
+    blend += '#define ATOMIC_ADD(x, y, z) sycl::atomic_fetch_add(sycl::atomic<decltype(z)>(sycl::global_ptr<decltype(z)>(&(x[y]))), z)\n'
   if re.search(fr'\bATOMIC_MAX\b', body):
-    blend += '#define ATOMIC_MAX(x, y, z) sycl::atomic_fetch_max(sycl::atomic<std::remove_reference<decltype(x)>::type>(sycl::global_ptr<std::remove_reference<decltype(x)>::type>(&(x[y]))), z)\n'
+    blend += '#define ATOMIC_MAX(x, y, z) sycl::atomic_fetch_max(sycl::atomic<decltype(z)>(sycl::global_ptr<decltype(z)>(&(x[y]))), z)\n'
 
   # Reversed order in dim configs
   index_str = 'const int blockIdx_x = _item.get_group(2), blockIdx_y = _item.get_group(1), blockIdx_z = _item.get_group(0), threadIdx_x = _item.get_local_id(2), threadIdx_y = _item.get_local_id(1), threadIdx_z = _item.get_local_id(0);'
@@ -72,8 +72,8 @@ def do_native_translation_v2(codeset, **kwargs):
   full_body = f'''#include <math.h>
 #include <algorithm>
 #include <CL/sycl.hpp>
-{blend}
 
+{blend}
 #ifndef __SYCL_COMMON_MACRO__
 #define __SYCL_COMMON_MACRO__
 
@@ -109,4 +109,5 @@ extern "C" void {kernel_name}(sycl::queue* q, int blks, void **__args) {{
   }});
 }}
 '''
+  full_body = re.sub(fr'\b__device__\b', '', full_body)
   return full_body
