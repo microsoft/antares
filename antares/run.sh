@@ -45,7 +45,7 @@ export PYTHONPATH=${TVM_HOME}/python:${TVM_HOME}/topi/python:${TVM_HOME}/nnvm/py
 
 VERSION_TAG=$(cat engine/install_antares_host.sh | grep ^VERSION_TAG | head -n 1 | awk -F\= '{print $NF}')
 
-if [[ "$(cat ${TVM_HOME}/VERSION_TAG 2>/dev/null)" != "${VERSION_TAG}" ]] || [ ! -e ${TVM_HOME}/build/libtvm.so ]; then
+if [[ "${TVM}" != "0" ]] && ( [[ "$(cat ${TVM_HOME}/VERSION_TAG 2>/dev/null)" != "${VERSION_TAG}" ]] || [ ! -e ${TVM_HOME}/build/libtvm.so ] ); then
   echo 'Antares dependencies are not up-to-date/fully installed for current Antares version. Try updating the dependencies with: `make install_host` ..'
   exit 1
 fi
