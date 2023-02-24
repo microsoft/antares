@@ -115,8 +115,12 @@ namespace ab {
   }
 
   void* moduleLoad(const std::string &binary) {
+    const char* data = binary.data();
+    std::string module;
+    if (data[0] == '/' && data[1] == '/' && data[2] == ' ')
+      module = moduleCompile(binary), data = module.data();
     CUmodule hmod = nullptr;
-    CHECK_OK(0 == cuModuleLoadData(&hmod, binary.data()));
+    CHECK_OK(0 == cuModuleLoadData(&hmod, data));
     return hmod;
   }
 
