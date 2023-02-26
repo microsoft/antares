@@ -56,6 +56,8 @@ def do_native_translation_v2(codeset, **kwargs):
 
 #if (__CUDA_ARCH__ >= 600)
 {cuda_linux_half.strip()}
+
+#define uint32_t unsigned
 #endif
 
 #endif
