@@ -99,9 +99,45 @@ signal.signal(signal.SIGINT, cleanup_on_exit)
 
 verbose = int(os.environ.get('VERBOSE', '1'))
 
+def init_properties():
+  AntaresGlobal.attrs = Mock()
+  AntaresGlobal.attrs.blend = ''
+  AntaresGlobal.attrs.backend = backend
+  AntaresGlobal.auto_config = AutoConfig()
+
+  def get_device_props():
+    props = Mock()
+    with open('%s/device_properties.cfg' % os.environ['ANTARES_DRIVER_PATH'], 'r') as fp:
+      mem_bandwith, compute_version = [], '.'
+      while True:
+        line = fp.readline()
+        if not line:
+          break
+        key, val = line.split(': ')
+        val = val.strip()
+        if key in ('GlobalMemoryBusWidth', 'MemoryClockRate'):
+          mem_bandwith.append(float(val))
+        elif key in ('ComputeCapabilityMajor'):
+          compute_version = val + compute_version
+        elif key in ('ComputeCapabilityMinor'):
+          compute_version = compute_version + val
+        elif key in ('WarpSize'):
+          props.warp_size = int(val)
+        elif key in ('MaxThreadsPerBlock'):
+          props.max_threads_per_block = int(val)
+        elif key in ('MaxSharedMemoryPerBlock'):
+          props.max_shared_memory_per_block = int(val)
+      mem_bandwith = 'inf' if not mem_bandwith else product(mem_bandwith) * 2.5e-7
+      props.mem_bandwith = float(mem_bandwith)
+      props.compute_version = compute_version
+    return props
+
+  AntaresGlobal.attrs.device_props = get_device_props()
+
 try:
   backend_config = importlib.import_module('backends.%s.config' % backend)
   backend_root = os.path.dirname(backend_config.__file__)
+  init_properties()
 except ModuleNotFoundError:
   raise Exception('>> Platform config for backend %s not found' % backend)
 except:
@@ -168,12 +204,23 @@ def get_target_source(best_config, dir_sid=None):
     def tensor_display(encoded_name, prop):
       return f'{encoded_name}:{prop["dtype"]}{str(prop["shape"])}'
 
+    def cast_c_type(code):
+      code = re.sub(r'\bfloat64\b', 'double', code)
+      code = re.sub(r'\bfloat32\b', 'float', code)
+      code = re.sub(r'\bfloat16\b', 'half', code)
+      code = re.sub(r'\bint64\b', 'int64_t', code)
+      code = re.sub(r'\bint32\b', 'int', code)
+      code = re.sub(r'\bint16\b', 'short', code)
+      code = re.sub(r'\bint8\b', 'char', code)
+      return code
+
     kernel_slices.sort()
     code = ['']
     for i, (kernel_id, kernel_name, args, body) in enumerate(kernel_slices):
       num_outputs = len(global_arg_props['_out']) if i + 1 == len(kernel_slices) else 1
-      display_inputs = ', '.join([tensor_display(x, prop) for _, x, prop in args[:-num_outputs]])
-      display_outputs = ', '.join([tensor_display(x, prop) for _, x, prop in args[-num_outputs:]])
+      display_inputs = ', '.join([tensor_display(x, prop) for x, prop in args[:-num_outputs]])
+      display_outputs = ', '.join([tensor_display(x, prop) for x, prop in args[-num_outputs:]])
+      args = [(cast_c_type(prop['dtype']), x, prop) for x, prop in args]
       kernel = backend_config.do_native_translation_v2((kernel_name, args[:-num_outputs], args[-num_outputs:], body), attrs=getattr(AntaresGlobal, 'attrs', None)).strip()
       kernel = cpp_format(kernel)
       code.append(f'// LOCAL: {kernel_name} -- {display_inputs} -> {display_outputs}\n\n{kernel}\n')

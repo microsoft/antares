@@ -339,16 +339,15 @@ def codegen(ast_seq, input_dict, output_dict, best_config, space_only=False):
       arg_line = kernel[idy+1:idx]
       args, outputs_ex = [], []
       for x in arg_line.split(','):
-        c_type = x.split('*')[0].strip()
         v_name = x.split()[-1]
         if v_name.startswith('___'):
           continue
         v_name_in_pool = v_name[2:] if re.match(r'^__[a-z]+', v_name) else v_name
         v_props = tensors_pool[v_name_in_pool]
         if re.search(r'\b___%s\b' % v_name, arg_line) is not None:
-          outputs_ex.append((c_type, v_name, v_props))
+          outputs_ex.append((v_name, v_props))
         else:
-          args.append((c_type, v_name, v_props))
+          args.append((v_name, v_props))
       kernel_slices.append((kernel_id, kernel_name, args + outputs_ex, body))
     return kernel_slices
 
