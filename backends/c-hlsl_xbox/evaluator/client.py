@@ -1,8 +1,10 @@
+#!/usr/bin/env python3
+
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
 import json
-import os
+import sys, os
 import urllib.request
 
 rev_port = int(os.environ.get('REV', 0))
@@ -83,3 +85,9 @@ def eval(kernel_path, **kwargs):
       break
     results[key] = float('%.10e' % float(results[key]))
   return results
+
+if __name__ == "__main__":
+  local_file = sys.argv[1] if len(sys.argv) > 1 else ''
+  init()
+  print()
+  print('Result:', eval(local_file))
