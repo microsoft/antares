@@ -25,7 +25,7 @@ class OpTensor:
     @staticmethod
     def merge_dtype(first, second):
         dtypes = (first._dtype, second._dtype)
-        ordered_dtypes = ['float64', 'float32', 'int32', 'int16', 'int8']
+        ordered_dtypes = ['float64', 'float32', 'float16', 'int32', 'int16', 'int8']
         for _dtype in ordered_dtypes:
           if _dtype in dtypes:
             return _dtype
@@ -229,7 +229,7 @@ class OpTensor:
           return output.cast('int64' if self._dtype == 'float64' else 'int32')
         if func_name in ('rfloor', 'rceil') and len(others) == 0:
           func_name = func_name[1:]
-        if func_name in ('exp', 'sqrt', 'max', 'min', 'log', 'sin', 'cos', 'floor', 'ceil') and self._dtype == 'float16':
+        if func_name in ('exp', 'sqrt', 'rsqrt', 'max', 'min', 'log', 'sin', 'cos', 'floor', 'ceil') and self._dtype == 'float16':
           func_name = f'fp16_{func_name}'
         if func_name in ('pow', 'abs', 'tan', 'tanh', 'normcdf', 'erf'):
           return OpTensor('call', {"name": func_name, "inputs": [OpTensor.parse(x).up_cast() for x in [self] + others]}, self.up_cast().dtype()).cast(self._dtype)
