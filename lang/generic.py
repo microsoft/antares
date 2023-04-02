@@ -93,7 +93,7 @@ def refactor_special_names(code, global_arg_props):
   code = code.replace('(int* __restrict__ _id, ', '(').replace('_id[(0)]', '_id')
   for i in range(len(global_arg_props['_out'])):
     std_name = global_arg_props['_out'][i]['name']
-    code = re.sub(fr'\b___{std_name}\[.*\] = \b', '', code)
+    code = re.sub(fr'\b___{std_name}\[.*\] = ', '', code)
 
   code = refactor_builtins(code)
   if len(global_arg_props['_out']) <= 1:
