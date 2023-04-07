@@ -53,7 +53,22 @@ namespace ab {
   void finalize() {
   }
 
+  inline size_t compute_slotsize(size_t value) {
+      if (value >= (1LL << 30))
+          return value;
+      value -= 1;
+      value |= value >> 1;
+      value |= value >> 2;
+      value |= value >> 4;
+      value |= value >> 8;
+      value |= value >> 16;
+      value |= value >> 32;
+      value += 1;
+      return value;
+  }
+
   void* alloc(size_t byteSize, const std::vector<size_t> &shape, const std::string &dtype, const std::string &name) {
+    byteSize = compute_slotsize(byteSize);
     auto &it = _cached_memory[byteSize];
     if (it.size()) {
       auto dptr = it.back();
@@ -69,6 +84,7 @@ namespace ab {
   }
 
   void release(void *dptr, size_t byteSize) {
+    byteSize = compute_slotsize(byteSize);
     auto &it = _cached_memory[byteSize];
     it.push_back(dptr);
   }
