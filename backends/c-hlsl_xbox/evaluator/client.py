@@ -25,6 +25,37 @@ def init(**kwargs):
     print("Skipping evaluation: environment variable `AGENT_URL` not specified (required: e.g. export AGENT_URL=<win10-ip-addr>)")
     exit(1)
 
+
+def receive(conn, size):
+  buff = b''
+  while size > 0:
+    data = conn.recv(size)
+    if not data:
+      return None
+    size -= len(data)
+    buff += data
+  return buff
+
+def receive_int(conn):
+  val = receive(conn, 8)
+  return int(val) if val is not None else None
+
+def send_int(conn, val):
+  conn.sendall(('%08u' % val).encode('utf-8'))
+
+def receive_str(conn):
+  length = receive_int(conn)
+  if length is None:
+    return None
+  val = receive(conn, length)
+  return val if val is not None else None
+
+def send_str(conn, val):
+  val = val.encode('utf-8') if isinstance(val, str) else val
+  send_int(conn, len(val))
+  conn.sendall(val)
+
+
 def eval(kernel_path, **kwargs):
   if rev_port:
     with open(kernel_path, 'rb') as fp:
@@ -32,21 +63,12 @@ def eval(kernel_path, **kwargs):
     if int(kwargs.get('compile', 0)):
       import binascii
       return {'HEX': '@' + binascii.hexlify(kernel_data).decode('utf-8') + '@'}
-    def receive(s, size):
-      buff = b''
-      while size > 0:
-        data = s.recv(size)
-        if not data:
-            return b''
-        size -= len(data)
-        buff += data
-      return buff
 
     conn = rev_state["conn"]
-    conn.sendall(('%08u' % len(kernel_data)).encode('utf-8'))
-    conn.sendall(kernel_data)
-    nbytes = int(receive(conn, 8))
-    resp = json.loads(receive(conn, nbytes))
+    send_str(conn, 'eval')
+    send_str(conn, kernel_data)
+    resp = receive_str(conn)
+    resp = json.loads(resp)
     return resp
 
   url_with_port = os.environ['AGENT_URL'].strip()
