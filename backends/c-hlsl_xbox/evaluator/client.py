@@ -10,6 +10,8 @@ import urllib.request
 rev_port = int(os.environ.get('REV', 0))
 rev_state = {}
 
+EVAL_PROPERTIES = {'compiler': 'x86_64-w64-mingw32-g++', 'compile_flags': '-std=c++17 -Wno-string-compare -Wno-unused-result -Wno-unused-value -O2 -static -lpthread'}
+
 def init(**kwargs):
   if rev_port:
     import socket
@@ -37,11 +39,11 @@ def receive(conn, size):
   return buff
 
 def receive_int(conn):
-  val = receive(conn, 8)
+  val = receive(conn, 32)
   return int(val) if val is not None else None
 
 def send_int(conn, val):
-  conn.sendall(('%08u' % val).encode('utf-8'))
+  conn.sendall(('%032u' % val).encode('utf-8'))
 
 def receive_str(conn):
   length = receive_int(conn)

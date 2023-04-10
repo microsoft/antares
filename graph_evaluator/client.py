@@ -17,7 +17,11 @@ def init(**kwargs):
     try:
       import importlib
       eval_client = importlib.import_module('backends.%s.evaluator.client' % backend)
-      return eval_client.init(**kwargs)
+      out = eval_client.init(**kwargs)
+      if hasattr(eval_client, 'EVAL_PROPERTIES'):
+        global EVAL_PROPERTIES
+        EVAL_PROPERTIES = eval_client.EVAL_PROPERTIES
+      return out
     except ModuleNotFoundError:
       pass
     except:
