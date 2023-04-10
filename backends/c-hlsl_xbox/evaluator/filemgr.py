@@ -33,11 +33,11 @@ def receive(conn, size):
   return buff
 
 def receive_int(conn):
-  val = receive(conn, 8)
+  val = receive(conn, 32)
   return int(val) if val is not None else None
 
 def send_int(conn, val):
-  conn.sendall(('%08u' % val).encode('utf-8'))
+  conn.sendall(('%032u' % val).encode('utf-8'))
 
 def receive_str(conn):
   length = receive_int(conn)
@@ -79,7 +79,18 @@ if __name__ == "__main__":
       path = path[:-len(os.sep)]
     if os.sep not in path:
       path = '.' + os.sep + path
-    assert os.path.isdir(path), "Not a directory."
+
+    if not os.path.isdir(path):
+      x = os.path.basename(path)
+      with open(path, 'rb') as fp:
+        data = fp.read()
+      send_str(conn, 'upload')
+      send_str(conn, x)
+      send_str(conn, data)
+      send_str(conn, 'msg')
+      send_str(conn, 'Completed!')
+      exit(0)
+
     name = os.path.basename(path)
     assert len(name) > 0, f"Directory with empty name."
     lst = [y for x in os.walk(path) for y in glob(os.path.join(x[0], '*'))]

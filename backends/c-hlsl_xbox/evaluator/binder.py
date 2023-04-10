@@ -19,11 +19,11 @@ def receive(conn, size):
   return buff
 
 def receive_int(conn):
-  val = receive(conn, 8)
+  val = receive(conn, 32)
   return int(val) if val is not None else None
 
 def send_int(conn, val):
-  conn.sendall(('%08u' % val).encode('utf-8'))
+  conn.sendall(('%032u' % val).encode('utf-8'))
 
 def receive_str(conn):
   length = receive_int(conn)

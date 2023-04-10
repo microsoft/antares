@@ -44,7 +44,9 @@ def load_eval(eval_path):
     os.environ['COMPUTE_V1'] = data[idx:data.index('\n', idx)]
     idx = data.index(symback) + len(symback)
     eval_backend = data[idx:data.index(' ', idx)]
-    assert backend == eval_backend, f"Current backend `{backend}` doesn't correspond with the evaluation requirement. Please retry with: BACKEND={eval_backend} antares eval .."
+    if backend != eval_backend:
+      print('\n\033[91m%s\033[0m' % f"Current backend `{backend}` doesn't correspond with `{eval_backend}` required by source code, which may result in compilation failure.\n")
+      time.sleep(1)
 
 def init_arg_parser():
   save_path, eval_path, dump_path = None, None, None
