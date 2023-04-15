@@ -641,8 +641,6 @@ def main_compute(code_only=False):
         tuner.task.best.occur,
         num_trials,
         tuner.task.best.timecost))
-
-      cleanup_on_exit(-1, None)
     else:
       raise Exception('Unrecognized tuner type: `%s`' % tuner_type)
   else:
@@ -673,6 +671,15 @@ def main_compute(code_only=False):
   save_to_path_if_necessary(device_source)
   eval_client.init(backend_root=backend_root)
   dev_id = int(os.environ.get('DEV_ID', '0'))
+
+  if (save_path and dump_path) is None and os.environ.get("FUNC_NAME", None) and '// [metadata] ' in device_source:
+    AntaresGlobal.device_source = device_source
+    metadata = device_source.index('// [metadata] ')
+    metadata = device_source[metadata:device_source.index('\n', metadata)].split()[-1]
+    hex_code = binascii.unhexlify(eval_client.eval(kernel_path=kernel_path, dev_id=(fix_device_id if fix_device_id >= 0 else dev_id), backend_root=backend_root, compile=1)['HEX'][1:-1])
+    with open(get_real_path(os.environ["FUNC_NAME"] + ".mod"), 'wb') as fp:
+      fp.write(metadata.encode('utf-8'))
+      fp.write(hex_code)
 
   if dump_path is not None:
     AntaresGlobal.device_source = device_source
