@@ -14,14 +14,15 @@ EVAL_PROPERTIES = {'compiler': 'x86_64-w64-mingw32-g++', 'compile_flags': '-std=
 
 def init(**kwargs):
   if rev_port:
-    import socket
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    print(f"\n>> Waiting for peer to connect to port: {rev_port} ..")
-    s.bind(('0.0.0.0', rev_port))
-    s.listen()
-    conn, addr = s.accept()
-    rev_state["s"], rev_state["conn"] = s, conn
+    if "conn" not in rev_state:
+      import socket
+      s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+      s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+      print(f"\n>> Waiting for peer to connect to port: {rev_port} ..")
+      s.bind(('0.0.0.0', rev_port))
+      s.listen()
+      conn, addr = s.accept()
+      rev_state["s"], rev_state["conn"] = s, conn
     print(f"Received connection from peer.")
   elif not os.environ.get('AGENT_URL', ''):
     print("Skipping evaluation: environment variable `AGENT_URL` not specified (required: e.g. export AGENT_URL=<win10-ip-addr>)")
