@@ -138,12 +138,17 @@ namespace ab {
 
   void memcpyHtoD(void *dptr, void *hptr, size_t byteSize, void *stream) {
     LOAD_ONCE(dxMemcpyHtoDAsync, int (*)(void* dst, void* src, size_t bytes, void* hStream));
-    CHECK(0 == dxMemcpyHtoDAsync(dptr, hptr, byteSize, stream), "Failed to copy memory to device.");
+    CHECK(0 == dxMemcpyHtoDAsync(dptr, hptr, byteSize, stream), "Failed to copy memory from host to device.");
+  }
+
+  void memcpyDtoD(void *dptr, void *dptr0, size_t byteSize, void *stream) {
+    LOAD_ONCE(dxMemcpyDtoDAsync, int (*)(void* dst, void* src, size_t bytes, void* hStream));
+    CHECK(0 == dxMemcpyDtoDAsync(dptr, dptr0, byteSize, stream), "Failed to copy memory from device to device.");
   }
 
   void memcpyDtoH(void *hptr, void *dptr, size_t byteSize, void *stream) {
     LOAD_ONCE(dxMemcpyDtoHAsync, int (*)(void* dst, void* src, size_t bytes, void* hStream));
-    CHECK(0 == dxMemcpyDtoHAsync(hptr, dptr, byteSize, stream), "Failed to copy memory from device.");
+    CHECK(0 == dxMemcpyDtoHAsync(hptr, dptr, byteSize, stream), "Failed to copy memory from device to host.");
   }
 
   void synchronize(void *stream) {
