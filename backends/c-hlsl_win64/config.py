@@ -159,7 +159,8 @@ float tanh_ex(float x) {
 
     full_body = f'''{pre_defines}
 {lds}
-{registers}{blend}
+{registers}
+{blend}
 
 [RootSignature("DescriptorTable(UAV(u0, numDescriptors={len(in_args) + len(out_args)})){require_cbv}")]
 [numthreads({get_extent('threadIdx.x')}, {get_extent('threadIdx.y')}, {get_extent('threadIdx.z')})]
