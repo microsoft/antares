@@ -2,7 +2,11 @@
 // Licensed under the MIT License.
 
 //; eval_flags(c-rocm): -lamdhip64 -D__HIP_PLATFORM_HCC__ -I/opt/rocm/include -L/opt/rocm/lib
-//; eval_flags(c-cuda): -lcuda -lcudart -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -L/usr/local/cuda/lib64/stubs -ldl
+//; eval_flags(c-cuda): -lcuda -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -L/usr/local/cuda/lib64/stubs -ldl
+
+#if !defined(CHECK_OK)
+#define CHECK_OK(x)  ((x) ? 1 : (fprintf(stderr, "[CheckFail] %s:%d\n", __FILE__, __LINE__), exit(1), 0))
+#endif
 
 #if !defined(__HIP_PLATFORM_HCC__)
 #include <cuda.h>
@@ -21,6 +25,7 @@
 #define cuStreamSynchronize hipStreamSynchronize
 #define cuCtxSynchronize hipDeviceSynchronize
 #define cuMemcpyHtoDAsync hipMemcpyHtoDAsync
+#define cuMemcpyDtoDAsync hipMemcpyDtoDAsync
 #define cuMemcpyDtoHAsync hipMemcpyDtoHAsync
 #define CUdeviceptr hipDeviceptr_t
 #define CUmodule hipModule_t
@@ -32,7 +37,8 @@
 #define cuEventRecord hipEventRecord
 #define CUcontext long
 #define cuDevicePrimaryCtxRetain(x, y) (*(x) = (CUcontext)((long)(y)), 0)
-#define cuCtxSetCurrent(x) hipSetDevice((long)(x))
+#define cuCtxSetCurrent(x) hipSetDevice((int)(x))
+#define cuCtxGetCurrent(x) hipGetDevice((int*)(x))
 #define CUstream hipStream_t
 #endif
 
@@ -43,11 +49,27 @@ namespace ab {
   static std::unordered_map<size_t, std::vector<void*>> _cached_memory;
 
   void init(int dev) {
+    static bool _retained = false;
     CUcontext ctx;
+
+    if (dev < 0) {
+      if (!_retained && 0 == cuCtxGetCurrent(&ctx)) {
+        cuDevicePrimaryCtxRetain(&ctx, _current_device);
+        cuCtxSetCurrent(ctx);
+        _retained = true;
+        return;
+      }
+      dev = 0;
+    }
+#if !defined(__RUNTIME_MODE__)
     // Just one of many methods to set target device id by visiblity
     setenv("CUDA_VISIBLE_DEVICES", std::to_string(dev).c_str(), 1);
+#else
+    _current_device = dev;
+#endif
     if (0 != cuInit(0) || 0 != cuDevicePrimaryCtxRetain(&ctx, _current_device) || 0 != cuCtxSetCurrent(ctx))
         throw std::runtime_error("GPU device is not found.\n");
+    _retained = true;
   }
 
   void finalize() {
@@ -68,6 +90,8 @@ namespace ab {
   }
 
   void* alloc(size_t byteSize, const std::vector<size_t> &shape, const std::string &dtype, const std::string &name) {
+    init(-1);
+
     byteSize = compute_slotsize(byteSize);
     auto &it = _cached_memory[byteSize];
     if (it.size()) {
@@ -90,6 +114,9 @@ namespace ab {
   }
 
   std::string moduleCompile(const std::string &source) {
+#if defined(__RUNTIME_MODE__)
+    return source;
+#else
     ab_utils::TempFile tempfile("cu", source);
     auto &path = tempfile.get_path();
 
@@ -128,6 +155,7 @@ namespace ab {
 
     ab_utils::Process(compile_args, 30);
     return file_read((path + ".out").c_str());
+#endif // __RUNTIME_MODE__
   }
 
   void* moduleLoad(const std::string &binary) {
@@ -191,6 +219,10 @@ namespace ab {
 
   void memcpyHtoD(void *dptr, void *hptr, size_t byteSize, void *stream) {
     CHECK_OK(0 == cuMemcpyHtoDAsync((CUdeviceptr)dptr, hptr, byteSize, (CUstream)stream));
+  }
+
+  void memcpyDtoD(void *dptr, void *dptr0, size_t byteSize, void *stream) {
+    CHECK_OK(0 == cuMemcpyDtoDAsync((CUdeviceptr)dptr, (CUdeviceptr)dptr0, byteSize, (CUstream)stream));
   }
 
   void memcpyDtoH(void *hptr, void *dptr, size_t byteSize, void *stream) {

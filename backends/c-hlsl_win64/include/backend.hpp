@@ -8,11 +8,11 @@
 #include <chrono>
 #include <stdlib.h>
 
-#define HLSL_LIBRARY_PATH R"(.\antares_hlsl_v0.3.4_x64.dll)"
-#define HLSL_LIBRARY_PATH_XBOX R"(.\antares_hlsl_xbox_v0.3.4_x64.dll)"
+#define HLSL_LIBRARY_PATH R"(antares_hlsl_v0.3.4_x64.dll)"
+#define HLSL_LIBRARY_PATH_XBOX R"(antares_hlsl_xbox_v0.3.4_x64.dll)"
 
 #define CHECK(stat, reason, ...)  ((stat) ? 1 : (fprintf(stderr, "[CheckFail] "), fprintf(stderr, reason, ##__VA_ARGS__), fprintf(stderr, "\n\n"), fflush(stderr), exit(1), 0))
-#define LOAD_ONCE(func, ftype)   static FARPROC __ ## func; if (!__ ## func) { __ ## func = GetProcAddress(ab::hLibDll, #func); CHECK(__ ## func, "No such function symbol defined: %s()", #func); } auto func = (ftype)__ ## func;
+#define LOAD_ONCE(func, ftype)   static FARPROC __ ## func; if (!__ ## func) { init(0); __ ## func = GetProcAddress(ab::hLibDll, #func); CHECK(__ ## func, "No such function symbol defined: %s()", #func); } auto func = (ftype)__ ## func;
 
 namespace ab {
 
@@ -22,10 +22,15 @@ namespace ab {
   void init(int dev) {
     if (ab::hLibDll != nullptr)
       return;
+
+    if (getenv("LIB_ROOT")) {
+      auto dllpath = std::string(getenv("LIB_ROOT")) + "/lib/";
+      SetDllDirectoryA(dllpath.c_str());
+    }
     ab::hLibDll = LoadLibrary(HLSL_LIBRARY_PATH);
     if (ab::hLibDll == nullptr)
       ab::hLibDll = LoadLibrary(HLSL_LIBRARY_PATH_XBOX), is_xbox = true;
-    CHECK(hLibDll, "Failed to load `" HLSL_LIBRARY_PATH "`, please download these libraries first: antares clean && antares\n");
+    CHECK(hLibDll, "Failed to load `" HLSL_LIBRARY_PATH "`, please report an issue to https://github.com/microsoft/antares/issues\n");
 
     int mode = getenv("DXINIT") ? atoi(getenv("DXINIT")) : 0;
     const char *compat = getenv("DXCOMPAT") ? getenv("DXCOMPAT") : "*";
@@ -69,9 +74,6 @@ namespace ab {
     LOAD_ONCE(dxMemFree, int (*)(void* dptr));
     CHECK(0 == dxMemFree(dptr), "Failed to free device pointer.");
   }
-
-  void* memAlloc(size_t byteSize) { return alloc(byteSize, {}, "", ""); }
-  void memFree(void *dptr) { return release(dptr, 0); }
 
   std::string moduleCompile(const std::string &source) {
     LOAD_ONCE(dxModuleCompile, const char* (*)(const char*, long long *));
