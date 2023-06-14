@@ -170,7 +170,7 @@ void CSMain(uint3 threadIdx: SV_GroupThreadID, uint3 blockIdx: SV_GroupID) {{
 '''
     full_body = re.sub(r'\bshort\b', 'min16int', full_body)
     full_body = re.sub(r'\(char\)', '', full_body)
-    full_body = re.sub(r'\bchar\b', 'bool', full_body)
+    full_body = re.sub(r'\bchar\b', 'uint', full_body)
     full_body = re.sub(r'\bfp16_', '', full_body)
     full_body = re.sub(fr'\b__device__\b', '', full_body)
     return full_body
