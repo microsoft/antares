@@ -12,7 +12,7 @@
 #define HLSL_LIBRARY_PATH_XBOX R"(antares_hlsl_xbox_v0.3.4_x64.dll)"
 
 #define CHECK(stat, reason, ...)  ((stat) ? 1 : (fprintf(stderr, "[CheckFail] "), fprintf(stderr, reason, ##__VA_ARGS__), fprintf(stderr, "\n\n"), fflush(stderr), exit(1), 0))
-#define LOAD_ONCE(func, ftype)   static FARPROC __ ## func; if (!__ ## func) { init(0); __ ## func = GetProcAddress(ab::hLibDll, #func); CHECK(__ ## func, "No such function symbol defined: %s()", #func); } auto func = (ftype)__ ## func;
+#define LOAD_ONCE(func, ftype)   static FARPROC __ ## func; if (!__ ## func) { ab::init(0); __ ## func = GetProcAddress(ab::hLibDll, #func); CHECK(__ ## func, "No such function symbol defined: %s()", #func); } auto func = (ftype)__ ## func;
 
 namespace ab {
 
