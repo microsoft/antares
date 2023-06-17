@@ -139,15 +139,22 @@ float tanh_ex(float x) {
 }
 #define tanh tanh_ex
 '''
-    body = re.sub(r'\b__syncthreads\b', 'GroupMemoryBarrierWithGroupSync', body)
     body = re.sub(r'__float2half_rn', '', body)
     body = re.sub(r'__half2float_rn', '', body)
     body = re.sub(r'\#pragma\ unroll\b', '[unroll]', body)
 
+    blend, rebuild = kwargs['attrs'].blend, []
+    for line in blend.split('\n'):
+      pos = re.search(r'^ *__shared__ ', line)
+      if pos:
+        lds.append('groupshared ' + line[pos.end():])
+      else:
+        rebuild.append(line)
+    rebuild = blend = '\n'.join(rebuild)
+
     lds = '\n'.join(lds)
     registers = ''.join(registers)
 
-    blend = kwargs['attrs'].blend
     if re.search(fr'\bATOMIC_ADD\b', body):
       blend += '\ntemplate <class X, class Y, class Z> Z ATOMIC_ADD(X x, Y y, Z z) { Z w; InterlockedAdd(x[y], z, w); return w; }'
     if re.search(fr'\bATOMIC_MAX\b', body):
@@ -168,6 +175,7 @@ void CSMain(uint3 threadIdx: SV_GroupThreadID, uint3 blockIdx: SV_GroupID) {{
   {body}
 }}
 '''
+    full_body = re.sub(r'\b__syncthreads\b', 'GroupMemoryBarrierWithGroupSync', full_body)
     full_body = re.sub(r'\bshort\b', 'min16int', full_body)
     full_body = re.sub(r'\(char\)', '', full_body)
     full_body = re.sub(r'\bchar\b', 'uint', full_body)
