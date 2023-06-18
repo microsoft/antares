@@ -66,6 +66,9 @@ def implement_builtins(name, args):
   elif name == '__builtin_cond_set':
     assert len(args) == 3
     return f'{{ if ({args[1]}) ({args[0]}) = ({args[2]}); }}'
+  elif name == '__builtin_cond':
+    assert len(args) == 2
+    return f'{{ if ({args[1]}) ({args[0]}); }}'
   else:
     raise Exception(f'Builtin function with {name} is not handled.')
 
