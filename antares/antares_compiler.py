@@ -216,6 +216,10 @@ def get_target_source(best_config, dir_sid=None):
       code = re.sub(r'\bint8\b', 'char', code)
       return code
 
+    define_list = json.loads(os.environ.get('DEFINES', '{}'))
+    define_list = '\n'.join([f'#define {it} {define_list[it]}\n' for it in define_list])
+    define_list = define_list + '\n' if define_list else ''
+
     kernel_slices.sort()
     code = ['']
     for i, (kernel_id, kernel_name, args, body) in enumerate(kernel_slices):
@@ -223,7 +227,7 @@ def get_target_source(best_config, dir_sid=None):
       display_inputs = ', '.join([tensor_display(x, prop) for x, prop in args[:-num_outputs]])
       display_outputs = ', '.join([tensor_display(x, prop) for x, prop in args[-num_outputs:]])
       args = [(cast_c_type(prop['dtype']), x, prop) for x, prop in args]
-      kernel = backend_config.do_native_translation_v2((kernel_name, args[:-num_outputs], args[-num_outputs:], body), attrs=getattr(AntaresGlobal, 'attrs', None)).strip()
+      kernel = define_list + backend_config.do_native_translation_v2((kernel_name, args[:-num_outputs], args[-num_outputs:], body), attrs=getattr(AntaresGlobal, 'attrs', None)).strip()
       kernel = cpp_format(kernel)
       code.append(f'// LOCAL: {kernel_name} -- {display_inputs} -> {display_outputs}\n\n{kernel}\n')
 

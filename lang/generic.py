@@ -25,6 +25,8 @@ def einstein_v2(exprss, input_dict, extra_outputs=[], **kwargs):
 
   if 'comments' in kwargs:
     os.environ['COMMENTS'] = json.dumps(kwargs['comments'])
+  if 'defines' in kwargs:
+    os.environ['DEFINES'] = json.dumps(kwargs['defines'])
   if 'func_name' in kwargs:
     os.environ['FUNC_NAME'] = kwargs['func_name']
 
