@@ -41,10 +41,8 @@ def do_native_translation_v2(codeset, **kwargs):
     cuda_linux_half += '\n__forceinline__ __device__ __half hmin(const __half &a, const __half &b) { return a < b ? a : b; }\n'
 
   blend = kwargs['attrs'].blend
-  if re.search(fr'\bATOMIC_ADD\b', body):
-    blend += '#define ATOMIC_ADD(x, y, z) atomicAdd(&(x[y]), z)\n'
-  if re.search(fr'\bATOMIC_MAX\b', body):
-    blend += '#define ATOMIC_MAX(x, y, z) atomicMax(&(x[y]), z)\n'
+  if re.search(fr'\bATOMIC_', body):
+    blend += '''#define ATOMIC_ADD_I64(x, y, z) atomicAdd((unsigned long long*)&(x[y]), (unsigned long long)(z))\n#define ATOMIC_ADD_I32(x, y, z) atomicAdd(&(x[y]), z)\n#define ATOMIC_ADD_F32(x, y, z) atomicAdd(&(x[y]), z)\n#define ATOMIC_MIN_F32(x, y, z) atomicMin((int*)&(x[y]), ((int&)(z)))\n'''
 
   full_body = f'''
 #include <cuda_runtime.h>

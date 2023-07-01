@@ -159,6 +159,7 @@ namespace ab {
   }
 
   void* moduleLoad(const std::string &binary) {
+    init(-1);
     const char* data = binary.data();
     std::string module;
     if (data[0] == '/' && data[1] == '/' && data[2] == ' ')
