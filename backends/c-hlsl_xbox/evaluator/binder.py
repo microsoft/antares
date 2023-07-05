@@ -7,6 +7,7 @@ import time, os, sys, json, socket, subprocess
 
 HOST_ADDR = sys.argv[1].split(':')
 
+libhlsl = None
 
 def receive(conn, size):
   buff = b''
@@ -76,6 +77,18 @@ def main():
               results[k] = float(v)
             except:
               results[k] = v
+        send_str(conn, json.dumps(results))
+      elif cmd == b'compile':
+        print(f'COMPILE')
+        kernel_data = receive_str(conn)
+        import ctypes, binascii
+        global libhlsl
+        if libhlsl is None:
+          libhlsl = ctypes.cdll.LoadLibrary(r'.\antares_hlsl_xbox_v0.3.4_x64.dll')
+          libhlsl.dxModuleCompile.argtypes = (ctypes.c_char_p, ctypes.POINTER(ctypes.c_longlong),)
+          libhlsl.dxModuleCompile.restype = ctypes.c_char_p
+        kernel_bin = libhlsl.dxModuleCompile(kernel_data, ctypes.POINTER(ctypes.c_longlong)())
+        results = {'HEX': '@' + binascii.hexlify(kernel_bin).decode('utf-8') + '@'}
         send_str(conn, json.dumps(results))
       elif cmd == b'mkdirs':
         path = receive_str(conn)

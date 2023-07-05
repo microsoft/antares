@@ -64,8 +64,16 @@ def eval(kernel_path, **kwargs):
     with open(kernel_path, 'rb') as fp:
       kernel_data = fp.read()
     if int(kwargs.get('compile', 0)):
-      import binascii
-      return {'HEX': '@' + binascii.hexlify(kernel_data).decode('utf-8') + '@'}
+     if int(os.environ.get('CODE_DEBUG', 0)) == 0:
+        conn = rev_state["conn"]
+        send_str(conn, 'compile')
+        send_str(conn, kernel_data)
+        resp = receive_str(conn)
+        resp = json.loads(resp)
+        return resp
+     else:
+        import binascii
+        return {'HEX': '@' + binascii.hexlify(kernel_data).decode('utf-8') + '@'}
 
     conn = rev_state["conn"]
     send_str(conn, 'eval')
