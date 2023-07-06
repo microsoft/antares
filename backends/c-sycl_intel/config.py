@@ -59,6 +59,15 @@ def do_native_translation_v2(codeset, **kwargs):
   body = body.replace('__syncthreads()', '_item.barrier(cl::sycl::access::fence_space::local_space)').replace('\n', '\n    ')
 
   blend = kwargs['attrs'].blend
+  if re.search(fr'\bATOMIC_', body) or re.search(fr'\bATOMIC_', blend):
+    blend = '''
+#define ATOMIC_ADD_I64(x, y, z) sycl::atomic_fetch_add(sycl::atomic<decltype(z)>(sycl::global_ptr<decltype(z)>(&(x[y]))), z)
+#define ATOMIC_ADD_I32(x, y, z) sycl::atomic_fetch_add(sycl::atomic<decltype(z)>(sycl::global_ptr<decltype(z)>(&(x[y]))), z)
+#define ATOMIC_MAX_I32(x, y, z) sycl::atomic_fetch_max(sycl::atomic<decltype(z)>(sycl::global_ptr<decltype(z)>(&(x[y]))), z)
+#define ATOMIC_ADD_F32(x, y, z) sycl::atomic_fetch_add(sycl::atomic<decltype(z)>(sycl::global_ptr<decltype(z)>(&(x[y]))), z)
+#define ATOMIC_MIN_F32(x, y, z) sycl::atomic_fetch_min(sycl::atomic<decltype(z)>(sycl::global_ptr<decltype(z)>(&(x[y]))), z)
+inline template <class X, class Y> int ATOMIC_CAS_I32(X x, Y y, int z, int old) { sycl::atomic_compare_exchange_strong<int>(sycl::atomic<int>(sycl::global_ptr<int>((int*)&(x[y]))), old, z); return old; }
+''' + blend
   if re.search(fr'\bATOMIC_ADD\b', body):
     blend += '#define ATOMIC_ADD(x, y, z) sycl::atomic_fetch_add(sycl::atomic<decltype(z)>(sycl::global_ptr<decltype(z)>(&(x[y]))), z)\n'
   if re.search(fr'\bATOMIC_MAX\b', body):

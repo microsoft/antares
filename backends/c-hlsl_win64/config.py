@@ -155,10 +155,15 @@ float tanh_ex(float x) {
     lds = '\n'.join(lds)
     registers = ''.join(registers)
 
-    if re.search(fr'\bATOMIC_ADD\b', body):
-      blend += '\ntemplate <class X, class Y, class Z> Z ATOMIC_ADD(X x, Y y, Z z) { Z w; InterlockedAdd(x[y], z, w); return w; }'
-    if re.search(fr'\bATOMIC_MAX\b', body):
-      blend += '\ntemplate <class X, class Y, class Z> Z ATOMIC_MAX(X x, Y y, Z z) { Z w; InterlockedMax(x[y], z, w); return w; }'
+    if re.search(fr'\bATOMIC_', body) or re.search(fr'\bATOMIC_', blend):
+      blend = '''
+template <class X, class Y> int64_t ATOMIC_ADD_I64(X x, Y y, int64_t z)      { int64_t w; InterlockedAdd(x[y], z, w); return w; }
+template <class X, class Y> int     ATOMIC_ADD_I32(X x, Y y, int z)          { int w; InterlockedAdd(x[y], z, w); return w; }
+template <class X, class Y> int     ATOMIC_MAX_I32(X x, Y y, int z)          { int w; InterlockedMax(x[y], z, w); return w; }
+template <class P, class V, class Q> Q ATOMIC_ADD_F32(P x, V y, Q z) { if (!z) return x[y]; while (1) { Q old = x[y], curr = old + z, origin_val; InterlockedCompareExchangeFloatBitwise(x[y], old, curr, origin_val); if (origin_val == old) return curr; } }
+template <class P, class V, class Q> Q ATOMIC_MIN_F32(P x, V y, Q z) { while (1) { float old = x[y], curr = z, origin_val; if (old <= z) return old; InterlockedCompareExchangeFloatBitwise(x[y], old, curr, origin_val); if (origin_val == old) return curr; } }
+template <class X, class Y> int     ATOMIC_CAS_I32(X x, Y y, int z, int old) { int w; InterlockedCompareExchange(x[y], old, z, w); return w; }
+''' + blend
 
     require_cbv = ''
     if len(cb_args) > 0:

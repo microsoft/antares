@@ -41,8 +41,15 @@ def do_native_translation_v2(codeset, **kwargs):
     cuda_linux_half += '\n__forceinline__ __device__ __half hmin(const __half &a, const __half &b) { return a < b ? a : b; }\n'
 
   blend = kwargs['attrs'].blend
-  if re.search(fr'\bATOMIC_', body):
-    blend += '''#define ATOMIC_ADD_I64(x, y, z) atomicAdd((unsigned long long*)&(x[y]), (unsigned long long)(z))\n#define ATOMIC_ADD_I32(x, y, z) atomicAdd(&(x[y]), z)\n#define ATOMIC_ADD_F32(x, y, z) atomicAdd(&(x[y]), z)\n#define ATOMIC_MIN_F32(x, y, z) atomicMin((int*)&(x[y]), ((int&)(z)))\n'''
+  if re.search(fr'\bATOMIC_', body) or re.search(fr'\bATOMIC_', blend):
+    blend = '''
+#define ATOMIC_ADD_I64(x, y, z) atomicAdd((unsigned long long*)&(x[y]), (unsigned long long)(z))
+#define ATOMIC_ADD_I32(x, y, z) atomicAdd(&(x[y]), z)
+#define ATOMIC_MAX_I32(x, y, z) atomicMax(&(x[y]), z)
+#define ATOMIC_ADD_F32(x, y, z) atomicAdd(&(x[y]), z)
+#define ATOMIC_MIN_F32(x, y, z) atomicMin((int*)&(x[y]), ((int&)(z)))
+#define ATOMIC_CAS_I32(x, y, z, old) atomicCAS(((int*)x) + y, old, z)
+''' + blend
 
   full_body = f'''
 #include <cuda_runtime.h>
