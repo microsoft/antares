@@ -87,6 +87,10 @@ def main():
           libhlsl = ctypes.cdll.LoadLibrary(r'.\antares_hlsl_xbox_v0.3.4_x64.dll')
           libhlsl.dxModuleCompile.argtypes = (ctypes.c_char_p, ctypes.POINTER(ctypes.c_longlong),)
           libhlsl.dxModuleCompile.restype = ctypes.c_char_p
+          libhlsl.dxModuleSetCompat.argtypes = (ctypes.c_char_p,)
+          libhlsl.dxModuleSetCompat.restype = ctypes.c_int
+          libhlsl.dxModuleSetCompat(os.environ.get('CSV', 'cs_6_5').encode())
+
         kernel_bin = libhlsl.dxModuleCompile(kernel_data, ctypes.POINTER(ctypes.c_longlong)())
         results = {'HEX': '@' + binascii.hexlify(kernel_bin).decode('utf-8') + '@'}
         send_str(conn, json.dumps(results))

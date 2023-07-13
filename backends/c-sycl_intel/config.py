@@ -33,13 +33,6 @@ def do_native_translation_v2(codeset, **kwargs):
   if 'VAMAP' in os.environ:
     expand_args += '\n' + '\n'.join(['  auto ' + x.split(":")[0].split('/')[-1] + ' = (' + x.split("/")[0] + f')(long long)__args[{len(in_args) + len(out_args) + i}];' for i, x in enumerate(os.environ['VAMAP'].split(','))])
 
-  def get_extent(key, defval=1):
-    str_pat = f'// [thread_extent] {key} = '
-    idx = body.find(str_pat)
-    if idx >= 0:
-      return int(body[idx+len(str_pat):body.index('\n', idx)])
-    return defval
-
   group_shared = []
   parsed_lines, body = [], body.split('\n')
   for line in body:
@@ -52,21 +45,48 @@ def do_native_translation_v2(codeset, **kwargs):
     parsed_lines.append(f'{line[0:len(line)-len(simple_line)]}{type}* {name} = __accessor_{name}.get_pointer();');
     group_shared.append(f'sycl::accessor<{type}, 1, sycl::access::mode::read_write, sycl::access::target::local> __accessor_{name}(sycl::range<1>({size_str}), cgh);');
   body = '\n'.join(parsed_lines)
+
+  parsed_lines, blend = [], kwargs['attrs'].blend.split('\n')
+  for line in blend:
+    simple_line = line.strip()
+    if not simple_line.startswith('__shared__ '):
+      parsed_lines.append(line)
+      continue
+    _, type, data = simple_line.split(' ', 2)
+    name, size_str = data[:-2].split('[')
+    size_str = size_str.split(']')[0]
+    shared_defs = f'{line[0:len(line)-len(simple_line)]}{type}* {name} = __accessor_{name}.get_pointer();';
+    if simple_line.endswith('\\'):
+      shared_defs += ' \\'
+    parsed_lines.append(shared_defs);
+    group_shared.append(f'sycl::accessor<{type}, 1, sycl::access::mode::read_write, sycl::access::target::local> __accessor_{name}(sycl::range<1>({size_str}), cgh);');
+  blend = '\n'.join(parsed_lines)
+ 
   group_shared = '\n    '.join(group_shared)
   del parsed_lines
 
-  body = body.replace('Idx.', 'Idx_')
-  body = body.replace('__syncthreads()', '_item.barrier(cl::sycl::access::fence_space::local_space)').replace('\n', '\n    ')
+  def get_extent(key, defval=1):
+    str_pat = f'// [thread_extent] {key} = '
+    idx = body.find(str_pat)
+    if idx >= 0:
+      return int(body[idx+len(str_pat):body.index('\n', idx)])
+    idx = blend.find(str_pat)
+    if idx >= 0:
+      return int(blend[idx+len(str_pat):blend.index('\n', idx)])
+    return defval
 
-  blend = kwargs['attrs'].blend
   if re.search(fr'\bATOMIC_', body) or re.search(fr'\bATOMIC_', blend):
     blend = '''
-#define ATOMIC_ADD_I64(x, y, z) sycl::atomic_fetch_add(sycl::atomic<decltype(z)>(sycl::global_ptr<decltype(z)>(&(x[y]))), z)
-#define ATOMIC_ADD_I32(x, y, z) sycl::atomic_fetch_add(sycl::atomic<decltype(z)>(sycl::global_ptr<decltype(z)>(&(x[y]))), z)
-#define ATOMIC_MAX_I32(x, y, z) sycl::atomic_fetch_max(sycl::atomic<decltype(z)>(sycl::global_ptr<decltype(z)>(&(x[y]))), z)
-#define ATOMIC_ADD_F32(x, y, z) sycl::atomic_fetch_add(sycl::atomic<decltype(z)>(sycl::global_ptr<decltype(z)>(&(x[y]))), z)
-#define ATOMIC_MIN_F32(x, y, z) sycl::atomic_fetch_min(sycl::atomic<decltype(z)>(sycl::global_ptr<decltype(z)>(&(x[y]))), z)
+#define ATOMIC_ADD_I64(x, y, z) sycl::atomic_fetch_add(sycl::atomic<decltype(z)>(sycl::global_ptr<decltype(z)>(&((x)[y]))), z)
+#define ATOMIC_ADD_I32(x, y, z) sycl::atomic_fetch_add(sycl::atomic<int>(sycl::global_ptr<int>(&((x)[y]))), z)
+#define ATOMIC_MAX_I32(x, y, z) sycl::atomic_fetch_max(sycl::atomic<int>(sycl::global_ptr<int>(&((x)[y]))), z)
+#define ATOMIC_MIN_I32(x, y, z) sycl::atomic_fetch_min(sycl::atomic<int>(sycl::global_ptr<int>(&((x)[y]))), z)
+
 inline template <class X, class Y> int ATOMIC_CAS_I32(X x, Y y, int z, int old) { sycl::atomic_compare_exchange_strong<int>(sycl::atomic<int>(sycl::global_ptr<int>((int*)&(x[y]))), old, z); return old; }
+
+inline template <class X, class Y> float ATOMIC_ADD_F32(X data, Y index, float value) {  if (!value) return data[index]; while (1) { float old = data[index]; float curr = old + value; int origin_val = ATOMIC_CAS_I32((int*)data, index, (int&)curr, (int&)old); if (origin_val == (int&)old) return curr; } }
+
+inline template <class X, class Y> float ATOMIC_MIN_F32(X data, Y index, float value) { int old = ATOMIC_MIN_I32((int*)data, index, (int&)value); return (float&)old; }
 ''' + blend
   if re.search(fr'\bATOMIC_ADD\b', body):
     blend += '#define ATOMIC_ADD(x, y, z) sycl::atomic_fetch_add(sycl::atomic<decltype(z)>(sycl::global_ptr<decltype(z)>(&(x[y]))), z)\n'
@@ -75,8 +95,8 @@ inline template <class X, class Y> int ATOMIC_CAS_I32(X x, Y y, int z, int old) 
 
   # Reversed order in dim configs
   index_str = 'const int blockIdx_x = _item.get_group(2), blockIdx_y = _item.get_group(1), blockIdx_z = _item.get_group(0), threadIdx_x = _item.get_local_id(2), threadIdx_y = _item.get_local_id(1), threadIdx_z = _item.get_local_id(0);'
-  lds = [get_extent('threadIdx_z'), get_extent('threadIdx_y'), get_extent('threadIdx_x')]
-  gds = [get_extent('blockIdx_z') * lds[0], get_extent('blockIdx_y') * lds[1], get_extent('blockIdx_x') * lds[2]]
+  lds = [get_extent('threadIdx.z'), get_extent('threadIdx.y'), get_extent('threadIdx.x')]
+  gds = [get_extent('blockIdx.z') * lds[0], get_extent('blockIdx.y') * lds[1], get_extent('blockIdx.x') * lds[2]]
 
   full_body = f'''#include <math.h>
 #include <algorithm>
@@ -119,4 +139,6 @@ extern "C" void {kernel_name}(sycl::queue* q, int blks, void **__args) {{
 }}
 '''
   full_body = re.sub(fr'\b__device__\b', '', full_body)
+  full_body = full_body.replace('Idx.', 'Idx_')
+  full_body = full_body.replace('__syncthreads()', '_item.barrier(cl::sycl::access::fence_space::local_space)').replace('\n', '\n    ')
   return full_body
