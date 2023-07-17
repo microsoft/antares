@@ -1,6 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-
+#ifdef _MSC_VER
+#define NOMINMAX
+#endif
 #include "npy.hpp"
 #include "execute_module.hpp"
 
