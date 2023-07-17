@@ -18,12 +18,19 @@
 #include <cstring>
 #include <functional>
 #include <numeric>
+#include <atomic>
 
 #include <malloc.h>
 
 #if defined(_WIN64)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#ifdef _MSC_VER
+#include <direct.h>
+#define chdir(x) _chdir(x)
+#define GetTempPath GetTempPathA
+#define GetCurrentDirectory GetCurrentDirectoryA
+#endif
 #endif
 
 #if !defined(_WIN64) || defined(__MINGW64__)
@@ -56,7 +63,7 @@ namespace ab_utils {
 
   public:
     TempFile(const std::string &extension_name, const std::string &file_content, bool auto_delete = true): auto_delete(auto_delete) {
-      static unsigned int k_count = 0;
+      static std::atomic<unsigned int> k_count = 0;
       char temp[4096];
 #if defined(_WIN64)
       GetTempPath(sizeof(temp), temp);
@@ -68,7 +75,7 @@ namespace ab_utils {
         *temp = 0;
 
       do {
-        this->file_path = std::string(temp) + ".antares-module-tempfile." + std::to_string(__sync_add_and_fetch(&k_count, 1)) + "." + extension_name;
+        this->file_path = std::string(temp) + ".antares-module-tempfile." + std::to_string(++k_count) + "." + extension_name;
         FILE *fp = fopen(this->file_path.c_str(), "rb");
         if (!fp) break;
         fclose(fp);
