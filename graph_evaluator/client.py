@@ -94,8 +94,9 @@ def eval(kernel_path, **kwargs):
       debug_cnt = int(os.environ.get('AB_DEBUG', 0))
       if debug_cnt > 0:
         flags += ['--debug', str(debug_cnt)]
-      value_absdir = os.environ.get('VALUE_PATH', '').strip()
+      value_absdir = os.environ.get('VALUE_PATH', '.').strip()
       if value_absdir:
+        value_absdir = value_absdir if not value_absdir.startswith('.') else os.path.join(os.environ['WORKDIR'], value_absdir)
         flags += ['--value_absdir', value_absdir]
       timeout = str(kwargs.get("expected_timeout", "")).strip()
       if timeout:

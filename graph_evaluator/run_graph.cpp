@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+#include "npy.hpp"
 #include "execute_module.hpp"
 
 static void *memory_alloc(size_t length)
@@ -92,21 +93,33 @@ int main(int argc, char** argv)
       global_args.push_back(dptr);
 
       void *data_ptr = memory_alloc(it.mem_size());
-      FILE *fp = nullptr;
-      if (value_absdir.size() > 0) {
-        std::string name = value_absdir + it.name;
-        fp = fopen(name.c_str(), "rb");
-      }
-
       size_t size = it.element_size();
-      if (fp != nullptr) {
-        fseek(fp, 0, SEEK_END);
-        size_t fbytes = ftell(fp);
-        fseek(fp, 0, SEEK_SET);
-        fread(data_ptr, 1, std::min(it.mem_size(), fbytes), fp);
-        for (int i = fbytes; i < it.mem_size(); ++i)
+
+      auto numpy_load = [&](const std::string &path, size_t byte_size) -> bool {
+        if (value_absdir.size() == 0)
+          return false;
+        std::ifstream stream(path, std::ifstream::in | std::ifstream::binary);
+        if (!stream)
+         return false;
+        // CHECK_OK(header.dtype.kind == 'f' && header.dtype.itemsize == 8);
+
+        bool fortran_order;
+        using namespace npy;
+        std::string header_s = read_header(stream);
+        header_t header = parse_header(header_s); // header.dtype.str().c_str()
+        std::vector<unsigned long> shape = header.shape;
+        ssize_t size = static_cast<ssize_t>(comp_size(shape));
+
+        size_t fbytes = size * header.dtype.itemsize;
+        size_t read_size = std::min(byte_size, fbytes);
+        stream.read(reinterpret_cast<char*>(data_ptr), read_size);
+        for (int i = fbytes; i < byte_size; ++i)
           ((char*)data_ptr)[i] = ((char*)data_ptr)[i - fbytes];
-        fclose(fp);
+        return true;
+      };
+
+      if (numpy_load(value_absdir + it.name + ".npy", it.mem_size())) {
+        // pass;
       } else if (it.dtype == "int32") {
         for (size_t x = 0; x < size; ++x)
           ((int*)data_ptr)[x] = 0;
