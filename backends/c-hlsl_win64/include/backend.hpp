@@ -8,6 +8,12 @@
 #include <chrono>
 #include <stdlib.h>
 
+#ifdef _MSC_VER
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
+#define LoadLibrary LoadLibraryA
+#endif
+
 #define HLSL_LIBRARY_PATH R"(antares_hlsl_v0.3.4_x64.dll)"
 #define HLSL_LIBRARY_PATH_XBOX R"(antares_hlsl_xbox_v0.3.4_x64.dll)"
 
