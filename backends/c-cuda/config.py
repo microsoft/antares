@@ -47,8 +47,10 @@ def do_native_translation_v2(codeset, **kwargs):
 #define ATOMIC_ADD_I32(x, y, z) atomicAdd(&(x[y]), z)
 #define ATOMIC_MAX_I32(x, y, z) atomicMax(&(x[y]), z)
 #define ATOMIC_ADD_F32(x, y, z) atomicAdd(&(x[y]), z)
-#define ATOMIC_MIN_F32(x, y, z) atomicMin((int*)&(x[y]), ((int&)(z)))
 #define ATOMIC_CAS_I32(x, y, z, old) atomicCAS(((int*)x) + y, old, z)
+#define ATOMIC_MIN_F32(x, y, z) atomicMin((int*)&(x[y]), ((int&)(z)))
+#define ATOMIC_MIN_F64(x, y, z) atomicMin((long long*)&(x[y]), ((long long&)(z)))
+#define ATOMIC_ADD_F64(x, y, z) atomicAdd(&(x[y]), z)
 ''' + blend
 
   full_body = f'''

@@ -211,6 +211,17 @@ class OpTensor:
           return self.cast('float32')
         return self
 
+    def get_hash(self):
+        if self._dtype == 'int8':
+           return self.call('(uint64_t)(unsigned int8)')
+        if self._dtype == 'int16':
+           return self.call('(uint64_t)(unsigned int16)')
+        if self._dtype == 'int32':
+           return self.call('(uint64_t)(unsigned int32)')
+        if self._dtype == 'int64':
+           return self.call('(uint64_t)(unsigned int64)')
+        raise Exeption('Unrecognized unsigned_cast for dtype = %s' % self._dtype)
+
     def call(self, func_name, others=None, output_dtype=None):
         if others is None:
           others = []
