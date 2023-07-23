@@ -182,6 +182,7 @@ void CSMain(uint3 threadIdx: SV_GroupThreadID, uint3 blockIdx: SV_GroupID) {{
 '''
     full_body = re.sub(r'\b__syncthreads\b', 'GroupMemoryBarrierWithGroupSync', full_body)
     full_body = re.sub(r'\bshort\b', 'min16int', full_body)
+    full_body = re.sub(r'\bunsigned min16int\b', 'min16uint', full_body)
     full_body = re.sub(r'\(char\)', '', full_body)
     full_body = re.sub(r'\bchar\b', 'uint', full_body)
     full_body = re.sub(r'\bfp16_', '', full_body)
