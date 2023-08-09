@@ -19,7 +19,7 @@ RUN apt-get update && apt install -y --no-install-recommends git ca-certificates
 
 
 RUN curl -L https://repo.radeon.com/rocm/rocm.gpg.key | apt-key add -
-RUN printf "deb [arch=amd64] http://repo.radeon.com/rocm/apt/5.3/ ubuntu main" | tee /etc/apt/sources.list.d/rocm_hip.list && \
+RUN printf "deb [arch=amd64] http://repo.radeon.com/rocm/apt/5.4.2/ ubuntu main" | tee /etc/apt/sources.list.d/rocm_hip.list && \
     apt update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     rocm-dev rocblas hipsparse rccl rocfft hipfft rocrand miopen-hip rocthrust hip-rocclr && apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -30,4 +30,4 @@ RUN pip3 install --upgrade antares && mkdir -p /root/.local/antares && mv $(anta
 # OpenCL has been included in ROCm already
 RUN rm -rf /usr/lib/x86_64-linux-gnu/libOpenCL.so.1*
 
-# RUN python3 -m pip install tensorflow-rocm==2.4.3 mpi4py  # tensorflow-rocm==1.15.12
+RUN python3 -m pip install torch==2.0.0 --index-url https://download.pytorch.org/whl/rocm5.4.2

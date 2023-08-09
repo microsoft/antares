@@ -20,5 +20,4 @@ RUN cp -r /opt/intel/oneapi/compiler/latest/linux/include/sycl/CL /opt/intel/one
 RUN apt update && apt-get install -y python3-pip
 RUN pip3 install --upgrade antares && mkdir -p /root/.local/antares && mv $(antares pwd)/../3rdparty /root/.local/antares/3rdparty && pip3 uninstall antares -y && echo 'exec /antares/main.py "$@"' > /usr/local/bin/antares && chmod a+x /usr/local/bin/antares
 
-# RUN python3 -m pip install --user torch==1.10.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
-# RUN python3 -m pip install --upgrade intel-tensorflow && python3 -m pip install --upgrade numpy mpi4py
+RUN python3 -m pip install torch==2.0.0 --index-url https://download.pytorch.org/whl/cpu
