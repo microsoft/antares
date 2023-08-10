@@ -21,7 +21,7 @@ RUN apt-get update && apt install -y --no-install-recommends git ca-certificates
 RUN curl -L https://repo.radeon.com/rocm/rocm.gpg.key | apt-key add -
 RUN printf "deb [arch=amd64] http://repo.radeon.com/rocm/apt/5.4.2/ ubuntu main" | tee /etc/apt/sources.list.d/rocm_hip.list && \
     apt update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    rocm-dev rocblas hipsparse rccl rocfft hipfft rocrand miopen-hip rocthrust hip-rocclr && apt-get clean && rm -rf /var/lib/apt/lists/*
+    rocm-dev rocblas hipsparse rccl rocfft hipfft rocrand miopen-hip rocthrust hip-rocclr hipsparse-dev rccl-dev rocblas-dev && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN /bin/echo -e "set backspace=indent,eol,start\nset nocompatible\nset ts=4" > /etc/vim/vimrc.tiny
 
