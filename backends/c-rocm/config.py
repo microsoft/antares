@@ -39,7 +39,7 @@ def do_native_translation_v2(codeset, **kwargs):
     amdgfx = os.environ['AMDGFX']
   else:
     amdgfx = kwargs['attrs'].device_props.compute_version.split('.')
-    if int(amdgfx[0]) < 10:
+    if int(amdgfx[0]) < 10 and int(amdgfx[1]) == 10:
       amdgfx = 'gfx%u%02x' % (int(amdgfx[0]), int(amdgfx[1]))
     else:
       amdgfx = 'gfx%u%02u' % (int(amdgfx[0]), int(amdgfx[1]))
