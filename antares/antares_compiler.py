@@ -676,14 +676,14 @@ def main_compute(code_only=False):
   eval_client.init(backend_root=backend_root)
   dev_id = int(os.environ.get('DEV_ID', '0'))
 
-  if (save_path and dump_path) is None and os.environ.get("FUNC_NAME", None) and '// [metadata] ' in device_source:
+  if (save_path and dump_path) is None and os.environ.get("TORCH_FN", None) and '// [metadata] ' in device_source:
     AntaresGlobal.device_source = device_source
     metadata = device_source.index('// [metadata] ')
     metadata = device_source[metadata:device_source.index('\n', metadata)].split()[-1].encode('utf-8')
     hex_code = device_source.encode('utf-8')
     if int(os.environ.get('CODE_DEBUG', 0)) == 0:
       hex_code = binascii.unhexlify(eval_client.eval(kernel_path=kernel_path, dev_id=(fix_device_id if fix_device_id >= 0 else dev_id), backend_root=backend_root, compile=1)['HEX'][1:-1])
-    with open(get_real_path(os.environ["FUNC_NAME"] + ".mod"), 'wb') as fp:
+    with open(get_real_path(os.environ["TORCH_FN"] + ".mod"), 'wb') as fp:
       fp.write(metadata)
       fp.write(hex_code)
 

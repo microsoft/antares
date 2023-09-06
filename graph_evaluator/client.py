@@ -107,7 +107,7 @@ def eval(kernel_path, **kwargs):
     flags = ' '.join(flags)
     exec_cmd = f'sh -c "cd {os.path.dirname(kernel_path)} && BACKEND={backend} {launcher} {evaluator_path} my_kernel.cc {flags}" || true'
     try:
-      output = subprocess.check_output(exec_cmd, shell=True).decode()
+      output = subprocess.check_output(exec_cmd, shell=True, timeout=20).decode()
     except:
       output = ''
 

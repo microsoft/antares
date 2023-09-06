@@ -15,7 +15,7 @@ def schedule(attrs):
     for i in range(len(output.op.reduce_axis)):
       slice_reduce.append(cfg.define_split(f"{prefix}:R{i}", attrs.get_extent(output.op.reduce_axis[i]), num_outputs=2, init_vals=[[-1, 4],]))
 
-    unroll = cfg.define_knob(f"{prefix}:UN", [1, 4, 8, 16, 32, 64], init_vals=[1,] if attrs.backend == 'c-mcpu_avx512' else [0,])
+    unroll = cfg.define_knob(f"{prefix}:UN", [1, 4, 8, 16, 32, 64], init_vals=[1,] if attrs.backend != 'c-mcpu' else [0,])
 
     output_local, = s.cache_write([output], "local")
 

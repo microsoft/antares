@@ -19,7 +19,7 @@ namespace ab {
 
   void init(int dev) {
     try {
-      if (__BACKEND__ == "c-sycl_intel")
+      if (__BACKEND__ != "c-sycl_cuda")
         _sycl_queue = std::move(sycl::queue(sycl::default_selector{}));
       else {
         // for SYCL CUDA, select the i-th GPU device
@@ -41,6 +41,10 @@ namespace ab {
     } catch (sycl::exception const &e) {
       std::terminate();
     }
+
+    int steps = getenv("STEP") ? std::atoi(getenv("STEP")) : 0;
+    if (steps > 0)
+      return;
     size_t max_compute_units = _sycl_queue.get_device().get_info<cl::sycl::info::device::max_compute_units>();
     size_t max_work_group_size = _sycl_queue.get_device().get_info<cl::sycl::info::device::max_work_group_size>();
     size_t max_mem_alloc_size = _sycl_queue.get_device().get_info<cl::sycl::info::device::max_mem_alloc_size>();
@@ -61,7 +65,7 @@ namespace ab {
       it.pop_back();
       return dptr;
     }
-    // if (__BACKEND__ == "c-sycl_intel")
+    // if (__BACKEND__ != "c-sycl_cuda")
     //   return memalign(sysconf(_SC_PAGESIZE), byteSize);
     return sycl::malloc_device(byteSize, _sycl_queue);
   }
@@ -75,8 +79,8 @@ namespace ab {
     ab_utils::TempFile tempfile("cpp", source);
     auto path = tempfile.get_path();
 
-    if (__BACKEND__ == "c-sycl_intel")
-      ab_utils::Process({"dpcpp", path, "-std=c++17", "-lpthread", "-fPIC", "-shared", "-Wno-pass-failed", "-O3", "-ffast-math", "-march=native", "-o", path + ".out"}, 10);
+    if (__BACKEND__ != "c-sycl_cuda")
+      ab_utils::Process({"dpcpp", path, "-std=c++17", "-lpthread", "-fPIC", "-shared", "-Wno-pass-failed", "-O3", "-ffast-math", "-Wno-deprecated", "-march=native", "-o", path + ".out"}, 10);
     else {
       std::string gpu_arch = "50"; // Corresponds to the back-end default.
 #ifdef SYCL_CUDA
@@ -142,7 +146,7 @@ namespace ab {
     }
 
     ((void(*)(void*, long, void* const*))hFunc[0])(&_sycl_queue, attrs, krnl_args.data());
-    if (__BACKEND__ == "c-sycl_intel") // have to sync unlike CUDA
+    if (__BACKEND__ != "c-sycl_cuda") // have to sync except CUDA
        _sycl_queue.wait();
   }
 
