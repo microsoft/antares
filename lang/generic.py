@@ -27,8 +27,6 @@ def einstein_v2(exprss, input_dict, extra_outputs=[], **kwargs):
     os.environ['COMMENTS'] = json.dumps(kwargs['comments'])
   if 'defines' in kwargs:
     os.environ['DEFINES'] = json.dumps(kwargs['defines'])
-  if 'func_name' in kwargs:
-    os.environ['FUNC_NAME'] = kwargs['func_name']
 
   for k in input_dict:
    if len(input_dict[k]['shape']) == 0:

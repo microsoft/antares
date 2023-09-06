@@ -354,5 +354,5 @@ def codegen(ast_seq, input_dict, output_dict, best_config, space_only=False):
   kernel_slices = translate_code(func.imported_modules[0].get_source(), best_config)
   return kernel_slices
 
-if int(os.environ.get('TVM', 1)) == 0:
-  from next_codegen import codegen
+if len(os.environ.get('TORCH_FN', '')) > 0:
+  from torch_codegen.torch_codegen import codegen

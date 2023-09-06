@@ -61,13 +61,6 @@ BACKEND=c-cuda STEP=2000 COMPUTE_V1='- S = 512; einstein_v2(input_dict={"input0"
 # Cleanup history caches:
 antares clean
 
-# Boot HTTP daemon for accepting searching tasks:
-antares rest-server
-
-# Setup Plugin for Pytorch && Examples:
-BACKEND=c-cuda antares torch-setup
-BACKEND=c-mcpu antares torch-setup
-python3 -m antares_core.frameworks.pytorch.examples.1_hello_world
 ```
 
 ## Contributing

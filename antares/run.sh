@@ -51,7 +51,7 @@ if [[ "${TVM}" != "0" ]] && ( [[ "$(cat ${TVM_HOME}/VERSION_TAG 2>/dev/null)" !=
 fi
 
 if [[ "$COMPUTE_V1" == "" ]]; then
-  export COMPUTE_V1='- einstein_v2("output0[N, M] = input0[N, M] + input1[N, M]", input_dict={"input0": {"dtype": "float32", "shape": [1024, 512]}, "input1": {"dtype": "float32", "shape": [1024, 512]}})'
+  export COMPUTE_V1='- N = 1024 * 1024 * 64; einstein_v2("output0[N] = input0[N].call(`max`, const(0, dtype=input0.dtype()))", {"input0": {"dtype": "float32", "shape": [N]}})' antares
 fi
 
 mkdir -p ${ANTARES_DRIVER_PATH}

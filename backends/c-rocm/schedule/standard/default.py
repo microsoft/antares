@@ -39,8 +39,11 @@ def schedule(attrs):
   attrs.advanced_sched = config or step > 0
   tail_op, explicit_ops = None, [x for x in attrs.explicit_ops]
 
-  if (len(explicit_ops) > 1 and
-      not explicit_ops[-1].output(0).op.reduce_axis):
+  red = int(os.environ.get('RED', -1))
+  if red == -1:
+    red = (len(explicit_ops) > 1 and not explicit_ops[-1].output(0).op.reduce_axis)
+
+  if red:
     fuse_tail = attrs.auto_config.define_knob(f"FU", [False, True])
     tail_op = explicit_ops[-1]
     if fuse_tail:
