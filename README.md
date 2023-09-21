@@ -1,87 +1,126 @@
-## What is Antares:
+## AutoRT: the Next Generation of Antares.
 
-**Antares** (https://github.com/microsoft/antares) is an engine to auto generate optimized kernels for [Multi Backends](backends). It is a framework not only for ***Software developers*** to get backend-related code, but also for ***Hardware developers*** to extend new backends/hareware quickly and easily. Antares frontend is based on [Antares IR](AntaresIR.md) that follows "One Language Syntax for All Platforms".
+AutoRT is a compiler solution that invents, evaluates and optimizes operators for Pytorch using your own accelerators.
+- AutoRT can be as a [benchmark utility](#--playground-1---benchmark-your-windows-device) for device performance testing and profiling.
+- AutoRT can also generate Pytorch2 of your device to accelerate standard [Pytorch applications](#quick-test-2-mnist-training-by-pytorch2-using-windows-directx) (e.g. DirectX).
+- Additionally, AutoRT futher helps to construct [custom-defined](#quick-test-1-create-custom-operator-of-your-own-in-pytorch-2) / fused operators that are beyond the built-in functions of Pytorch.
+- ***AutoRT for Windows DirectX 12*** has experimental version [released](#--quick-installation-for-microsoft-windows-1011).
+- Click [here](https://github.com/microsoft/antares/issues/new) to suggest more platforms (e.g. Pytorch2 for Windows ROCm / OpenCL / SYCL / Apple Metal / ..) you would like AutoRT to support in the follow-up releases.
 
-### How to Install:
+#### Archtecture of AutoRT as a Backend for Pytorch 2.0:
+<p align="center">
+  <img src="AutoRT4Torch.svg" data-canonical-src="AutoRT4Torch.svg" width="650" height="230" />
+</p>
 
+#### Workflow of Custom Operations from Antares IR to Different Backends:
+<p align="center">
+  <img src="AutoRT-opt.svg" data-canonical-src="AutoRT-opt.svg" width="650" height="120" />
+</p>
+
+
+## - Quick Installation for Microsoft Windows 10/11:
+
+#### Step-1: Download & Install [Official Python 3.8 for Windows 10/11 x64](https://www.python.org/ftp/python/3.8.10/python-3.8.10-amd64.exe)
+
+#### Step-2: Install AutoRT (experimental version):
 ```sh
-python3 -m pip install --upgrade antares
+python.exe -m pip install https://github.com/microsoft/antares/releases/download/v0.9.0/autort-0.9.0-cp38-cp38-win_amd64.whl
 ```
 
-### Quick Test:
 
+## - Playground 1 - Benchmark your Windows Device:
+
+#### Quick Test 1: Benchmark to evaluate device memory bandwidth over DirectX 12.
 ```sh
-BACKEND=c-scpu antares
-
-# List Supported Backends
-antares backends
-
-# Help Information:
-antares help
+$ python.exe -m autort.utils.memtest
+  ...
+  [1000/1000] AutoRT Device Memory Bandwidth: (Actual ~= 468.12 GB/s) (Theoretical ~= 561.75 GB/s)
 ```
 
-### Usage Examples (antares save/eval/compile):
-
+#### Quick Test 2: Benchmark to evaluate device FP32 performance over DirectX 12.
 ```sh
-# Quickly generate a multi-threaded CPU code:
-BACKEND=c-mcpu antares
-
-# Search an efficient multi-threaded CPU code and save best code to specified location:
-STEP=100 BACKEND=c-mcpu antares save ./kernel_example.cpp
-
-# Reproduce kernel evaluation based on an early saved source code:
-BACKEND=c-mcpu antares eval ./kernel_example.cpp
-
-# Freeze kernels and compiled into edge-side binaries:
-BACKEND=c-mcpu antares compile ./kernel_example.cpp ./output-dest/
-# Build solution in destination directory:
-cd ./output-dest && make
+$ python.exe -m autort.utils.fp32test
+  ...
+  [5000/5000] AutoRT FP32 TFLOPS: (Actual ~= 9.84 TFLOPS) (Theoretical ~= 10.93 TFLOPS)
 ```
 
-### Advanced Examples:
+## - Playground 2 - Running Pytorch2 over DirectX:
+
+#### Quick Test 1: Create "custom operator" of your own in Pytorch 2.
+
+- **Style-1: "Command Line Style"** Custom Operator Generation:
 ```sh
-# Quickly generate a CUDA code with correctness checking:
-CHECK=1 BACKEND=c-cuda antares
+# First, create a custom sigmoid activation operator:
+$ python.exe -m autort.utils.export --ir "sigmoid_f32[N] = 1 - 1 / (1 + data[N].call(strs.exp))" -i data=float32[N:4096000]
 
-# Search an efficient multi-threaded CPU code showing progress bar only:
-PROGRESS=1 STEP=100 BACKEND=c-mcpu antares save ./kernel_example.cpp
-
-# Quickly generate a SHADER code for Windows 10/11's DirectX12:
-BACKEND=c-hlsl_win64 antares
-
-# Quickly generate an ROCm code for AMDGPU (requires ROCm SDK >= 4.2):
-BACKEND=c-rocm antares
-
-# Quickly generate a CUDA code for computing MatMul (512,512)x(512,512) based on [Antares IR](AntaresIR.md) for NVIDIA GPU (requires NVIDIA CUDA SDK >= 10.0):
-BACKEND=c-cuda COMPUTE_V1='- S = 512; einstein_v2(input_dict={"input0": {"dtype": "float32", "shape": [S, S]}, "input1": {"dtype": "float32", "shape": [S, S]}}, exprss="output0[N, M] +=! input0[N, K] * input1[K, M]")' antares
-
-# Search an efficient CUDA code for MatMul, using 2000 steps for trial:
-BACKEND=c-cuda STEP=2000 COMPUTE_V1='- S = 512; einstein_v2(input_dict={"input0": {"dtype": "float32", "shape": [S, S]}, "input1": {"dtype": "float32", "shape": [S, S]}}, exprss="output0[N, M] +=! input0[N, K] * input1[K, M]")' antares
-
-# Cleanup history caches:
-antares clean
-
+# Then, use it in Pytorch 2 session:
+$ python.exe
+>> import torch
+>> import autort
+>> data = torch.arange(0, 10, dtype=torch.float32, device=autort.device())
+>>
+>> output = autort.ops.sigmoid_f32(data)
+>> print(output)
+tensor([0.5000, 0.7311, 0.8808, 0.9526, 0.9820, 0.9933, 0.9975, 0.9991, 0.9997,
+        0.9999])
 ```
 
-## Contributing
+- **Style-2: "AutoRT API Style"** Custom Operator Generation:
+```sh
+$ python.exe
+>> import torch
+>> import autort
+>>
+>> from autort.utils.export import export_module
+>> export_module(ir="sigmoid_f32[N] = 1 - 1 / (1 + data[N].call(strs.exp))", inputs=["data=float32[N:4096000]"])
+>>
+>> data = torch.arange(0, 10, dtype=torch.float32, device=autort.device())
+>> output = autort.ops.sigmoid_f32(data)
+>> print(output)
+tensor([0.5000, 0.7311, 0.8808, 0.9526, 0.9820, 0.9933, 0.9975, 0.9991, 0.9997,
+        0.9999])
+```
 
-This project welcomes contributions and suggestions.  Most contributions require you to agree to a
-Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
-the rights to use your contribution. For details, visit https://cla.opensource.microsoft.com.
+#### Quick Test 2: MNIST Training by Pytorch2 using Windows DirectX:
+```sh
+$ python.exe -m autort.examples.mnist
+  ...
+  step = 100, loss = 2.2871, accuracy = 21.88 %
+  step = 200, loss = 2.1408, accuracy = 46.88 %
+  step = 300, loss = 1.6713, accuracy = 62.50 %
+  step = 400, loss = 0.9573, accuracy = 62.50 %
+  step = 500, loss = 0.8338, accuracy = 68.75 %
+  step = 600, loss = 0.5882, accuracy = 84.38 %
+  step = 700, loss = 0.2738, accuracy = 87.50 %
+  step = 800, loss = 0.5159, accuracy = 87.50 %
+  step = 900, loss = 0.5511, accuracy = 84.38 %
+  step = 1000, loss = 0.2616, accuracy = 93.75 %
+  ...
+```
 
-When you submit a pull request, a CLA bot will automatically determine whether you need to provide
-a CLA and decorate the PR appropriately (e.g., status check, comment). Simply follow the instructions
-provided by the bot. You will only need to do this once across all repos using our CLA.
+#### Quick Test 3: Fine-tune existing operators to make Pytorch Builtin Operators run faster.
+```sh
+$ python.exe -m autort.utils.mmtest
 
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
-For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
-contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+  >> Performance of your device:
 
-## Trademarks
+     `MM-Perf` (current) = 4.15 TFLOPS
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  >> ...
 
-This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft 
-trademarks or logos is subject to and must follow 
-[Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general).
-Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship.
-Any use of third-party trademarks or logos are subject to those third-party's policies.
+$ python.exe -m autort.utils.export -s 4000
 
+  Module file for operator `gemm_f32` has been exported to `.\ops\gemm_f32.mod`.
+
+  ..
+
+$ python.exe -m autort.utils.mmtest
+
+  >> Performance of your device:
+
+     `MM-Perf` (current) = 9.71 TFLOPS
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  >> ...
+```
+
+If you like it, welcome to report issues or donate stars which can encourage AutoRT to support more backends, more OS-type and more documentations. See More Information about Microsoft [Contributing](CONTRIBUTING.md) and [Trademarks](TRADEMARKS.md).
