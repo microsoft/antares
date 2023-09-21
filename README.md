@@ -1,5 +1,7 @@
 ## AutoRT: the Next Generation of Antares.
 
+(For legacy Antares, please redirect to documentation [README Legacy](README-legacy.md).)
+
 AutoRT is a compiler solution that invents, evaluates and optimizes operators for Pytorch using your own accelerators.
 - AutoRT can be as a [benchmark utility](#--playground-1---benchmark-your-windows-device) for device performance testing and profiling.
 - AutoRT can also generate Pytorch2 of your device to accelerate standard [Pytorch applications](#quick-test-2-mnist-training-by-pytorch2-using-windows-directx) (e.g. DirectX).
