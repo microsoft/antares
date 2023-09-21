@@ -26,7 +26,7 @@ AutoRT is a compiler solution that invents, evaluates and optimizes operators fo
 
 #### Step-2: Install AutoRT (experimental version):
 ```sh
-python.exe -m pip install https://github.com/microsoft/antares/releases/download/v0.9.0/autort-0.9.0-cp38-cp38-win_amd64.whl
+python.exe -m pip install --upgrade --force-reinstall https://github.com/microsoft/antares/releases/download/v0.9.0/autort-0.9.0-cp38-cp38-win_amd64.whl
 ```
 
 
@@ -57,10 +57,9 @@ $ python.exe -m autort.utils.export --ir "sigmoid_f32[N] = 1 - 1 / (1 + data[N].
 
 # Then, use it in Pytorch 2 session:
 $ python.exe
->> import torch
->> import autort
->> data = torch.arange(0, 10, dtype=torch.float32, device=autort.device())
+>> import torch, autort
 >>
+>> data = torch.arange(0, 10, dtype=torch.float32, device=autort.device())
 >> output = autort.ops.sigmoid_f32(data)
 >> print(output)
 tensor([0.5000, 0.7311, 0.8808, 0.9526, 0.9820, 0.9933, 0.9975, 0.9991, 0.9997,
@@ -70,11 +69,9 @@ tensor([0.5000, 0.7311, 0.8808, 0.9526, 0.9820, 0.9933, 0.9975, 0.9991, 0.9997,
 - **Style-2: "AutoRT API Style"** Custom Operator Generation:
 ```sh
 $ python.exe
->> import torch
->> import autort
+>> import torch, autort
 >>
->> from autort.utils.export import export_module
->> export_module(ir="sigmoid_f32[N] = 1 - 1 / (1 + data[N].call(strs.exp))", inputs=["data=float32[N:4096000]"])
+>> autort.export(ir="sigmoid_f32[N] = 1 - 1 / (1 + data[N].call(strs.exp))", inputs=["data=float32[N:4096000]"])
 >>
 >> data = torch.arange(0, 10, dtype=torch.float32, device=autort.device())
 >> output = autort.ops.sigmoid_f32(data)
