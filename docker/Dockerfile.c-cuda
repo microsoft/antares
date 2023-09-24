@@ -1,4 +1,4 @@
-FROM nvidia/cuda:11.0.3-cudnn8-devel-ubuntu20.04
+FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu20.04
 
 ENV DEBIAN_FRONTEND noninteractive
 ENV PYTHONDONTWRITEBYTECODE 1
@@ -24,3 +24,4 @@ ENV LD_LIBRARY_PATH=/usr/local/nvidia/lib64:$LD_LIBRARY_PATH
 RUN pip3 install --upgrade antares && mkdir -p /root/.local/antares && mv $(antares pwd)/../3rdparty /root/.local/antares/3rdparty && pip3 uninstall antares -y && echo 'exec /antares/main.py "$@"' > /usr/local/bin/antares && chmod a+x /usr/local/bin/antares
 
 RUN python3 -m pip install torch==2.0.0 --index-url https://download.pytorch.org/whl/cu117
+RUN python3 -m pip install cython
