@@ -30,7 +30,11 @@ AutoRT is a compiler solution that invents, evaluates and optimizes operators fo
 python.exe -m pip install --upgrade https://github.com/microsoft/antares/releases/download/v0.9.0/autort-0.9.0_directx-cp38-cp38-win_amd64.whl
 ```
 
-### - For Linux CUDA, you can try this on Ubuntu 20.04 (or equivalent container, e.g. nvidia/cuda:11.8.0-cudnn8-devel-ubuntu20.04):
+### - For Linux CUDA, you can try this on Ubuntu 20.04 (or equivalent containers below):
+ * **Docker Image:** nvidia/cuda:11.8.0-cudnn8-devel-ubuntu20.04
+ * **Docker Image:** nvidia/cuda:12.0.1-cudnn8-devel-ubuntu20.04
+ * ..
+
 #### Step-1: Install AutoRT for CUDA (experimental version):
 ```sh
 python3.8 -m pip install --upgrade https://github.com/microsoft/antares/releases/download/v0.9.0/autort-0.9.0_cuda-cp38-cp38-manylinux1_x86_64.whl
