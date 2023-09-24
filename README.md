@@ -6,7 +6,7 @@ AutoRT is a compiler solution that invents, evaluates and optimizes operators fo
 - AutoRT can be as a [benchmark utility](#--playground-1---benchmark-your-windows-device) for device performance testing and profiling.
 - AutoRT can also generate Pytorch2 of your device to accelerate standard [Pytorch applications](#quick-test-2-mnist-training-by-pytorch2-using-windows-directx) (e.g. DirectX).
 - Additionally, AutoRT futher helps to construct [custom-defined](#quick-test-1-create-custom-operator-of-your-own-in-pytorch-2) / fused operators that are beyond the built-in functions of Pytorch.
-- ***AutoRT for Windows DirectX 12*** has experimental version [released](#--quick-installation-for-microsoft-windows-1011).
+- ***AutoRT for Windows DirectX 12 / Linux CUDA*** has experimental version [released](#--quick-installation-of-autort).
 - Click [here](https://github.com/microsoft/antares/issues/new) to suggest more platforms (e.g. Pytorch2 for Windows ROCm / OpenCL / SYCL / Apple Metal / ..) you would like AutoRT to support in the follow-up releases.
 
 #### Archtecture of AutoRT as a Backend for Pytorch 2.0:
@@ -20,15 +20,21 @@ AutoRT is a compiler solution that invents, evaluates and optimizes operators fo
 </p>
 
 
-## - Quick Installation for Microsoft Windows 10/11:
+## - Quick Installation of AutoRT:
+
+### - For AutoRT for DirectX, you can try this on Windows 10/11:
 
 #### Step-1: Download & Install [Official Python 3.8 for Windows 10/11 x64](https://www.python.org/ftp/python/3.8.10/python-3.8.10-amd64.exe)
-
-#### Step-2: Install AutoRT (experimental version):
+#### Step-2: Install AutoRT for DirectX (experimental version):
 ```sh
-python.exe -m pip install --upgrade --force-reinstall https://github.com/microsoft/antares/releases/download/v0.9.0/autort-0.9.0-cp38-cp38-win_amd64.whl
+python.exe -m pip install --upgrade https://github.com/microsoft/antares/releases/download/v0.9.0/autort-0.9.0_directx-cp38-cp38-win_amd64.whl
 ```
 
+### - For Linux CUDA, you can try this on Ubuntu 20.04 (or equivalent container, e.g. nvidia/cuda:11.8.0-cudnn8-devel-ubuntu20.04):
+#### Step-1: Install AutoRT for CUDA (experimental version):
+```sh
+python3.8 -m pip install --upgrade https://github.com/microsoft/antares/releases/download/v0.9.0/autort-0.9.0_cuda-cp38-cp38-manylinux1_x86_64.whl
+```
 
 ## - Playground 1 - Benchmark your Windows Device:
 
