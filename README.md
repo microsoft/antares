@@ -22,22 +22,26 @@ AutoRT is a compiler solution that invents, evaluates and optimizes operators fo
 
 ## - Quick Installation of AutoRT:
 
-### - For AutoRT for DirectX, you can try this on Windows 10/11:
+#### Requirements
+| Platform | OS Requirement | Python Requirement | Download Link |
+| --- | --- | --- | --- |
+| DirectX 12 | Windows >= 10 / Microsoft XBox | [Python3.8](https://www.python.org/ftp/python/3.8.10/python-3.8.10-amd64.exe) | [Download](https://github.com/microsoft/antares/releases/download/v0.9.0/autort-0.9.0_directx-cp38-cp38-win_amd64.whl) |
+| CUDA >= 11 | Ubuntu 20.04 (or images) | Python3.8 (from Ubuntu Repo) | [Download](https://github.com/microsoft/antares/releases/download/v0.9.0/autort-0.9.0_cuda-cp38-cp38-manylinux1_x86_64.whl) |
 
-#### Step-1: Download & Install [Official Python 3.8 for Windows 10/11 x64](https://www.python.org/ftp/python/3.8.10/python-3.8.10-amd64.exe)
-#### Step-2: Install AutoRT for DirectX (experimental version):
-```sh
-python.exe -m pip install --upgrade https://github.com/microsoft/antares/releases/download/v0.9.0/autort-0.9.0_directx-cp38-cp38-win_amd64.whl
-```
-
-### - For Linux CUDA, you can try this on Ubuntu 20.04 (or equivalent containers below):
+#### Step-1: Python3 Installation.
+For Ubuntu 20.04 (or equivalent containers below), ensure Python3.8 is installed by `sudo apt-get install python3.8-dev python3-pip`.
  * **Docker Image:** nvidia/cuda:11.8.0-cudnn8-devel-ubuntu20.04
  * **Docker Image:** nvidia/cuda:12.0.1-cudnn8-devel-ubuntu20.04
  * ..
 
-#### Step-1: Install AutoRT for CUDA (experimental version):
+For Windows 10/11, ensure Python3.8 is installed by downloading and installing "Python Requirement" links in [requirements](#requirements).
+
+
+#### Step-2: Install AutoRT:
+Download wheel file for your OS and platform from "Download Links" in [requirements](#requirements). Then using `python3.8 -m pip install *.whl` command to install the package.
+
 ```sh
-python3.8 -m pip install --upgrade https://github.com/microsoft/antares/releases/download/v0.9.0/autort-0.9.0_cuda-cp38-cp38-manylinux1_x86_64.whl
+python.exe -m pip install <local-file-path-for-autort-whl-package>
 ```
 
 ## - Playground 1 - Benchmark your Windows Device:
