@@ -25,8 +25,8 @@ AutoRT is a compiler solution that invents, evaluates and optimizes operators fo
 #### Requirements
 | Platform | OS Requirement | Python Requirement | Download Link |
 | --- | --- | --- | --- |
-| DirectX 12 | Windows >= 10 / Microsoft XBox | [Python3.8](https://www.python.org/ftp/python/3.8.10/python-3.8.10-amd64.exe) | [Download](https://github.com/microsoft/antares/releases/download/v0.9.0/autort-0.9.0_directx-cp38-cp38-win_amd64.whl) |
-| CUDA >= 11 | Ubuntu 20.04 (or images) | Python3.8 (from Ubuntu Repo) | [Download](https://github.com/microsoft/antares/releases/download/v0.9.0/autort-0.9.0_cuda-cp38-cp38-manylinux1_x86_64.whl) |
+| DirectX 12 | Windows >= 10 / Microsoft XBox | [Python3.8](https://www.python.org/ftp/python/3.8.10/python-3.8.10-amd64.exe) | [Download](https://github.com/microsoft/antares/releases/download/v0.9.1/autort-0.9.1_directx-cp38-cp38-win_amd64.whl) |
+| CUDA >= 11 | Ubuntu 20.04 (or images) | Python3.8 (from Ubuntu Repo) | [Download](https://github.com/microsoft/antares/releases/download/v0.9.1/autort-0.9.1_cuda-cp38-cp38-manylinux1_x86_64.whl) |
 | .. | .. (More coming soon) .. |
 
 #### Step-1: Python3 Installation.
