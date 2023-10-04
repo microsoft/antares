@@ -1,8 +1,10 @@
 ## AutoRT: the Next Generation of Antares.
 
-(For legacy Antares, please redirect to documentation [README Legacy](README-legacy.md).)
+***Path-1:*** Antares Kernel Optimizers (CUDA/ROCm/DX/SYCL/OpenCL/): `python3 -m pip install antares`, please follow: [README for Antares](README-legacy.md).
 
-AutoRT is a compiler solution that invents, evaluates and optimizes operators for Pytorch using your own accelerators.
+***Path-2:*** AutoRT for Pytorch Runtime & Device Benchmark (CUDA/DirectX/<more-in-the-future>): `python38 -m pip install <autort-download-link-below>`
+
+AutoRT is a compiler solution that helps runtime users to invent, benchmark and optimize operators for Pytorch using your own accelerators.
 - AutoRT can be as a [benchmark utility](#--playground-1---benchmark-your-windows-device) for device performance testing and profiling.
 - AutoRT can also generate Pytorch2 of your device to accelerate standard [Pytorch applications](#quick-test-2-mnist-training-by-pytorch2-using-windows-directx) (e.g. DirectX).
 - Additionally, AutoRT futher helps to construct [custom-defined](#quick-test-1-create-custom-operator-of-your-own-in-pytorch-2) / fused operators that are beyond the built-in functions of Pytorch.
