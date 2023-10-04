@@ -1,6 +1,6 @@
 ## AutoRT: the Next Generation of Antares.
 
-***Path-1:*** Antares Kernel Optimizers (CUDA/ROCm/DX/SYCL/OpenCL/): `python3 -m pip install antares`, please follow: [README for Antares](README-legacy.md).
+***Path-1:*** Antares Kernel Optimizers (CUDA/ROCm/DX/SYCL/OpenCL/CPU/IPU/Android): `python3 -m pip install antares`, please follow: [README for Antares](README-legacy.md).
 
 ***Path-2:*** AutoRT for Pytorch Runtime & Device Benchmark (CUDA/DirectX/<more-in-the-future>): `python38 -m pip install <autort-download-link-below>`
 
