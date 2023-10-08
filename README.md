@@ -29,8 +29,8 @@ AutoRT is a compiler solution that helps runtime users to invent, benchmark and 
 #### Requirements
 | Platform | OS Requirement | Python Requirement | Download Link |
 | --- | --- | --- | --- |
-| DirectX 12 | Windows >= 10 / Microsoft XBox | [Python3.8](https://www.python.org/ftp/python/3.8.10/python-3.8.10-amd64.exe) | python.exe -m pip install https://github.com/microsoft/antares/releases/download/v0.9.1/autort-0.9.1.1_directx-cp38-cp38-win_amd64.whl |
-| CUDA >= 11 | Ubuntu >= 18.04 (or images) | Python 3.8/3.9/3.10/3.11/3.12 | python3 -m pip install https://github.com/microsoft/antares/releases/download/v0.9.1/autort-0.9.1.1+cuda.linux.tar.gz |
+| DirectX 12 | Windows >= 10 / Microsoft XBox | [Python3.8](https://www.python.org/ftp/python/3.8.10/python-3.8.10-amd64.exe) | python.exe -m pip install --verbose https://github.com/microsoft/antares/releases/download/v0.9.1/autort-0.9.1.1_directx-cp38-cp38-win_amd64.whl |
+| CUDA >= 11 | Ubuntu >= 18.04 (or images) | Python 3.8/3.9/3.10/3.11/3.12 | python3 -m pip install --verbose https://github.com/microsoft/antares/releases/download/v0.9.1/autort-0.9.1.1+cuda.linux.tar.gz |
 | .. | .. | .. | .. (More coming soon) .. |
 
 For Ubuntu >= 18.04 (or equivalent containers below), ensure Python >= 3.8 is installed by `sudo apt-get install python3-dev python3-pip`.
