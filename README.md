@@ -2,7 +2,7 @@
 
 ***Path-1:*** Antares Kernel Optimizer (CUDA/ROCm/DX/SYCL/OpenCL/CPU/IPU/Android):
 
-`python3 -m pip install antares`, please follow: [README for Antares](README-legacy.md).
+&nbsp;&nbsp;&nbsp;&nbsp;`python3 -m pip install antares`, which follows: [README for Antares](README-legacy.md).
 
 ***Path-2:*** AutoRT for Pytorch Runtime & Device Benchmark (CUDA/DirectX/..):
 
@@ -39,6 +39,10 @@ For Ubuntu >= 18.04 (or equivalent containers below), ensure Python >= 3.8 is in
  * **Docker Image:** nvidia/cuda:12.0.1-cudnn8-devel-ubuntu20.04
  * **Docker Image:** nvidia/cuda:12.1.0-cudnn8-devel-ubuntu22.04
  * ..
+
+For CUDA, if you want AutoRT to produce custom operators for Pytorch, please ensure torch has been installed before AutoRT's installation, e.g.:
+
+&nbsp;&nbsp;&nbsp;&nbsp;`python3 -m pip install torch --index-url https://download.pytorch.org/whl/cu118`
 
 ## - Playground 1 - Benchmark your Windows Device:
 
