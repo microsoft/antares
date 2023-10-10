@@ -9,7 +9,7 @@
 AutoRT is a compiler solution that helps runtime users to invent, benchmark and optimize operators for Pytorch using your own accelerators:
 - AutoRT can be as a [benchmark utility](#--playground-1---benchmark-your-windows-device) for device performance testing and profiling.
 - AutoRT can also generate Pytorch2 of your device to accelerate standard [Pytorch applications](#quick-test-2-mnist-training-by-pytorch2-using-windows-directx) (e.g. DirectX).
-- Additionally, AutoRT futher helps to construct [custom-defined](#quick-test-1-create-custom-operator-of-your-own-in-pytorch-2) / fused operators that are beyond the built-in functions of Pytorch.
+- Additionally, AutoRT futher helps to construct [custom defined](#quick-test-1-create-custom-operator-of-your-own-in-pytorch-2) / fused operators that are beyond the built-in functions of Pytorch.
 - ***AutoRT for Windows DirectX 12 / Linux CUDA*** has experimental version [released](#--quick-installation-of-autort).
 - Click [here](https://github.com/microsoft/antares/issues/new) to suggest more platforms (e.g. Pytorch2 for Windows ROCm / OpenCL / SYCL / Apple Metal / ..) you would like AutoRT to support in the follow-up releases.
 
@@ -26,21 +26,22 @@ AutoRT is a compiler solution that helps runtime users to invent, benchmark and 
 
 ## - Quick Installation of AutoRT:
 
-#### Requirements
+#### Installation
+
 | Platform | OS Requirement | Python Requirement | Download Link |
 | --- | --- | --- | --- |
-| DirectX 12 | Windows >= 10 / Microsoft XBox | [Python3.8](https://www.python.org/ftp/python/3.8.10/python-3.8.10-amd64.exe) | python.exe -m pip install --verbose https://github.com/microsoft/antares/releases/download/v0.9.1/autort-0.9.1.1_directx-cp38-cp38-win_amd64.whl |
+| DirectX 12 | Windows >= 10 / Microsoft XBox | [Python3.8](https://www.python.org/ftp/python/3.8.10/python-3.8.10-amd64.exe) | python.exe -m pip install --verbose https://github.com/microsoft/antares/releases/download/v0.9.1/autort-0.9.1.2_directx-cp38-cp38-win_amd64.whl |
 | CUDA >= 11 | Ubuntu >= 18.04 (or images) | Python 3.8/3.9/3.10/3.11/3.12 | python3 -m pip install --verbose https://github.com/microsoft/antares/releases/download/v0.9.1/autort-0.9.1.1+cuda.linux.tar.gz |
 | .. | .. | .. | .. (More coming soon) .. |
 
-For Ubuntu >= 18.04 (or equivalent containers below), ensure Python >= 3.8 is installed by `sudo apt-get install python3-dev python3-pip`.
+For CUDA, here are several Ubuntu >= 18.04 equivalent containers below:
  * **Docker Image:** nvidia/cuda:12.0.1-cudnn8-devel-ubuntu18.04
  * **Docker Image:** nvidia/cuda:11.8.0-cudnn8-devel-ubuntu20.04
  * **Docker Image:** nvidia/cuda:12.0.1-cudnn8-devel-ubuntu20.04
  * **Docker Image:** nvidia/cuda:12.1.0-cudnn8-devel-ubuntu22.04
  * ..
 
-For CUDA, if you want AutoRT to produce custom operators for Pytorch, please ensure torch has been installed before AutoRT's installation, e.g.:
+To enable AutoRT to produce custom CUDA operators for Pytorch 2, please also ensure **Pytorch is installed before AutoRT**, with:
 
 &nbsp;&nbsp;&nbsp;&nbsp;`python3 -m pip install torch --index-url https://download.pytorch.org/whl/cu118`
 
