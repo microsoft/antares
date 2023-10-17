@@ -197,6 +197,7 @@ namespace ab {
     float sec = dxEventElapsedSecond(hStart, hStop);
     CHECK(0 == dxEventDestroy(hStart), "Failed to destroy released event.");
     CHECK(0 == dxEventDestroy(hStop), "Failed to destroy released event.");
+    CHECK(sec >= 0, "Failure is caught during a kernel execution.");
     return (double)sec;
   }
 }
