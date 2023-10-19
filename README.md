@@ -79,10 +79,7 @@ tensor([0.5000, 0.7311, 0.8808, 0.9526, 0.9820, 0.9933, 0.9975, 0.9991, 0.9997, 
 
 - **Style-2: "Command Line Style"** Custom Operator Generation:
 ```sh
-# First, create a custom sigmoid activation operator (without tuning):
-$ python.exe -m autort.utils.export --ir "sigmoid_f32[N] = 1 - 1 / (1 + data[N].call(strs.exp))" -i data=float32[N:4096000]
-
-# Create a custom sigmoid activation operator with autotuning for 10 steps:
+# Fist, create a custom sigmoid activation operator with auto-tuning steps == 10:
 $ python.exe -m autort.utils.export --ir "sigmoid_f32[N] = 1 - 1 / (1 + data[N].call(strs.exp))" -i data=float32[N:4096000] -c "tune:5"
 
 # Then, use it in Pytorch 2 session:
