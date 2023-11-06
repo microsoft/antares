@@ -19,8 +19,8 @@ BACKEND = $(shell ./antares/get_backend.sh)
 
 PARAMS ?=  docker run -v $(shell pwd):/antares -w /antares --privileged -v /:/host \
 	--shm-size=1g --ulimit memlock=-1 --ulimit stack=67108864 \
-	-v $(shell dirname `find /usr/lib/ -name libnvidia-ptxjitcompiler.so` 2>/dev/null | tail -n 1):/usr/local/nvidia/lib64 \
-	-v $(shell dirname `find /usr/lib/ -name libcuda.so.1` 2>/dev/null | tail -n 1)/libcuda.so.1:/usr/lib/x86_64-linux-gnu/libcuda.so.1 \
+	-v $(shell dirname `find /usr/lib/ -name libnvidia-ptxjitcompiler.so` 2>/dev/null | grep -v i386 | tail -n 1):/usr/local/nvidia/lib64 \
+	-v $(shell dirname `find /usr/lib/ -name libcuda.so.1` 2>/dev/null | grep -v i386 | tail -n 1)/libcuda.so.1:/usr/lib/x86_64-linux-gnu/libcuda.so.1 \
 	-v $(shell pwd)/.libAntares:/root/.cache/antares \
 	-v $(shell pwd)/public/roc_prof:/usr/local/bin/rp -e CPU_THREADS=$(CPU_THREADS) -e ANTARES_ROOT=/antares -e BATCH=$(BATCH) -e AB_DEBUG=$(AB_DEBUG) -e INIT_CONFIG='$(value INIT_CONFIG)' \
 	-e STEP=$(STEP) -e AGENT_URL='$(value AGENT_URL)' -e TUNER=$(TUNER) -e CONFIG='$(value CONFIG)' -e BACKEND=$(BACKEND) -e COMPUTE_V1='$(value COMPUTE_V1)' \
