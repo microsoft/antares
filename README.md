@@ -1,10 +1,10 @@
 ## AutoRT: the Next Generation of Antares.
 
-***Path-1:*** Antares Kernel Optimizer (CUDA/ROCm/DX/SYCL/OpenCL/CPU/IPU/Android):
+***Path 1 (for Kernel Optimization):*** Antares Kernel Optimizer (CUDA/ROCm/DX/SYCL/OpenCL/CPU/IPU/Android):
 
 &nbsp;&nbsp;&nbsp;&nbsp;`python3 -m pip install antares`, which follows: [README for Antares](README-legacy.md).
 
-***Path-2:*** AutoRT for Pytorch Runtime & Device Benchmark (CUDA/DirectX/..):
+***Path 2 (for Runtime/Benchmark):*** AutoRT for Pytorch Runtime & Device Benchmark (CUDA/DirectX/..):
 
 AutoRT is a compiler solution that helps runtime users to invent, benchmark and optimize operators for Pytorch using your own accelerators:
 - AutoRT can be as a [benchmark utility](#--playground-1---benchmark-your-windows-device) for device performance testing and profiling.
@@ -30,8 +30,9 @@ AutoRT is a compiler solution that helps runtime users to invent, benchmark and 
 
 | Platform | OS Requirement | Python Requirement | Download Link |
 | --- | --- | --- | --- |
-| DirectX 12 | Windows >= 10 / Microsoft XBox | [Python3.8](https://www.python.org/ftp/python/3.8.10/python-3.8.10-amd64.exe) | python.exe -m pip install -v https://github.com/microsoft/antares/releases/download/v0.9.1/autort-0.9.1.4+directx.win-cp38-cp38-win_amd64.whl |
-| CUDA >= 11 | Ubuntu >= 18.04 (or images) | Python 3.8/3.9/3.10/3.11/3.12 | python3 -m pip install -v https://github.com/microsoft/antares/releases/download/v0.9.1/autort-0.9.1.4+cuda.linux.zip |
+| DirectX 12 | Windows >= 10 / Microsoft XBox | [Python3.8](https://www.python.org/ftp/python/3.8.10/python-3.8.10-amd64.exe) (Windows) | python.exe -m pip install -v https://github.com/microsoft/antares/releases/download/v0.9.2/autort-0.9.2.0+directx.win-cp38-cp38-win_amd64.whl |
+| Vulkan 1.3 | Ubuntu >= 18.04 (or images)  | Python3.8 (Linux) | python3.8 -m pip install -v https://github.com/microsoft/antares/releases/download/v0.9.2/autort-0.9.2.0+vulkan.linux-cp38-cp38-manylinux1_x86_64.whl |
+| CUDA >= 11 | Ubuntu >= 18.04 (or images) | Python 3.8/3.9/3.10/3.11/3.12 | python3 -m pip install -v https://github.com/microsoft/antares/releases/download/v0.9.2/autort-0.9.2.0+cuda.linux.zip |
 | .. | .. | .. | .. (More coming soon) .. |
 
 For CUDA, here are several Ubuntu >= 18.04 equivalent containers below:
