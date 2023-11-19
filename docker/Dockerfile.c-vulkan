@@ -2,7 +2,6 @@ FROM nvidia/vulkan:1.1.121
 
 ENV DEBIAN_FRONTEND noninteractive
 ENV PYTHONDONTWRITEBYTECODE 1
-ENV PATH $PATH:/usr/local/nvidia/lib64/bin
 ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
 
 RUN env > /etc/environment
@@ -11,16 +10,15 @@ RUN rm -f /etc/apt/sources.list.d/*
 
 RUN /bin/echo "deb http://archive.ubuntu.com/ubuntu bionic main restricted universe multiverse" > /etc/apt/sources.list
 RUN /bin/echo "deb http://archive.ubuntu.com/ubuntu bionic-updates main restricted universe multiverse" >> /etc/apt/sources.list
-RUN /bin/echo "deb http://ppa.launchpad.net/ubuntu-toolchain-r/test/ubuntu bionic main" >> /etc/apt/sources.list
-RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 1E9377A2BA9EF27F
 
 RUN apt-get update && apt install -y --no-install-recommends git ca-certificates \
-    python3-distutils python3.8-dev vulkan-utils libvulkan-dev g++-9 \
+    vulkan-utils libvulkan-dev \
     vim-tiny less netcat-openbsd inetutils-ping curl patch iproute2 \
-    libpci3 libnuma-dev make file openssh-server kmod gdb libopenmpi-dev openmpi-bin psmisc \
-        autoconf automake autotools-dev libtool \
-        zlib1g-dev rename zip unzip librdmacm-dev gnupg \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+    make file openssh-server gdb psmisc zlib1g-dev rename zip unzip gnupg
+
+RUN /bin/echo "deb http://ppa.launchpad.net/ubuntu-toolchain-r/test/ubuntu bionic main" >> /etc/apt/sources.list
+RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 1E9377A2BA9EF27F
+RUN apt-get update && apt install -y --no-install-recommends g++-9 xz-utils
 
 RUN ln -sf /usr/bin/g++-9 /usr/bin/g++
 RUN ln -sf /usr/bin/gcc-9 /usr/bin/gcc
@@ -29,16 +27,15 @@ RUN ln -sf /usr/bin/gcc /usr/bin/cc
 RUN ln -sf /usr/bin/gcc /usr/bin/x86_64-linux-gnu-gcc
 RUN ln -sf /usr/bin/g++ /usr/bin/x86_64-linux-gnu-g++
 
-RUN ln -sf python3.8 /usr/bin/python3
+RUN curl -L https://github.com/ghostplant/collections/releases/download/utilities/python3.12-linux-x86_64.tar.xz | xz -d | tar xvf - -C /usr/local >/dev/null
+RUN ln -sf /usr/local/bin/python3.12 /usr/bin/python3
 RUN ln -sf python3 /usr/bin/python
 RUN ln -sf python /usr/bin/python.exe
-RUN curl -LO https://bootstrap.pypa.io/get-pip.py && python3 get-pip.py && rm -f get-pip.py
+# RUN curl -LO https://bootstrap.pypa.io/get-pip.py && python3 get-pip.py && rm -f get-pip.py
 
 RUN /bin/echo -e "set backspace=indent,eol,start\nset nocompatible\nset ts=4" > /etc/vim/vimrc.tiny
 
-ENV LD_LIBRARY_PATH=/usr/local/nvidia/lib64:$LD_LIBRARY_PATH
-RUN pip3 install --upgrade antares && mkdir -p /root/.local/antares && mv $(antares pwd)/../3rdparty /root/.local/antares/3rdparty && pip3 uninstall antares -y && echo 'exec /antares/main.py "$@"' > /usr/local/bin/antares && chmod a+x /usr/local/bin/antares
+RUN python3 -m pip install cython setuptools
+RUN python3 -m pip install https://download.pytorch.org/whl/nightly/cpu/torch-2.2.0.dev20231118%2Bcpu-cp312-cp312-linux_x86_64.whl
 
-RUN python3 -m pip install cython
-RUN python3 -m pip install torch==2.0.0 --index-url https://download.pytorch.org/whl/cpu
-RUN python3 -m pip install setuptools
+RUN apt-get install -y --no-install-recommends mesa-vulkan-drivers
