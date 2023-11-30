@@ -93,7 +93,7 @@ tensor([0.5000, 0.7311, 0.8808, 0.9526, 0.9820, 0.9933, 0.9975, 0.9991, 0.9997,
 
 #### Quick Test 2: MNIST Training by Pytorch2 (DirectX only):
 ```sh
-$ python.exe -m autort.examples.mnist
+$ python.exe -m autort.examples.02_mnist
   ...
   step = 100, loss = 2.2871, accuracy = 21.88 %
   step = 200, loss = 2.1408, accuracy = 46.88 %
