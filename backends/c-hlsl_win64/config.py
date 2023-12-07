@@ -187,4 +187,5 @@ void CSMain(uint3 threadIdx: SV_GroupThreadID, uint3 blockIdx: SV_GroupID) {{
     full_body = re.sub(r'\bchar\b', 'uint', full_body)
     full_body = re.sub(r'\bfp16_', '', full_body)
     full_body = re.sub(fr'\b__device__\b', '', full_body)
+    full_body = full_body.replace('(volatile float*)', '')
     return full_body
