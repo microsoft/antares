@@ -2,6 +2,7 @@
 # Licensed under the MIT license.
 
 import os
+import re
 import subprocess
 
 def to_search_space(ast_seq, input_dict, output_dict):
@@ -44,4 +45,5 @@ extern "C" void {kernel_name}(const int __rank__, void** __args) {{
   {body.replace('threadIdx.x', '__rank__')}
 }}
 '''
-  return full_body
+
+  return re.sub(r'\bhalf\b', '__fp16', full_body)

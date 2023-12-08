@@ -11,7 +11,7 @@ static void *memory_alloc(size_t length)
 #if defined(HLSL_LIBRARY_PATH)
     void *data_ptr = (void*)GlobalAlloc(0, length);
 #else
-    void *data_ptr = (void*)memalign(256, length);
+    void *data_ptr = (void*)malloc(length);
 #endif
     return data_ptr;
 }
