@@ -1,4 +1,4 @@
-FROM intel/oneapi-hpckit:2023.0.0-devel-ubuntu20.04
+FROM intel/oneapi-hpckit:2023.2.1-devel-ubuntu20.04
 
 ENV DEBIAN_FRONTEND noninteractive
 ENV PYTHONDONTWRITEBYTECODE 1
@@ -6,12 +6,13 @@ ENV PYTHONDONTWRITEBYTECODE 1
 RUN env > /etc/environment
 
 RUN sed -i 's/^#deb /deb /g' /etc/apt/sources.list
+RUN rm -rf /etc/apt/sources.list.d/*
 
 RUN apt-get update && apt install -y --no-install-recommends git ca-certificates \
     vim-tiny less netcat-openbsd inetutils-ping curl patch iproute2 \
     g++ libpci3 libnuma-dev make file openssh-server kmod gdb psmisc \
         autoconf automake autotools-dev libtool \
-        zlib1g-dev rename zip unzip librdmacm-dev gnupg \
+        zlib1g-dev rename zip unzip librdmacm-dev gnupg p7zip-full rsync \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN /bin/echo -e "set backspace=indent,eol,start\nset nocompatible\nset ts=4" > /etc/vim/vimrc.tiny
@@ -20,4 +21,7 @@ RUN cp -r /opt/intel/oneapi/compiler/latest/linux/include/sycl/CL /opt/intel/one
 RUN apt update && apt-get install -y python3-pip
 RUN pip3 install --upgrade antares && mkdir -p /root/.local/antares && mv $(antares pwd)/../3rdparty /root/.local/antares/3rdparty && pip3 uninstall antares -y && echo 'exec /antares/main.py "$@"' > /usr/local/bin/antares && chmod a+x /usr/local/bin/antares
 
-RUN python3 -m pip install torch==2.0.0 --index-url https://download.pytorch.org/whl/cpu
+RUN python3 -m pip install https://download.pytorch.org/whl/nightly/cpu/torch-2.2.0.dev20231118%2Bcpu-cp38-cp38-linux_x86_64.whl
+RUN python3 -m pip install cython
+RUN ln -s python3 /usr/bin/python
+RUN ln -s python /usr/bin/python.exe
