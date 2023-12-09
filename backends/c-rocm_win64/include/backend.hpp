@@ -5,6 +5,7 @@
 
 #include <random>
 #include <sstream>
+#include <cassert>
 
 #define AMDHIP64_LIBRARY_PATH R"(C:\Windows\System32\amdhip64.dll)"
 
@@ -50,8 +51,12 @@ namespace ab {
   }
 
   std::string moduleCompile(const std::string &source) {
-    std::string wsl_path = "/tmp/.antares-module-tempfile.cu";
+    SetEnvironmentVariable("WSLENV", "TMP/p");
+
+    std::string filename = ".antares-module-tempfile.cu";
+    std::string wsl_path = getenv("TMP") + filename;
     FILE *fp = fopen(wsl_path.c_str(), "w");
+    assert(fp != nullptr);
     fwrite(source.data(), source.size(), 1, fp);
     fclose(fp);
 
@@ -60,8 +65,8 @@ namespace ab {
     CHECK(spec != nullptr, "__AMDGFX__ is not found in Antares code for Windows ROCm. Please export correspoding AMD arch before code generation. e.g. export AMDGFX=gfx906 antares save ..");
     std::string arch = "gfx" + std::to_string(std::atoi(spec + sizeof(amdgfx) - 1));
 
-    ab_utils::Process({"wsl.exe", "sh", "-cx", "\"/opt/rocm/bin/hipcc " + wsl_path + " --amdgpu-target=" + arch + " --genco -Wno-ignored-attributes -O2 -o " + wsl_path + ".out 1>&2\""}, 30);
-    return file_read((wsl_path + ".out").c_str());
+    ab_utils::Process({"wsl.exe", "sh", "-cx", "\"/opt/rocm/bin/hipcc $TMP/" + filename + " --amdgpu-target=" + arch + " --genco -Wno-ignored-attributes -O2 -o " + filename + ".out 1>&2\""}, 30);
+    return file_read((filename + ".out").c_str());
   }
 
   void* moduleLoad(const std::string &binary) {
