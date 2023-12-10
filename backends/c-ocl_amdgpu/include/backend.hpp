@@ -20,13 +20,13 @@ namespace ab {
     std::vector<cl_platform_id> platforms(num_dev);
     CHECK_OK(0 == clGetPlatformIDs(num_dev, &platforms[0], &num_dev));
     CHECK_OK(num_dev > 0);
-
-    CHECK_OK(0 == clGetDeviceIDs(platforms[0], CL_DEVICE_TYPE_ALL, 0, 0, &num_dev));
-    std::vector<cl_device_id> devices(num_dev);
     CHECK_OK(dev < num_dev);
-    CHECK_OK(0 == clGetDeviceIDs(platforms[0], CL_DEVICE_TYPE_ALL, num_dev, &devices[0], &num_dev));
 
-    device_id = devices[dev];
+    CHECK_OK(0 == clGetDeviceIDs(platforms[dev], CL_DEVICE_TYPE_ALL, 0, 0, &num_dev));
+    std::vector<cl_device_id> devices(num_dev);
+    CHECK_OK(0 == clGetDeviceIDs(platforms[dev], CL_DEVICE_TYPE_ALL, num_dev, &devices[0], &num_dev));
+
+    device_id = devices[0];
     context = clCreateContext(NULL, 1, &device_id, NULL, NULL, &stat), CHECK_OK(stat == 0);
     cmdqueue = clCreateCommandQueue(context, device_id, 0, &stat), CHECK_OK(stat == 0);
 
