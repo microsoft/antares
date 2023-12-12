@@ -1,0 +1,106 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+
+#include "tensorflow/core/framework/common_shape_fns.h"
+#include "tensorflow/core/framework/op.h"
+#include "tensorflow/core/framework/op_kernel.h"
+
+#include "tensorflow/core/framework/tensor.h"
+#include "tensorflow/core/platform/mutex.h"
+#include "tensorflow/core/platform/stream_executor.h"
+#include "tensorflow/core/platform/env.h"
+#include "tensorflow/core/lib/io/path.h"
+
+#include <vector>
+
+#include "execute_module.hpp"
+
+namespace tensorflow {
+namespace {
+
+using namespace std;
+
+template <typename Device>
+class MainOpKernel: public AsyncOpKernel {
+ public:
+
+  explicit MainOpKernel(OpKernelConstruction* c)
+      : AsyncOpKernel(c) {
+    OP_REQUIRES_OK(c, c->GetAttr("source", &source));
+    OP_REQUIRES_OK(c, c->GetAttr("tf_module_path", &tf_module_path));
+    OP_REQUIRES_OK(c, c->GetAttr("antares_ir", &antares_ir));
+    OP_REQUIRES_OK(c, c->GetAttr("meta_inputs", &meta_inputs));
+    OP_REQUIRES_OK(c, c->GetAttr("meta_outputs", &meta_outputs));
+
+    LOG(INFO) << "MainOpKernel(num_in=" << meta_inputs.size() << ", num_out=" << meta_outputs.size() << ", ir=`" << antares_ir << "`..)";
+
+    int ord = 0;
+#if defined(ANTARES_CUDA)
+    cuCtxGetDevice(&ord);
+#elif defined(ANTARES_ROCM)
+    hipGetDevice(&ord);
+#endif
+    ab::init(ord);
+    gm = std::make_shared<ExecutionModule>(source);
+
+    args.resize(meta_inputs.size() + meta_outputs.size());
+
+    output_shapes.clear();
+    for (auto &meta_output: meta_outputs) {
+      int idx = meta_output.find('[');
+      CHECK_EQ(true, idx > 0);
+      std::vector<int64> shape_builder;
+      for (int i = idx + 1, j = i + 1; j <= meta_output.size(); ++j) {
+        if (j == meta_output.size() || meta_output[j] == ',')
+          shape_builder.push_back(std::atoi(meta_output.c_str() + i)), i = j + 2, ++j;
+      }
+      output_shapes.push_back(std::move(shape_builder));
+    }
+  }
+
+  ~MainOpKernel() {
+    // LOG(INFO) << "~MainOpKernel(..)";
+  }
+
+  void ComputeAsync(OpKernelContext* c, DoneCallback done) override {
+    // LOG(INFO) << "ComputeAsync(..)";
+    std::vector<Tensor*> outputs(meta_outputs.size());
+    for (int i = 0; i < outputs.size(); ++i) {
+      OP_REQUIRES_OK_ASYNC(c, c->allocate_output(i, tensorflow::TensorShape(gtl::ArraySlice<int64>(output_shapes[i].data(), output_shapes[i].size())), &outputs[i]), done);
+    }
+
+    for (int i = 0; i < meta_inputs.size(); ++i)
+      args[i] = (void*)c->input(i).tensor_data().data();
+    for (int i = 0; i < meta_outputs.size(); ++i)
+      args[meta_inputs.size() + i] = (void*)outputs[i]->tensor_data().data();
+#if defined(ANTARES_CUDA) || defined(ANTARES_ROCM)
+    CUstream stream = *reinterpret_cast<CUstream*>(c->op_device_context()->stream()->implementation()->GpuStreamMemberHack());
+    gm->compute(args.data(), stream);
+#else
+    gm->compute(args.data());
+    ab::synchronize(0);
+#endif
+    done();
+  }
+
+ private:
+  std::string source, antares_ir, tf_module_path;
+  std::vector<std::string> meta_inputs, meta_outputs;
+
+  TF_DISALLOW_COPY_AND_ASSIGN(MainOpKernel);
+
+ protected:
+  std::vector<void*> args;
+  std::vector<std::vector<int64>> output_shapes;
+  std::shared_ptr<ExecutionModule> gm;
+};
+
+#if defined(ANTARES_CUDA) || defined(ANTARES_ROCM)
+REGISTER_KERNEL_BUILDER(Name(OP_NAME).Device(DEVICE_GPU), MainOpKernel<Eigen::GpuDevice>);
+#else
+REGISTER_KERNEL_BUILDER(Name(OP_NAME).Device(DEVICE_CPU), MainOpKernel<Eigen::ThreadPoolDevice>);
+#endif
+
+}
+}  // namespace tensorflow
+
