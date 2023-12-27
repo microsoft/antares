@@ -8,10 +8,10 @@ import autort
 
 def init_op():
   autort.export(ir="space[data[N] % 2, N] = 1", \
-    inputs=["data=int32[N:1000]", "space=int32[2, N:1000]"], config="~N~:[1,256,1]", name="my_classify_i32")
+    inputs=["data=int32[N]", "space=int32[2, N]"], config="~N~:[1,256,1]", name="my_classify_i32")
 
   autort.export(ir="output[ids[N] - 1] = (val[N % val.size(0)]).when(ids[N] > 0)", \
-    inputs=["ids=int32[N:1000]", "val=int32[M:2000]", "output=int32[M:2000]"], config="~N~:[1,256,1]", name="my_bucket_i32")
+    inputs=["ids=int32[N]", "val=int32[M]", "output=int32[M]"], config="~N~:[1,256,1]", name="my_bucket_i32")
 
 def main(array):
   init_op()
