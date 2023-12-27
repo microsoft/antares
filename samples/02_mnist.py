@@ -26,9 +26,6 @@ if args.device == 'cuda':
   device = torch.device("cuda")
 elif args.device == 'cpu':
   device = torch.device("cpu")
-elif args.device == 'dml':
-  import torch_directml
-  device = torch_directml.device()
 else:
   import autort
   device = autort.device()
@@ -58,7 +55,7 @@ data_path = './mnist.pt'
 if not os.path.exists(data_path):
   print(f'Downloading dataset to {data_path} ..')
   import urllib.request, zipfile, io
-  with urllib.request.urlopen('https://github.com/ghostplant/collections/releases/download/utilities/pt-data-mnist.zip') as fp:
+  with urllib.request.urlopen('https://huggingface.co/datasets/ghostplant/data-collections/resolve/main/mnist.pt.zip?download=true') as fp:
     r = fp.read()
   z = zipfile.ZipFile(io.BytesIO(r))
   z.extractall('.')
