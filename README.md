@@ -91,22 +91,37 @@ tensor([0.5000, 0.7311, 0.8808, 0.9526, 0.9820, 0.9933, 0.9975, 0.9991, 0.9997,
 ```
 
 
-#### Quick Test 2: MNIST Training by Pytorch2 (DirectX only):
+#### Quick Test 2: Demo of Sorting/MNIST/LLama over Pytorch2:
+
+```sh
+$ python.exe -m autort.examples.01_sort_even_first
+
+Input : tensor([101, 102, 208,  99,   1, 127,  62,   8, 336, 336], dtype=torch.int32)
+  (is_even) tensor([False,  True,  True, False, False, False,  True,  True,  True,  True])
+
+Output: tensor([102, 208,  62,   8, 336, 336, 101,  99,   1, 127], dtype=torch.int32)
+  (is_even) tensor([ True,  True,  True,  True,  True,  True, False, False, False, False])
+```
+
 ```sh
 $ python.exe -m autort.examples.02_mnist
   ...
-  step = 100, loss = 2.2871, accuracy = 21.88 %
-  step = 200, loss = 2.1408, accuracy = 46.88 %
-  step = 300, loss = 1.6713, accuracy = 62.50 %
-  step = 400, loss = 0.9573, accuracy = 62.50 %
-  step = 500, loss = 0.8338, accuracy = 68.75 %
-  step = 600, loss = 0.5882, accuracy = 84.38 %
-  step = 700, loss = 0.2738, accuracy = 87.50 %
   step = 800, loss = 0.5159, accuracy = 87.50 %
   step = 900, loss = 0.5511, accuracy = 84.38 %
   step = 1000, loss = 0.2616, accuracy = 93.75 %
   ...
 ```
+
+```sh
+$ python.exe -m autort.examples.03_llama_tiny
+
+What is that?"
+"That is the sun," her mom said. "It gives us heat."
+The little girl was amazed. She had never seen the heat before.
+"Can we go outside and feel the sun?" she asked.
+"Yes," her mother said.
+```
+
 
 #### Quick Test 3: Fine-tune existing operators to make Pytorch Builtin Operators run faster (DirectX only).
 ```sh
