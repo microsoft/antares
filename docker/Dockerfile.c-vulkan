@@ -38,8 +38,8 @@ RUN ln -sf pip3 /usr/local/bin/pip
 RUN /bin/echo -e "set backspace=indent,eol,start\nset nocompatible\nset ts=4" > /etc/vim/vimrc.tiny
 
 RUN python3 -m pip install cython setuptools
-RUN python3 -m pip install https://download.pytorch.org/whl/nightly/cpu/torch-2.3.0.dev20231220%2Bcpu-cp312-cp312-linux_x86_64.whl
-RUN python3 -m pip install https://download.pytorch.org/whl/nightly/cpu/torchaudio-2.2.0.dev20231220%2Bcpu-cp312-cp312-linux_x86_64.whl
-RUN python3 -m pip install https://download.pytorch.org/whl/nightly/cpu/torchvision-0.18.0.dev20231220%2Bcpu-cp312-cp312-linux_x86_64.whl
+RUN python3 -m pip install https://download.pytorch.org/whl/cpu/torch-2.2.0%2Bcpu-cp312-cp312-linux_x86_64.whl
+RUN python3 -m pip install https://download.pytorch.org/whl/cpu/torchaudio-2.2.0%2Bcpu-cp312-cp312-linux_x86_64.whl
+RUN python3 -m pip install https://download.pytorch.org/whl/cpu/torchvision-0.17.0%2Bcpu-cp312-cp312-linux_x86_64.whl
 
 RUN apt-get install -y --no-install-recommends mesa-vulkan-drivers ffmpeg
