@@ -28,8 +28,8 @@ RUN ln -sf pip3 /usr/local/bin/pip
 RUN pip3 install --upgrade antares && mkdir -p /root/.local/antares && mv $(antares pwd)/../3rdparty /root/.local/antares/3rdparty && pip3 uninstall antares -y && echo 'exec /antares/main.py "$@"' > /usr/local/bin/antares && chmod a+x /usr/local/bin/antares
 
 RUN python3 -m pip install cython setuptools
-RUN python3 -m pip install https://download.pytorch.org/whl/nightly/cpu/torch-2.3.0.dev20231220%2Bcpu-cp312-cp312-linux_x86_64.whl
-RUN python3 -m pip install https://download.pytorch.org/whl/nightly/cpu/torchaudio-2.2.0.dev20231220%2Bcpu-cp312-cp312-linux_x86_64.whl
-RUN python3 -m pip install https://download.pytorch.org/whl/nightly/cpu/torchvision-0.18.0.dev20231220%2Bcpu-cp312-cp312-linux_x86_64.whl
+RUN python3 -m pip install https://download.pytorch.org/whl/cpu/torch-2.2.0%2Bcpu-cp312-cp312-linux_x86_64.whl
+RUN python3 -m pip install https://download.pytorch.org/whl/cpu/torchaudio-2.2.0%2Bcpu-cp312-cp312-linux_x86_64.whl
+RUN python3 -m pip install https://download.pytorch.org/whl/cpu/torchvision-0.17.0%2Bcpu-cp312-cp312-linux_x86_64.whl
 
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg
