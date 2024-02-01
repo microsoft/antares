@@ -27,7 +27,7 @@ RUN ln -sf /usr/bin/gcc /usr/bin/cc
 RUN ln -sf /usr/bin/gcc /usr/bin/x86_64-linux-gnu-gcc
 RUN ln -sf /usr/bin/g++ /usr/bin/x86_64-linux-gnu-g++
 
-RUN curl -LO https://github.com/ghostplant/collections/releases/download/utilities/python-3.12-linux-x86_64.deb && dpkg -i python-3.12-linux-x86_64.deb && rm -f python-3.12-linux-x86_64.deb
+RUN curl -LO https://github.com/ghostplant/collections/releases/download/utilities/python-3.12-linux-x86_64.deb && dpkg -i python-3.12-linux-x86_64.deb && rm -rf python-3.12-linux-x86_64.deb
 RUN ln -sf /usr/local/bin/python3.12 /usr/local/bin/python3
 RUN ln -sf python3 /usr/local/bin/python
 RUN ln -sf python /usr/local/bin/python.exe

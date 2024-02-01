@@ -1,4 +1,6 @@
 FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu18.04
+# nvidia/cuda:11.0.3-devel-ubuntu18.04
+# nvidia/cuda:11.4.3-cudnn8-devel-ubuntu18.04
 # FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu20.04
 
 ENV DEBIAN_FRONTEND noninteractive
