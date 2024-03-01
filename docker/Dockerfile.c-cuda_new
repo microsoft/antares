@@ -1,0 +1,32 @@
+FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
+
+ENV DEBIAN_FRONTEND noninteractive
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PATH $PATH:/usr/local/nvidia/lib64/bin
+ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/local/cuda/compat:$LD_LIBRARY_PATH
+
+RUN env > /etc/environment
+
+RUN apt-get update && apt install -y --no-install-recommends git ca-certificates \
+    python3-distutils python3-dev \
+    vim-tiny less netcat-openbsd inetutils-ping curl patch iproute2 \
+    g++ libpci3 libnuma-dev make file openssh-server kmod gdb libopenmpi-dev openmpi-bin psmisc \
+        autoconf automake autotools-dev libtool \
+        zlib1g-dev rename zip unzip librdmacm-dev gnupg p7zip-full \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+RUN ln -sf python3.10 /usr/bin/python3
+RUN ln -sf python3 /usr/bin/python
+RUN ln -sf python /usr/bin/python.exe
+RUN curl -LO https://bootstrap.pypa.io/get-pip.py && python3 get-pip.py && rm -f get-pip.py
+
+RUN /bin/echo -e "set backspace=indent,eol,start\nset nocompatible\nset ts=4" > /etc/vim/vimrc.tiny
+
+RUN [ -e /usr/lib/x86_64-linux-gnu/libcuda.so.1 ] || ln -s /host/usr/lib/x86_64-linux-gnu/libcuda.so.1 /usr/lib/x86_64-linux-gnu
+RUN ln -sf libcudart.so /usr/local/cuda/targets/x86_64-linux/lib/libcudart_static.a
+
+ENV LD_LIBRARY_PATH=/usr/local/nvidia/lib64:$LD_LIBRARY_PATH
+
+RUN python3 -m pip install cython setuptools
+RUN python3 -m pip install torch==2.2.0 torchaudio==2.2.0 torchvision --index-url https://download.pytorch.org/whl/cu118
+RUN python3 -m pip install -v --no-build-isolation git+https://github.com/microsoft/tutel@main
