@@ -50,15 +50,7 @@ class Net(nn.Module):
 
 torch.manual_seed(0)
 
-data_path = './mnist.pt'
-
-if not os.path.exists(data_path):
-  print(f'Downloading dataset to {data_path} ..')
-  import urllib.request, zipfile, io
-  with urllib.request.urlopen('https://huggingface.co/datasets/ghostplant/data-collections/resolve/main/mnist.pt.zip?download=true') as fp:
-    r = fp.read()
-  z = zipfile.ZipFile(io.BytesIO(r))
-  z.extractall('.')
+data_path = autort.download('./mnist.pt', 'https://huggingface.co/datasets/ghostplant/data-collections/resolve/main/mnist.pt.zip?download=true', is_zip=True)
 
 xs, ys = torch.load(data_path)
 xs, ys = (xs.float() / 1280).to(device), ys.to(device)
