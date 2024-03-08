@@ -6,19 +6,8 @@ import torch
 import os, sys, math, random
 import autort
 
-
-def download_pt(data_path, url):
-  if not os.path.exists(data_path):
-    print(f'Downloading dataset to {data_path} ..')
-    import urllib.request, zipfile, io
-    with urllib.request.urlopen(url) as fp:
-      r = fp.read()
-    with open(data_path, 'wb') as fp:
-      fp.write(r)
-  return torch.load(data_path)
-
-pt = download_pt('llama_story_110m.pt', 'https://huggingface.co/karpathy/tinyllamas/resolve/main/stories110M.pt?download=true')
-vocab = download_pt('vocab_32K.pt', 'https://huggingface.co/datasets/ghostplant/data-collections/resolve/main/vocab_32K.pt?download=true')
+pt = torch.load(autort.download('llama_story_110m.pt', 'https://huggingface.co/karpathy/tinyllamas/resolve/main/stories110M.pt?download=true'))
+vocab = torch.load(autort.download('vocab_32K.pt', 'https://huggingface.co/datasets/ghostplant/data-collections/resolve/main/vocab_32K.pt?download=true'))
 
 device = autort.device()
 

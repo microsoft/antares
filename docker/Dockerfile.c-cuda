@@ -32,7 +32,8 @@ ENV LD_LIBRARY_PATH=/usr/local/nvidia/lib64:$LD_LIBRARY_PATH
 RUN pip3 install --upgrade antares && mkdir -p /root/.local/antares && mv $(antares pwd)/../3rdparty /root/.local/antares/3rdparty && pip3 uninstall antares -y && echo 'exec /antares/main.py "$@"' > /usr/local/bin/antares && chmod a+x /usr/local/bin/antares
 
 RUN python3 -m pip install cython setuptools
-RUN python3 -m pip install torch==2.1.0 torchaudio==2.1.0 torchvision --index-url https://download.pytorch.org/whl/cu118
+# RUN python3 -m pip install torch==2.2.0 torchaudio==2.2.0 torchvision --index-url https://download.pytorch.org/whl/cu118
+RUN python3 -m pip install torch==2.2.0.dev20231010+cu118 torchaudio torchvision --index-url https://download.pytorch.org/whl/nightly/cu118
 
 # RUN python3 -m pip install https://download.pytorch.org/whl/cu118/torch-2.2.0%2Bcu118-cp38-cp38-linux_x86_64.whl
 # RUN python3 -m pip install https://download.pytorch.org/whl/cu118/torchaudio-2.2.0%2Bcu118-cp38-cp38-linux_x86_64.whl
