@@ -26,9 +26,9 @@ AutoRT is a compiler solution that helps runtime users to invent, benchmark and 
 
 | Platform | OS Requirement | Python Requirement | Download Link |
 | --- | --- | --- | --- |
-| DirectX 12 | Windows >= 10 / Microsoft XBox | [Python3.12](https://www.python.org/ftp/python/3.12.0/python-3.12.0-amd64.exe) (Windows) | python3.12 -m pip install https://github.com/microsoft/antares/releases/download/v0.9.5/autort-0.9.5.2+directx.win-cp312-cp312-win_amd64.whl |
-| Vulkan 1.3 | Ubuntu >= 18.04 (or images)  | [Python3.12](https://github.com/ghostplant/collections/releases/download/utilities/python-3.12-linux-x86_64.deb) (Linux) | python3.12 -m pip install https://github.com/microsoft/antares/releases/download/v0.9.5/autort-0.9.5.2+vulkan.linux-cp312-cp312-manylinux1_x86_64.whl |
-| CUDA >= 11.0 | Ubuntu >= 18.04 (or images) | Python 3.8/3.9/3.10/3.11/3.12 | python3 -m pip install https://github.com/microsoft/antares/releases/download/v0.9.5/autort-0.9.5.2+cuda.zip |
+| DirectX 12 | Windows >= 10 / Microsoft XBox | [Python3.12](https://www.python.org/ftp/python/3.12.0/python-3.12.0-amd64.exe) (Windows) | python3.12 -m pip install https://github.com/microsoft/antares/releases/download/v0.9.6/autort-0.9.6.0+directx.win-cp312-cp312-win_amd64.whl |
+| Vulkan 1.3 | Ubuntu >= 18.04  | Python3.12 (Linux) | python3.12 -m pip install https://github.com/microsoft/antares/releases/download/v0.9.6/autort-0.9.6.0+vulkan.linux-cp312-cp312-manylinux1_x86_64.whl |
+| CUDA >= 11.0 | Windows >= 10 / Ubuntu >= 18.04 | Python 3.8/3.9/3.10/3.11/3.12 | python3 -m pip install https://github.com/microsoft/antares/releases/download/v0.9.6/autort-0.9.6.0+cuda.zip |
 | .. | .. | .. | .. (More coming soon) .. |
 
 For CUDA, here are several Ubuntu >= 18.04 equivalent containers below:
@@ -72,7 +72,7 @@ tensor([0.5000, 0.7311, 0.8808, 0.9526, 0.9820, 0.9933, 0.9975, 0.9991, 0.9997, 
 
 - **Style-2: "Command Line Style"** Custom Operator Generation:
 ```sh
-# Fist, create a custom sigmoid activation operator with auto-tuning steps == 10:
+# Fist, create a custom sigmoid activation operator with 5 tuning steps:
 $ autort --ir "sigmoid_f32[N] = 1 - 1 / (1 + data[N].call(strs.exp))" -i data=float32[N:4096000] -c "tune:5"
 
 # Then, use it in Pytorch 2 session:
@@ -81,6 +81,10 @@ $ python.exe
 >>
 >> data = torch.arange(0, 10, dtype=torch.float32, device=autort.device())
 >> output = autort.ops.sigmoid_f32(data)
+>> print(output)
+tensor([0.5000, 0.7311, 0.8808, 0.9526, 0.9820, 0.9933, 0.9975, 0.9991, 0.9997,
+        0.9999])
+>> output = torch.nn.functional.sigmoid(data)
 >> print(output)
 tensor([0.5000, 0.7311, 0.8808, 0.9526, 0.9820, 0.9933, 0.9975, 0.9991, 0.9997,
         0.9999])
@@ -125,30 +129,11 @@ How large is Atlantic Ocean?
 The Atlantic Ocean is the second largest ocean on Earth, covering approximately 20% of the Earth's surface. ...
 ```
 
-
-#### Quick Test 3: Fine-tune existing operators to make Pytorch Builtin Operators run faster (DirectX only).
 ```sh
-$ python.exe -m autort.utils.mmtest
+$ python.exe -m autort.examples.06_diffuser_no_opt
 
-  >> Performance of your device:
-
-     `MM-Perf` (current) = 4.15 TFLOPS
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  >> ...
-
-$ python -m autort.utils.export -s 4000
-
-  Module file for operator `gemm_f32` has been exported to `.\ops\gemm_f32.mod`.
-
-  ..
-
-$ python.exe -m autort.utils.mmtest
-
-  >> Performance of your device:
-
-     `MM-Perf` (current) = 9.71 TFLOPS
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  >> ...
+...
+Image converted from `./samurai_nn.png` to `samurai_nn_diffused.png`..
 ```
 
 If you like it, welcome to report issues or donate stars which can encourage AutoRT to support more backends, more OS-type and more documentations. See More Information about Microsoft [Contributing](CONTRIBUTING.md) and [Trademarks](TRADEMARKS.md).

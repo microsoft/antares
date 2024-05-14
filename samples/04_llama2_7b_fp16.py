@@ -41,7 +41,10 @@ for n_layers in range(1024):
 device = autort.device()
 for k in param:
   print(f'Loading weight: {k}')
-  param[k] = param[k].to(device)
+  try:
+    param[k] = param[k].to(device)
+  except RuntimeError:
+    raise Exception('Out of device memory, please try `export VMEM=1` before running this application again.')
 print('')
 
 token_embedding_table = param['model.embed_tokens.weight']

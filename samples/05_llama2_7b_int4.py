@@ -133,7 +133,7 @@ def rmsnorm(x, weight):
 scales_dtype = 'float32' if use_float32 else 'float16'
 
 my_custom_fn = autort.export(ir="""
-  input1[S, N] = (qweight[S / 8, N] >> (S % 8 * 4)).call(strs.bitwise_and, 15) * input0[S].like(1)
+  input1[S, N] = ((qweight[S / 8, N] >> (S % 8 * 4)) & 15) * input0[S].like(1)
   w[S, N] = scales[S / 128, N] * (input1[S, N] - 8)
   my_result[N] +=! input0[S] * w[S, N].to(input0.dtype())
 """, inputs=["input0=float32[S:4096]", "qweight=int32[L:512, N:12288]", f"scales={scales_dtype}[K:32, N:12288]"], config='~N~:[256,8,32],~S~:[64,8]')
