@@ -28,7 +28,7 @@ AutoRT is a compiler solution that helps runtime users to invent, benchmark and 
 | --- | --- | --- | --- |
 | DirectX 12 | Windows >= 10 / Microsoft XBox | [Python3.12](https://www.python.org/ftp/python/3.12.0/python-3.12.0-amd64.exe) (Windows) | python3.12 -m pip install https://github.com/microsoft/antares/releases/download/v0.9.6/autort-0.9.6.1+directx.win-cp312-cp312-win_amd64.whl |
 | Vulkan 1.3 | Ubuntu >= 18.04  | Python3.12 (Linux) | python3.12 -m pip install https://github.com/microsoft/antares/releases/download/v0.9.6/autort-0.9.6.1+vulkan.linux-cp312-cp312-manylinux1_x86_64.whl |
-| CUDA >= 11.0 | Windows >= 10 / Ubuntu >= 18.04 | Python 3.8/3.9/3.10/3.11/3.12 | python3 -m pip install https://github.com/microsoft/antares/releases/download/v0.9.6/autort-0.9.6.1+cuda.zip |
+| CUDA >= 11.0 | Windows >= 10 / Ubuntu >= 18.04 | Python 3.8/3.9/3.10/3.11/3.12 | python3 -m pip install https://github.com/microsoft/antares/releases/download/v0.9.6/autort-0.9.6.2+cuda.zip |
 | .. | .. | .. | .. (More coming soon) .. |
 
 For CUDA, here are several Ubuntu >= 18.04 equivalent containers below:
