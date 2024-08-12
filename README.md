@@ -26,9 +26,10 @@ AutoRT is a compiler solution that helps runtime users to invent, benchmark and 
 
 | Platform | OS Requirement | Python Requirement | Download Link |
 | --- | --- | --- | --- |
-| DirectX 12 | Windows >= 10 / Microsoft XBox | [Python3.12](https://www.python.org/ftp/python/3.12.0/python-3.12.0-amd64.exe) (Windows) | python3.12 -m pip install https://github.com/microsoft/antares/releases/download/v0.9.6/autort-0.9.6.1+directx.win-cp312-cp312-win_amd64.whl |
-| Vulkan 1.3 | Ubuntu >= 18.04  | Python3.12 (Linux) | python3.12 -m pip install https://github.com/microsoft/antares/releases/download/v0.9.6/autort-0.9.6.1+vulkan.linux-cp312-cp312-manylinux1_x86_64.whl |
-| CUDA >= 11.0 | Windows >= 10 / Ubuntu >= 18.04 | Python 3.8/3.9/3.10/3.11/3.12 | python3 -m pip install https://github.com/microsoft/antares/releases/download/v0.9.6/autort-0.9.6.2+cuda.zip |
+| DirectX 12 (x86_64) | Windows >= 10 / Microsoft XBox | [Python3.12](https://www.python.org/ftp/python/3.12.0/python-3.12.0-amd64.exe) (Windows) | python3.12 -m pip install https://github.com/microsoft/antares/releases/download/v0.9.6/autort-0.9.6.3+directx.win-cp312-cp312-win_amd64.whl |
+| Vulkan 1.3 (x86_64) | Ubuntu >= 18.04  | Python3.12 (Linux) | python3.12 -m pip install https://github.com/microsoft/antares/releases/download/v0.9.6/autort-0.9.6.3+vulkan.linux-cp312-cp312-manylinux1_x86_64.whl |
+| CUDA >= 11.0 (x86_64) | Windows >= 10 / Ubuntu >= 18.04 | Python 3.10/3.12 | python3 -m pip install https://github.com/microsoft/antares/releases/download/v0.9.6/autort-0.9.6.3+cuda.zip |
+| CUDA >= 12.0 (aarch64) | Ubuntu >= 22.04 | Python 3.10/3.12 | python3 -m pip install https://github.com/microsoft/antares/releases/download/v0.9.6/autort-0.9.6.3+cuda.zip |
 | .. | .. | .. | .. (More coming soon) .. |
 
 For CUDA, here are several Ubuntu >= 18.04 equivalent containers below:
@@ -42,16 +43,31 @@ For CUDA, here are several Ubuntu >= 18.04 equivalent containers below:
 
 #### Quick Test 1: Benchmark to evaluate device memory bandwidth over DirectX 12.
 ```sh
-$ python.exe -m autort.utils.memtest
+$ python.exe -m autort.benchmark.memtest
   ...
   [1000/1000] AutoRT Device Memory Bandwidth: (Actual ~= 468.12 GB/s) (Theoretical ~= 561.75 GB/s)
 ```
 
 #### Quick Test 2: Benchmark to evaluate device FP32 performance over DirectX 12.
 ```sh
-$ python.exe -m autort.utils.fp32test
+$ python.exe -m autort.benchmark.fp32test
   ...
   [5000/5000] AutoRT FP32 TFLOPS: (Actual ~= 9.84 TFLOPS) (Theoretical ~= 10.93 TFLOPS)
+
+$ python.exe -m autort.benchmark.mmtest
+  ...
+```
+
+#### Quick Test 3: Benchmark to evaluate device copy time.
+```sh
+$ python.exe -m autort.benchmark.copytest
+  ...
+```
+
+#### Quick Test 4: Benchmark to evaluate device launch time.
+```sh
+$ python.exe -m autort.benchmark.launchtest
+  ...
 ```
 
 ## - Playground 2 - Running Pytorch2 over DirectX:
