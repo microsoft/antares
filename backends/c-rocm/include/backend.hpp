@@ -1,14 +1,14 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-//; eval_flags(c-rocm): -lamdhip64 -D__HIP_PLATFORM_HCC__ -I/opt/rocm/include -L/opt/rocm/lib
+//; eval_flags(c-rocm): -lamdhip64 -D__HIP_PLATFORM_HCC__ -D__HIP_PLATFORM_AMD__ -I/opt/rocm/include -L/opt/rocm/lib
 //; eval_flags(c-cuda): -lcuda -I/usr/local/cuda/include -L/usr/local/cuda/lib64 -L/usr/local/cuda/lib64/stubs -ldl
 
 #if !defined(CHECK_OK)
 #define CHECK_OK(x)  ((x) ? 1 : (fprintf(stderr, "[CheckFail] %s:%d\n", __FILE__, __LINE__), exit(1), 0))
 #endif
 
-#if !defined(__HIP_PLATFORM_HCC__)
+#if !defined(__HIP_PLATFORM_HCC__) && !defined(__HIP_PLATFORM_AMD__)
 #include <cuda.h>
 #else
 #include <hip/hip_runtime.h>
@@ -120,7 +120,7 @@ namespace ab {
     ab_utils::TempFile tempfile("cu", source);
     auto &path = tempfile.get_path();
 
-#if !defined(__HIP_PLATFORM_HCC__)
+#if !defined(__HIP_PLATFORM_HCC__) && !defined(__HIP_PLATFORM_AMD__)
     static std::string _gpu_arch;
     if (!_gpu_arch.size()) {
       int major, minor;
@@ -141,7 +141,7 @@ namespace ab {
     if (!_gpu_arch.size()) {
       hipDeviceProp_t prop;
       CHECK_OK(0 == hipGetDeviceProperties(&prop, _current_device));
-      _gpu_arch = "gfx" + std::to_string(prop.gcnArch);
+      _gpu_arch = prop.gcnArchName;
     }
 
     std::vector<std::string> codes = { get_between(source, "\n#define __AMDGFX__ ", "\n") };
@@ -150,7 +150,7 @@ namespace ab {
 
     std::vector<std::string> compile_args = {"/opt/rocm/bin/hipcc", path, "--genco", "-O2", "-Wno-ignored-attributes", "-o", (path + ".out")};
     for (auto &code: codes)
-      compile_args.push_back("--amdgpu-target=" + code);
+      compile_args.push_back("--offload-arch=" + code);
 #endif
 
     ab_utils::Process(compile_args, 30);

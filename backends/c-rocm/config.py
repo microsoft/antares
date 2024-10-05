@@ -36,13 +36,9 @@ def do_native_translation_v2(codeset, **kwargs):
     return defval
 
   if 'AMDGFX' in os.environ:
-    amdgfx = os.environ['AMDGFX']
+    amdgfx = f"#define __AMDGFX__ {os.environ['AMDGFX']}"
   else:
-    amdgfx = kwargs['attrs'].device_props.compute_version.split('.')
-    if int(amdgfx[0]) < 10 and int(amdgfx[1]) == 10:
-      amdgfx = 'gfx%u%02x' % (int(amdgfx[0]), int(amdgfx[1]))
-    else:
-      amdgfx = 'gfx%u%02u' % (int(amdgfx[0]), int(amdgfx[1]))
+    amdgfx = ""
 
   launch_bounds = get_extent('threadIdx.x') * get_extent('threadIdx.y') * get_extent('threadIdx.z')
 
@@ -69,7 +65,7 @@ def do_native_translation_v2(codeset, **kwargs):
 #define __STORE_ITEM_2__(t, out, ido, in, idi)
 #define __STORE_ITEM_3__(t, out, ido, in, idi)
 
-#define __AMDGFX__ {amdgfx}
+{amdgfx}
 
 __forceinline__ __device__ __half hmax(const __half &a, const __half &b) {{ return a > b ? a : b; }}
 __forceinline__ __device__ __half hmin(const __half &a, const __half &b) {{ return a < b ? a : b; }}
