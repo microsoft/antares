@@ -1,0 +1,41 @@
+FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu18.04
+# nvidia/cuda:11.0.3-devel-ubuntu18.04
+# nvidia/cuda:11.4.3-cudnn8-devel-ubuntu18.04
+# FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu20.04
+
+ENV DEBIAN_FRONTEND noninteractive
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PATH $PATH:/usr/local/nvidia/lib64/bin
+ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/local/cuda/compat:$LD_LIBRARY_PATH
+
+RUN echo 'mQINBGYzeoEBEADEVzm0fPTo1KfunTjKV5ZP0Mb86Z6izCXSYbeYt/iAaIfK7a8xc13I/uAOxzjcuZHD4sQh7/22I74ignCSexoJD3PnytpZtAxNjyj3jkJpIrdFOVd4Cmua5tnEI1Av+B21YLlYYftK2wR+Z6hpsz3NyQ8URR1SCX04BOV9AGxcWb7izkV9RHu6xR4x8kAjuTObhhqw/ZR73+U9mig785qmrtapQkF/IanYj2OofqUJwosDo8YAshi01735JP9s5do4nnsb6w6xcYQ0HlGn3AxR1k4WA2CK/90QybOmVbLz7IOF3Ou3cPfoDzSxAiQemge2msJWPaQLSy/HPUivPB2uNPxkcNIHUVwbjgIig0yaN0EOsvego1m6QvS8sm1MEA2ySl+9+q8wdqTnXbSgA3hq/5OoG4rvHD9GUAd6oRxbz/wdOU3J7BlAhEMAHgeQ9DyIzRP9lGeU3QnWNA+WFiiDrLljf+6xewe5iyqLxPqvCkFUDPCFemp2oIqeWf6l04IMtM4SJz2AnU1EvytprEEvntMvHMXlBBinw1Q5r3ES/QlPfWr4o5CUpu2P3GpZtflDe7jvccyJUMDtlqOVv7wBZPMZykjTAPQ16clGdtIqWdQSk3/bUA96RSdpM4gMGXFBGLBoAd7CptafRvPjpRnbMxs2jIxicnASfwJALEFgbQARAQABtD9MYXVuY2hwYWQgUFBBIGZvciBQUEEgZm9yIFVidW50dSBUb29sY2hhaW4gVXBsb2FkcyAocmVzdHJpY3RlZCmJAk4EEwEKADgWIQTI7JUuKg4fvcUJD2osJ3oKNSFU5QUCZjN6gQIbAwULCQgHAgYVCgkICwIEFgIDAQIeAQIXgAAKCRAsJ3oKNSFU5TkTEACpFJ+q0xqfAmRF1886cgtVw+ruJTqfsxdj7ms1os3/I5VXLhPMbUg56mtK9Okj0Nf9rY5bnDagJobjtS2JgzMbYWXocPJuwK6ZvmMD5tFSsTov19R3SyIT2x3JAy7S/LNWqVeZS41RtM8uSu56PhghE7aAP9PigFTI3CUargpx1DQh6xiHKRR57ZMrLcd4l6tj8yb4Hl+OeFRQMcoim696lPMSqzVtJ0epP7yNsz2LFaRmkRP/hf+S4JlSs8uCwzAl9eJR2h1v1WoBr0pAW2gjjd8VyKWhaKjneicJPqo5GDvhDl+lbrpqSwSHENlHDVyC+XvAjvTf4JhTQE/M1L/sGrqqa65n+WF4ZqauiDvn1bUw0vnL0oaiK/hyH1YGXW7khJ7JDlw/6LFNZ6Ih0UuVRTzVBBBz3Sipw5hgM9ztKEYLMI5zlwWGlhEjMnxDX5WauIUWjPv3dKQp1qTthN7Fgv3/2J6j+2/tMAfWeWB1tL8H4lVPUCfcpQpkTP/EHTnB3oaRiYy6GDuGKsNkhEUvlV2AnVAxO17IN5QQ2lMQ261zaPj9y9v1oCQlzGfmUKRJWFGbsooapdm7DTrqrfO+zyRXWPe6GRnYlmeXTRWi8CEIXpCkhhf8rma8KNnWS96jsTSU97Lo0hnIbL+4o3qf2BiYcfIwfoIXzUaj5ajGEA==' | base64 -d > /etc/apt/trusted.gpg.d/ubuntu-toolchain-r_ubuntu_test.gpg
+RUN env > /etc/environment
+
+RUN apt-get update && apt install -y --no-install-recommends git ca-certificates \
+    python3-distutils python3.8-dev \
+    vim-tiny less netcat-openbsd inetutils-ping curl patch iproute2 \
+    g++ libpci3 libnuma-dev make file openssh-server kmod gdb libopenmpi-dev openmpi-bin psmisc \
+        autoconf automake autotools-dev libtool \
+        zlib1g-dev rename zip unzip librdmacm-dev gnupg p7zip-full \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+RUN ln -sf python3.8 /usr/bin/python3
+RUN ln -sf python3 /usr/bin/python
+RUN ln -sf python /usr/bin/python.exe
+RUN curl -LO https://bootstrap.pypa.io/get-pip.py && python3 get-pip.py && rm -f get-pip.py
+
+RUN /bin/echo -e "set backspace=indent,eol,start\nset nocompatible\nset ts=4" > /etc/vim/vimrc.tiny
+
+RUN [ -e /usr/lib/x86_64-linux-gnu/libcuda.so.1 ] || ln -s /host/usr/lib/x86_64-linux-gnu/libcuda.so.1 /usr/lib/x86_64-linux-gnu
+RUN ln -sf libcudart.so /usr/local/cuda/targets/x86_64-linux/lib/libcudart_static.a
+
+ENV LD_LIBRARY_PATH=/usr/local/nvidia/lib64:$LD_LIBRARY_PATH
+RUN pip3 install --upgrade antares && mkdir -p /root/.local/antares && mv $(antares pwd)/../3rdparty /root/.local/antares/3rdparty && pip3 uninstall antares -y && echo 'exec /antares/main.py "$@"' > /usr/local/bin/antares && chmod a+x /usr/local/bin/antares
+
+RUN python3 -m pip install cython setuptools
+RUN python3 -m pip install torch==2.1.0 torchaudio==2.1.0 torchvision --index-url https://download.pytorch.org/whl/cu118
+# RUN python3 -m pip install torch==2.2.0.dev20231010+cu118 torchaudio torchvision --index-url https://download.pytorch.org/whl/nightly/cu118
+
+# RUN python3 -m pip install https://download.pytorch.org/whl/cu118/torch-2.2.0%2Bcu118-cp38-cp38-linux_x86_64.whl
+# RUN python3 -m pip install https://download.pytorch.org/whl/cu118/torchaudio-2.2.0%2Bcu118-cp38-cp38-linux_x86_64.whl
+# RUN python3 -m pip install https://download.pytorch.org/whl/cu118/torchvision-0.17.0%2Bcu118-cp38-cp38-linux_x86_64.whl
