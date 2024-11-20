@@ -31,3 +31,4 @@ RUN pip3 install --upgrade antares && mkdir -p /root/.local/antares && mv $(anta
 RUN rm -rf /usr/lib/x86_64-linux-gnu/libOpenCL.so.1*
 
 RUN pip3 install torch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 networkx==3.0 --index-url https://download.pytorch.org/whl/rocm6.1
+RUN python3 -m pip install -v --no-build-isolation git+https://github.com/microsoft/tutel@main

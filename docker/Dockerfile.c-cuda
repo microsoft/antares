@@ -12,7 +12,7 @@ RUN apt-get update && apt install -y --no-install-recommends git ca-certificates
     vim-tiny less netcat-openbsd inetutils-ping curl patch iproute2 \
     g++ libpci3 libnuma-dev make file openssh-server kmod gdb libopenmpi-dev openmpi-bin psmisc \
         autoconf automake autotools-dev libtool \
-        zlib1g-dev rename zip unzip librdmacm-dev gnupg p7zip-full \
+        zlib1g-dev rename zip unzip librdmacm-dev gnupg p7zip-full sudo \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN ln -sf python3.8 /usr/bin/python3
@@ -21,6 +21,8 @@ RUN ln -sf python /usr/bin/python.exe
 RUN curl -LO https://bootstrap.pypa.io/get-pip.py && python3 get-pip.py && rm -f get-pip.py
 
 RUN /bin/echo -e "set backspace=indent,eol,start\nset nocompatible\nset ts=4" > /etc/vim/vimrc.tiny
+
+RUN pip3 install --upgrade antares && mkdir -p /root/.local/antares && mv $(antares pwd)/../3rdparty /root/.local/antares/3rdparty && pip3 uninstall antares -y && echo 'exec /antares/main.py "$@"' > /usr/local/bin/antares && chmod a+x /usr/local/bin/antares
 
 RUN [ -e /usr/lib/x86_64-linux-gnu/libcuda.so.1 ] || ln -s /host/usr/lib/x86_64-linux-gnu/libcuda.so.1 /usr/lib/x86_64-linux-gnu
 RUN ln -sf libcudart.so /usr/local/cuda/targets/x86_64-linux/lib/libcudart_static.a
@@ -31,3 +33,5 @@ RUN python3 -m pip install cython setuptools
 RUN python3 -m pip install torch==2.4.1 torchaudio==2.4.1 torchvision --index-url https://download.pytorch.org/whl/cu118
 RUN python3 -m pip install -v --no-build-isolation git+https://github.com/microsoft/tutel@main
 # RUN python3 -m pip install https://github.com/microsoft/antares/releases/download/v0.9.6/autort-0.9.6.3.4+cuda.zip
+
+# RUN mkdir -p /usr/local/nvidia/bin/ && /bin/echo 'sudo /usr/local/cuda/bin/nsys profile --stats=true -o /tmp/ "$@"' > /usr/local/nvidia/bin/nvprof && chmod a+x /usr/local/nvidia/bin/nvprof
