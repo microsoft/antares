@@ -18,7 +18,7 @@ INNER_CMD = ./antares/run.sh
 BACKEND = $(shell ./antares/get_backend.sh)
 WORK_DIR ?= $(shell pwd)
 
-PARAMS ?=  docker run -v /:/host -w /host$(WORK_DIR) --privileged \
+PARAMS ?=  docker run -v /:/host -w /host$(WORK_DIR) -v $(shell pwd):/antares --privileged \
 	--shm-size=1g --ulimit memlock=-1 --ulimit stack=67108864 \
 	-v $(shell dirname `find /usr/lib/ -name libnvidia-ptxjitcompiler.so` 2>/dev/null | grep -v i386 | tail -n 1)/libnvidia-ptxjitcompiler.so:/usr/local/nvidia/lib64/libnvidia-ptxjitcompiler.so \
 	-v $(shell dirname `find /usr/lib/ -name libcuda.so.1` 2>/dev/null | grep -v i386 | tail -n 1)/libcuda.so.1:/usr/lib/x86_64-linux-gnu/libcuda.so.1 \
