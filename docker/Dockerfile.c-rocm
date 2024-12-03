@@ -25,10 +25,11 @@ RUN printf "deb [arch=amd64] http://repo.radeon.com/rocm/apt/6.2.2/ ubuntu main"
 
 RUN /bin/echo -e "set backspace=indent,eol,start\nset nocompatible\nset ts=4" > /etc/vim/vimrc.tiny
 
-RUN pip3 install --upgrade antares && mkdir -p /root/.local/antares && mv $(antares pwd)/../3rdparty /root/.local/antares/3rdparty && pip3 uninstall antares -y && echo 'exec /antares/main.py "$@"' > /usr/local/bin/antares && chmod a+x /usr/local/bin/antares
+RUN python3 -m pip install --upgrade antares && mkdir -p /root/.local/antares && mv $(antares pwd)/../3rdparty /root/.local/antares/3rdparty && pip3 uninstall antares -y && echo 'exec /antares/main.py "$@"' > /usr/local/bin/antares && chmod a+x /usr/local/bin/antares
 
 # OpenCL has been included in ROCm already
 RUN rm -rf /usr/lib/x86_64-linux-gnu/libOpenCL.so.1*
 
-RUN pip3 install torch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 networkx==3.0 --index-url https://download.pytorch.org/whl/rocm6.1
+RUN python3 -m pip install torch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 networkx==3.0 --index-url https://download.pytorch.org/whl/rocm6.1
 RUN python3 -m pip install -v --no-build-isolation git+https://github.com/microsoft/tutel@main
+RUN python3 -m pip install -U "huggingface_hub[cli]"
