@@ -533,7 +533,7 @@ def main_compute(code_only=False):
     worker_size = batch_size if batch_size < dev_num else dev_num
     thread_pool = ThreadPoolExecutor(max_workers=worker_size)
 
-    tuner_type = 'OpEvo'
+    tuner_type = 'opevo'
     print('  >> MAKE_PARA = %d/%d, EXEC_PARA = %d, TUNER = %s' % (worker_size, batch_size, dev_num, tuner_type))
     print('  >> COMPUTE_V1 = %s\n' % os.environ['COMPUTE_V1'])
 
@@ -548,7 +548,7 @@ def main_compute(code_only=False):
     try:
       task.search_space_v2 = backend_config.to_search_space(*AntaresGlobal.compute_graph)
       task.n_parallel = batch_size
-      tuner = importlib.import_module('tuner.%s.main' % tuner_type)
+      tuner = importlib.import_module('%s.main' % tuner_type)
       tuner = tuner.MainTuner(task)
     except:
       raise Exception('>> Cannot import Antares Tuner: %s' % tuner_type)
