@@ -140,7 +140,7 @@ def codegen(ast_seq, input_dict, output_dict, best_config, space_only=False):
     output_end = ').astype("%s"), tag="", name="%s")\n' % (cast_dtype(root._dtype), output_name)
     return output_begin + reduce_pattern % basic_body + output_end
 
-  ll_irs = ['import tvm'] + emit_input_body(input_dict)
+  ll_irs = ['import numpy as np', 'np.float_ = np.float64', 'import tvm'] + emit_input_body(input_dict)
   for ast in ast_seq:
     loops_def, pattern = emit_reduce_body(ast)
     ll_irs.append(loops_def + emit_output_body(ast, pattern))

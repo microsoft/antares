@@ -37,7 +37,7 @@ eval:
 	@if [ "x$(HOST_MODE)" = "x0" ] && [ "x$(shell whoami)" = "xroot" ] && pgrep dockerd >/dev/null 2>&1 && [ -e docker/Dockerfile.$(BACKEND) ] && $(MAKE) install_docker; then $(PARAMS) -it --rm antares $(INNER_CMD) || true; else $(INNER_CMD) || true; fi
 
 shell: install_docker
-	$(PARAMS) -it --rm --platform linux/x86_64 --network=host -h $(BACKEND)-$(shell uname -m) antares bash || true
+	$(PARAMS) -it --rm --platform linux/$(shell uname -m) --network=host -h $(BACKEND)-$(shell uname -m) antares bash || true
 
 rest-server:
 	@if [ "x$(HOST_MODE)" = "x0" ] && [ "x$(shell whoami)" = "xroot" ] && pgrep dockerd >/dev/null 2>&1 && [ -e docker/Dockerfile.$(BACKEND) ] && $(MAKE) install_docker && $(MAKE) stop-server; then $(HTTP_EXEC) bash -c 'trap ctrl_c INT; ctrl_c() { exit 1; }; while true; do BACKEND=$(BACKEND) HTTP_SERVICE=1 HTTP_PORT=$(HTTP_PORT) $(INNER_CMD); done'; else HTTP_SERVICE=1 $(INNER_CMD) || true; fi
@@ -49,7 +49,7 @@ stop-server:
 	docker rm $(HTTP_NAME) >/dev/null 2>&1 || true
 
 install_docker:
-	docker build --platform linux/x86_64 -t antares --network=host . -f docker/Dockerfile.$(BACKEND)
+	docker build --platform linux/$(shell uname -m) -t antares --network=host . -f docker/Dockerfile.$(BACKEND)
 
 install_host:
 	./engine/install_antares_host.sh
