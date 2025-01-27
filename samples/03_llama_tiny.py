@@ -6,8 +6,8 @@ import torch
 import os, sys, math, random
 import autort
 
-pt = torch.load(autort.download('llama_story_110m.pt', 'https://huggingface.co/karpathy/tinyllamas/resolve/main/stories110M.pt?download=true'))
-vocab = torch.load(autort.download('vocab_32K.pt', 'https://huggingface.co/datasets/ghostplant/data-collections/resolve/main/vocab_32K.pt?download=true'))
+pt = torch.load(autort.download('meta-llama/llama_story_110m.pt', 'https://huggingface.co/karpathy/tinyllamas/resolve/main/stories110M.pt?download=true'))
+vocab = torch.load(autort.download('meta-llama/vocab_32K.pt', 'https://huggingface.co/datasets/ghostplant/data-collections/resolve/main/vocab_32K.pt?download=true'))
 
 device = autort.device()
 

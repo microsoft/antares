@@ -7,17 +7,20 @@ import torch
 import autort
 from safetensors import safe_open
 
-os.environ['D3D12_ENABLE_FP16'] = '1'
-vocab = torch.load(autort.download('./llama-2-7b-chat-hf/vocab_32K.pt', 'https://huggingface.co/datasets/ghostplant/data-collections/resolve/main/vocab_32K.pt?download=true'))
+from transformers import AutoTokenizer
+model_id = 'TheBloke/Llama-2-7B-Chat-GPTQ'
+tokenizer = AutoTokenizer.from_pretrained(model_id)
+tokenizer.use_default_system_prompt = False
 
-dictionary = {}
-for i, word in enumerate(vocab):
-  dictionary[word] = i
+os.environ['D3D12_ENABLE_FP16'] = '1'
 
 param = {}
-with safe_open(autort.download('./llama-2-7b-chat-hf/models_7b_int4.safetensors', 'https://huggingface.co/TheBloke/Llama-2-7B-Chat-GPTQ/resolve/main/model.safetensors?download=true'), framework='pt') as f:
+vocab = torch.load(autort.download('meta-llama/Llama-2-7b-chat-vocab_32K.pt', 'https://huggingface.co/datasets/ghostplant/data-collections/resolve/main/vocab_32K.pt?download=true'))
+with safe_open(autort.download('meta-llama/Llama-2-7b-chat-int4.safetensors', 'https://huggingface.co/TheBloke/Llama-2-7B-Chat-GPTQ/resolve/main/model.safetensors'), framework='pt') as f:
   for k in f.keys():
     param[k] = f.get_tensor(k)
+
+dictionary = dict([(word, i) for i, word in enumerate(vocab)])
 
 for n_layers in range(32):
   try:
@@ -111,7 +114,7 @@ head_size = token_embedding_table.size(-1) // n_heads
 token_embedding_table = token_embedding_table.view([token_embedding_table.size(0), n_heads, head_size])
 
 vocab_size, n_heads, head_size, = token_embedding_table.size(0), token_embedding_table.size(1), token_embedding_table.size(2)
-seq_len, hidden, = 256, qweight_f1[0].size(0)
+seq_len, hidden, = 4096, qweight_f1[0].size(0)
 kv_heads, dim = n_heads, n_heads * head_size
 
 assert n_heads // kv_heads == 1 and head_size % 2 == 0
@@ -136,7 +139,7 @@ my_custom_fn = autort.export(ir="""
   input1[S, N] = ((qweight[S / 8, N] >> (S % 8 * 4)) & 15) * input0[S].like(1)
   w[S, N] = scales[S / 128, N] * (input1[S, N] - 8)
   my_result[N] +=! input0[S] * w[S, N].to(input0.dtype())
-""", inputs=["input0=float32[S:4096]", "qweight=int32[L:512, N:12288]", f"scales={scales_dtype}[K:32, N:12288]"], config='~N~:[256,8,32],~S~:[64,8]')
+""", inputs=["input0=float32[S:4096]", "qweight=int32[L:512,N:12288]", f"scales={scales_dtype}[K:32,N:12288]"], config='~N~:[256,8,32],~S~:[64,8]')
 
 def matmul_dequat(x, qweight, scales, memory_out=None):
   x = x.view(-1)
@@ -184,10 +187,10 @@ def decode(prev, next):
     piece = chr(int(piece[1:-1], 16))
   return piece
 
-if __name__ == '__main__':
-  prompt = 'How large is Atlantic Ocean'
-  prompt_tokens = [1] + [dictionary[f' {x}' if f' {x}' in dictionary else x] for x in prompt.split()]
+def run(prompt):
+  prompt_tokens = tokenizer.encode(prompt, return_tensors="pt").view(-1).tolist()
 
+  print()
   with torch.no_grad():
     pos, token = 0, prompt_tokens[0]
 
@@ -205,3 +208,7 @@ if __name__ == '__main__':
       sys.stdout.write(decode(token, next))
       sys.stdout.flush()
       pos, token = pos + 1, next
+
+if __name__ == '__main__':
+  run('Using 400 words to summarize the history of AI.')
+

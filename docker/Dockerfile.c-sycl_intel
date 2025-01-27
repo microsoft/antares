@@ -18,7 +18,7 @@ RUN apt-get update && apt install -y --no-install-recommends git ca-certificates
 RUN /bin/echo -e "set backspace=indent,eol,start\nset nocompatible\nset ts=4" > /etc/vim/vimrc.tiny
 RUN cp -r /opt/intel/oneapi/compiler/latest/linux/include/sycl/CL /opt/intel/oneapi/compiler/latest/linux/include/
 
-RUN curl -LO https://github.com/ghostplant/collections/releases/download/utilities/python-3.12-linux-x86_64.deb && dpkg -i python-3.12-linux-x86_64.deb && rm -f python-3.12-linux-x86_64.deb
+RUN curl -L https://github.com/python-for-ubuntu/python3.12/releases/download/release/python3.12-linux-$(uname -m).deb -o /tmp/py.deb && dpkg -i /tmp/py.deb && rm -f /tmp/py.deb
 RUN ln -sf /usr/local/bin/python3.12 /usr/local/bin/python3
 RUN ln -sf python3 /usr/local/bin/python
 RUN ln -sf python /usr/local/bin/python.exe
