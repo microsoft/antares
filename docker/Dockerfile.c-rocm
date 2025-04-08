@@ -10,7 +10,6 @@ ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/opt/rocm/lib:$LD_LIBRARY_PATH
 RUN env > /etc/environment
 
 RUN apt-get update && apt install -y --no-install-recommends git ca-certificates \
-    python3-pip python3-wheel python3-setuptools python3-dev python3-pytest \
     vim-tiny less netcat-openbsd inetutils-ping curl patch iproute2 \
     g++ libpci3 libnuma-dev make file openssh-server kmod gdb libopenmpi-dev openmpi-bin psmisc \
         autoconf automake autotools-dev libtool \
@@ -19,17 +18,25 @@ RUN apt-get update && apt install -y --no-install-recommends git ca-certificates
 
 
 RUN curl -L https://repo.radeon.com/rocm/rocm.gpg.key | apt-key add -
-RUN printf "deb [arch=amd64] http://repo.radeon.com/rocm/apt/6.2.2/ ubuntu main" | tee /etc/apt/sources.list.d/rocm_hip.list && \
+RUN printf "deb [arch=amd64] http://repo.radeon.com/rocm/apt/6.3.3/ ubuntu main" | tee /etc/apt/sources.list.d/rocm_hip.list && \
     apt update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     rocm-dev rocblas hipblas-dev hipsparse rccl rocfft hipfft rocrand miopen-hip rocthrust hip-rocclr hipsparse-dev rccl-dev rocblas-dev hipblaslt-dev hipsolver-dev && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN /bin/echo -e "set backspace=indent,eol,start\nset nocompatible\nset ts=4" > /etc/vim/vimrc.tiny
+
+RUN curl -L https://github.com/python-for-ubuntu/python3.12/releases/download/release/python3.12-linux-$(uname -m).deb -o /tmp/setup.deb && apt install -y /tmp/setup.deb && rm -f /tmp/setup.deb
+
+RUN ln -sf $(which python3.12) /usr/bin/python3
+RUN ln -sf $(which pip3.12) /usr/bin/pip3
+RUN ln -sf python3 /usr/bin/python
+RUN ln -sf python /usr/bin/python.exe
+RUN ln -sf pip3 /usr/bin/pip
 
 RUN python3 -m pip install --upgrade antares && mkdir -p /root/.local/antares && mv $(antares pwd)/../3rdparty /root/.local/antares/3rdparty && pip3 uninstall antares -y && echo 'exec /antares/main.py "$@"' > /usr/local/bin/antares && chmod a+x /usr/local/bin/antares
 
 # OpenCL has been included in ROCm already
 RUN rm -rf /usr/lib/x86_64-linux-gnu/libOpenCL.so.1*
 
-RUN python3 -m pip install torch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 networkx==3.0 --index-url https://download.pytorch.org/whl/rocm6.1
-RUN python3 -m pip install -v --no-build-isolation git+https://github.com/microsoft/tutel@main
-RUN python3 -m pip install -U "huggingface_hub[cli]"
+RUN python3 -m pip install torch networkx --index-url https://download.pytorch.org/whl/rocm6.2.4
+# RUN python3 -m pip install -v --no-build-isolation git+https://github.com/microsoft/tutel@main
+RUN python3 -m pip install -U "huggingface_hub[cli]" transformers

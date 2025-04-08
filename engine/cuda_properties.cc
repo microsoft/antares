@@ -24,7 +24,14 @@ inline hipError_t hipDeviceGetAttribute_(int *val, hipDeviceAttribute_t attr, in
     hipError_t err = hipGetDeviceProperties(&prop, dev);
     if (err != 0)
       return err;
-    *val = (attr == hipDeviceAttributeComputeCapabilityMajor) ? (prop.gcnArch / 100) : (prop.gcnArch % 100);
+    std::string name = prop.gcnArchName + 3;
+    int index = int(name.find(':'));
+    if (index >= 0)
+      name = name.substr(0, index);
+    if (attr == hipDeviceAttributeComputeCapabilityMajor)
+      *val = std::atoi(name.substr(0, name.size() - 2).c_str());
+    else
+      *val = std::stoi(name.substr(name.size() - 2).c_str(), 0, 16);
     return hipSuccess;
   }
   return ::hipDeviceGetAttribute(val, attr, dev);
@@ -36,6 +43,7 @@ int main() {
   int val = -1, dev = getenv("DEVICE_ID") ? atoi(getenv("DEVICE_ID")) : 0;
   CHECK_ENV();
 
+  Q(MaxRegistersPerBlock);
   Q(MaxThreadsPerBlock);
   Q(WarpSize);
   Q(MaxSharedMemoryPerBlock);
