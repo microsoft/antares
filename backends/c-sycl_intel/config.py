@@ -100,7 +100,7 @@ inline template <class X, class Y> float ATOMIC_MIN_F32(X data, Y index, float v
 
   full_body = f'''#include <math.h>
 #include <algorithm>
-#include <CL/sycl.hpp>
+#include <sycl/sycl.hpp>
 
 {blend}
 #ifndef __SYCL_COMMON_MACRO__
@@ -124,12 +124,12 @@ inline template <class X, class Y> float ATOMIC_MIN_F32(X data, Y index, float v
 extern "C" void {kernel_name}(sycl::queue* q, int blks, void **__args) {{
   {expand_args}
 
-  using namespace cl::sycl;
+  using namespace sycl;
 
   q->submit([&](auto &cgh) {{
     {group_shared}
     {expand_accs}
-    cgh.parallel_for(cl::sycl::nd_range<3>(cl::sycl::range<3>({gds[0]}, {gds[1]}, blks * {lds[2]}), cl::sycl::range<3>({str(lds)[1:-1]})), [=](cl::sycl::nd_item<3> _item) {{
+    cgh.parallel_for(sycl::nd_range<3>(sycl::range<3>({gds[0]}, {gds[1]}, blks * {lds[2]}), sycl::range<3>({str(lds)[1:-1]})), [=](sycl::nd_item<3> _item) {{
       {expand_ptrs}
       {index_str}
 
@@ -140,5 +140,5 @@ extern "C" void {kernel_name}(sycl::queue* q, int blks, void **__args) {{
 '''
   full_body = re.sub(fr'\b__device__\b', '', full_body)
   full_body = full_body.replace('Idx.', 'Idx_')
-  full_body = full_body.replace('__syncthreads()', '_item.barrier(cl::sycl::access::fence_space::local_space)').replace('\n', '\n    ')
+  full_body = full_body.replace('__syncthreads()', '_item.barrier(sycl::access::fence_space::local_space)').replace('\n', '\n    ')
   return full_body

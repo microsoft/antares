@@ -1,10 +1,10 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-//; eval_flags(c-sycl_intel): -I/opt/intel/oneapi/compiler/latest/linux/include -lsycl -ldl -lpthread -Wno-deprecated-declarations
+//; eval_flags(c-sycl_intel): -I/opt/intel/oneapi/2025.1/include -lsycl -ldl -lpthread -Wno-deprecated-declarations
 //; eval_flags(c-sycl_cuda): [/usr/local/dpcpp-cuda/bin/clang++] -ldl -I/usr/local/dpcpp-cuda/include/sycl -L/usr/local/dpcpp-cuda/lib -lsycl -fsycl -fsycl-targets=nvptx64-nvidia-cuda-sycldevice -fsycl-unnamed-lambda -lpthread -iquote/usr/local/cuda/include -L/usr/local/cuda/lib64 -L/usr/local/cuda/lib64/stubs -lcuda -DSYCL_CUDA
 
-#include <sycl/CL/sycl.hpp>
+#include <sycl/sycl.hpp>
 #include <dlfcn.h>
 #include <pthread.h>
 #include <malloc.h>
@@ -45,11 +45,11 @@ namespace ab {
     int steps = getenv("STEP") ? std::atoi(getenv("STEP")) : 0;
     if (steps > 0)
       return;
-    size_t max_compute_units = _sycl_queue.get_device().get_info<cl::sycl::info::device::max_compute_units>();
-    size_t max_work_group_size = _sycl_queue.get_device().get_info<cl::sycl::info::device::max_work_group_size>();
-    size_t max_mem_alloc_size = _sycl_queue.get_device().get_info<cl::sycl::info::device::max_mem_alloc_size>();
-    size_t local_mem_size = _sycl_queue.get_device().get_info<cl::sycl::info::device::local_mem_size>();
-    size_t max_clock_frequency = _sycl_queue.get_device().get_info<cl::sycl::info::device::max_clock_frequency>();
+    size_t max_compute_units = _sycl_queue.get_device().get_info<sycl::info::device::max_compute_units>();
+    size_t max_work_group_size = _sycl_queue.get_device().get_info<sycl::info::device::max_work_group_size>();
+    size_t max_mem_alloc_size = _sycl_queue.get_device().get_info<sycl::info::device::max_mem_alloc_size>();
+    size_t local_mem_size = _sycl_queue.get_device().get_info<sycl::info::device::local_mem_size>();
+    size_t max_clock_frequency = _sycl_queue.get_device().get_info<sycl::info::device::max_clock_frequency>();
     fprintf(stderr, "    // (SYCL_INFO: SYCL Device Name = %s [%zd, %zd, %zd, %zd, %zd])\n", _sycl_queue.get_device().get_info<sycl::info::device::name>().c_str(),
       max_compute_units, max_work_group_size, max_mem_alloc_size, local_mem_size, max_clock_frequency
     );

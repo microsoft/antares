@@ -522,7 +522,7 @@ class MainTuner:
         for k in self.search_space:
           if self.search_space[k]['_type'] == 'factor' and '_init' in self.search_space[k]:
             for item in self.search_space[k]['_init']:
-              item[0] = self.search_space[k]['_value'][0] // int(np.product(item[1:]))
+              item[0] = self.search_space[k]['_value'][0] // int(math.prod(item[1:]))
 
         self.logger.info('Search space =', self.search_space)
         self._update_search_space(self.search_space)
