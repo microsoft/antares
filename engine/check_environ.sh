@@ -6,7 +6,7 @@ cd $(dirname $0)/..
 python3 -c 'import sys; assert sys.version >= "3.6", "Python Error: Antares depends on Python >= 3.6"'
 
 # Check Symlink Attributions
-if [[ ! -L "engine/device-stub/lib64" ]]; then
+if [[ -e "engine/device-stub" ]] && [[ ! -L "engine/device-stub/lib64" ]]; then
 	echo
 	echo 'Error: This repo is cloned with "Symbolic Link Attribution" lost.'
 	echo 'Please re-clone this repo in true Linux environment, or Windows WSL environment, or using "Git for Windows" that supports keeping "Symbolic Link Attribution".'
