@@ -2,112 +2,40 @@
 
 ***AutoRT for Device Runtime:***
 
-AutoRT is a compiler solution that helps runtime users to invent, benchmark and optimize operators for Pytorch using your own accelerators:
-- AutoRT can be as a [benchmark utility](#--playground-1---benchmark-your-windows-device) for device performance testing and profiling.
-- AutoRT can also generate Pytorch2 of your device to accelerate standard [Pytorch applications](#quick-test-2-mnist-training-by-pytorch2-using-windows-directx) (e.g. DirectX).
-- Additionally, AutoRT futher helps to construct [custom defined](#quick-test-1-create-custom-operator-of-your-own-in-pytorch-2) / fused operators that are beyond the built-in functions of Pytorch.
-- ***AutoRT for Windows DirectX 12 / Linux CUDA*** has experimental version [released](#--quick-installation-of-autort).
-- Click [here](https://github.com/microsoft/antares/issues/new) to suggest more platforms (e.g. Pytorch2 for Windows ROCm / OpenCL / SYCL / Apple Metal / ..) you would like AutoRT to support in the follow-up releases.
+AutoRT is a compiler solution that helps runtime users to invent, benchmark and optimize operators for Pytorch using your own accelerators.
 
-#### Archtecture of AutoRT as a Backend for Pytorch 2.0:
-<p align="center">
-  <img src="AutoRT4Torch.svg" data-canonical-src="AutoRT4Torch.svg" width="650" height="230" />
-</p>
+#### Recommended Docker Image for AutoRT Setup:
 
-#### Workflow of Custom Operations from Antares IR to Different Backends:
-<p align="center">
-  <img src="AutoRT-opt.svg" data-canonical-src="AutoRT-opt.svg" width="650" height="120" />
-</p>
+ * **Docker Image for CUDA:** nvidia/cuda:12.8.0-devel-ubuntu24.04
+ * **Docker Image for ROCM:** rocm/dev-ubuntu-24.04:7.2.4
+ * ..
 
-#### Tutorial of AutoRT:
+## Tutorial of AutoRT:
 
-1. Installation: [README.md](https://github.com/microsoft/antares/tree/latest/tutorial/installation)
+```md
+>>> Agentic Step-1:
+Please read this SKILL and learn by yourself:
+https://raw.githubusercontent.com/microsoft/antares/refs/heads/latest/SKILLS.md
 
-2. Device Benchmarking: [README.md](https://github.com/microsoft/antares/tree/latest/tutorial/benchmarking)
-
-
-## - Playground - Running Pytorch2 over DirectX:
-
-#### Quick Test 1: Create "custom operator" of your own in Pytorch 2.
-
-- **Style-1: "AutoRT API Style"** Custom Operator Generation:
-```py
->> import torch, autort
->> data = torch.arange(0, 10, dtype=torch.float32, device=autort.device())
-
->> f = autort.export(ir="sigmoid_f32[N] = 1 - 1 / (1 + data[N].call(strs.exp))", inputs=["data=float32[N:4096000]"], config="tune:5")
->> print(f(data))
-tensor([0.5000, 0.7311, 0.8808, 0.9526, 0.9820, 0.9933, 0.9975, 0.9991, 0.9997, 0.9999])
->> print(autort.ops.sigmoid_f32(data))
-tensor([0.5000, 0.7311, 0.8808, 0.9526, 0.9820, 0.9933, 0.9975, 0.9991, 0.9997, 0.9999])
+>>> Agentic Step-2:
+Regardless of whether the current environment meets the requirements,
+please follow AutoRT kernel examples to write a similar command that computes: output_1d = torch.sum(input_2d, dim=-1)
+All syntax for kernel body follows CUDA / HIP C++ 17 standard. No need for deep API consult.
 ```
 
-- **Style-2: "Command Line Style"** Custom Operator Generation:
-```sh
-# Fist, create a custom sigmoid activation operator with 5 tuning steps:
-$ autort --ir "sigmoid_f32[N] = 1 - 1 / (1 + data[N].call(strs.exp))" -i data=float32[N:4096000] -c "tune:5"
-
-# Then, use it in Pytorch 2 session:
-$ python.exe
->> import torch, autort
->>
->> data = torch.arange(0, 10, dtype=torch.float32, device=autort.device())
->> output = autort.ops.sigmoid_f32(data)
->> print(output)
-tensor([0.5000, 0.7311, 0.8808, 0.9526, 0.9820, 0.9933, 0.9975, 0.9991, 0.9997,
-        0.9999])
->> output = torch.nn.functional.sigmoid(data)
->> print(output)
-tensor([0.5000, 0.7311, 0.8808, 0.9526, 0.9820, 0.9933, 0.9975, 0.9991, 0.9997,
-        0.9999])
-```
-
-
-#### Quick Test 2: Demo of Sorting/MNIST/LLama over Pytorch2:
+## Quick Start:
 
 ```sh
-$ python.exe -m autort.examples.01_sort_even_first
+autort -n hello_world_example --source='
+@DEF_FUNC: input:float32[B, M] -> output:float32[B, M]
+@DEF_BIND: ~B~:1, ~%~:1024
 
-Input : tensor([101, 102, 208,  99,   1, 127,  62,   8, 336, 336], dtype=torch.int32)
-  (is_even) tensor([False,  True,  True, False, False, False,  True,  True,  True,  True])
-
-Output: tensor([102, 208,  62,   8, 336, 336, 101,  99,   1, 127], dtype=torch.int32)
-  (is_even) tensor([ True,  True,  True,  True,  True,  True, False, False, False, False])
+void main() {
+  if (int(blockIdx.x) == 0 && int(threadIdx.x) == 0)
+    printf("(autort) Hello World!\n");
+}'
 ```
 
-```sh
-$ python.exe -m autort.examples.02_mnist
-  ...
-  step = 800, loss = 0.5159, accuracy = 87.50 %
-  step = 900, loss = 0.5511, accuracy = 84.38 %
-  step = 1000, loss = 0.2616, accuracy = 93.75 %
-  ...
-```
+For Earlier Manual Doc (deprecated), please check: [Manual](README-manual.md) and [Legacy](README-legacy.md).
 
-```sh
-$ python.exe -m autort.examples.03_llama_tiny
-
-What is that?"
-"That is the sun," her mom said. "It gives us heat."
-The little girl was amazed. She had never seen the heat before.
-"Can we go outside and feel the sun?" she asked.
-"Yes," her mother said.
-...
-```
-
-```sh
-$ python.exe -m autort.examples.05_llama2_7b_int4
-
-How large is Atlantic Ocean?
-
-The Atlantic Ocean is the second largest ocean on Earth, covering approximately 20% of the Earth's surface. ...
-```
-
-```sh
-$ python.exe -m autort.examples.06_diffuser_no_opt
-
-...
-Image converted from `./samurai_nn.png` to `samurai_nn_diffused.png`..
-```
-
-If you like it, welcome to report issues or donate stars which can encourage AutoRT to support more backends, more OS-type and more documentations. See More Information about Microsoft [Contributing](CONTRIBUTING.md) and [Trademarks](TRADEMARKS.md).
+See More Information about Microsoft [Contributing](CONTRIBUTING.md) and [Trademarks](TRADEMARKS.md).
