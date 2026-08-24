@@ -14,7 +14,7 @@ python3.12 -m pip install --no-build-isolation -U https://github.com/microsoft/a
 - In the code, there can be only one output after `->`. If you need multiple outputs, put one after `->` and put the rest on the input side.
 - For extra writes, the user can pre-allocate sufficient workspace as input tensors and pass them as inputs before `->`.
 - Outside `void main()`, NEVER define C++ macros, helper functions, structs, or headers. Their original prototypes / declarations must go inside the main body. For example, helper functions should be defined as lambdas inside the main body.
-- To get the total dimension size of a tensor, e.g. `SPLIT` shown in the example below, please use: size_of_SPLIT().
+- To get the total dimension size of a tensor, e.g. `SPLIT` shown in the example below, please use: size_of_SPLIT(). Please note that size_of_XXX() is not a compile-time constant.
 - The highest language standard allowed in the kernel is C++17.
 - Limited to these tensor datatypes: float32/float64/float16/bfloat16/float8/int32/int64/int16/int8/..
 
