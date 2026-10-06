@@ -18,7 +18,7 @@ python3.12 -m pip install --no-build-isolation -U https://github.com/microsoft/a
 - The highest language standard allowed in the kernel is C++17.
 - Limited to these tensor datatypes: float32/float64/float16/bfloat16/float8/int32/int64/int16/int8/..
 
-## Below is an example:
+## Below is an example over command line:
 
 ```sh
 python3.12 -m autort.utils.export -n cuda_kernel_example --source='
@@ -61,17 +61,34 @@ void main() {
 }'
 ```
 
+## Below is an example over python interface:
+
+```py
+import torch
+import autort
+
+autort.export(name='cuda_kernel_example', source=r'''
+@DEF_FUNC: input0:bfloat16[B, M] -> final_output:float32[B, M]
+@DEF_BIND: ~B~:1, ~%~:256
+@DEF_EXTRA: value:float32
+
+void main() {
+  int block = int(blockIdx.x);
+  int thread = int(threadIdx.x);
+  // ...
+}
+''')
+
+
+final_out = autort.ops.cuda_kernel_example(.., extra=[float(..),])
+```
+
 ## After compilation, here is the way for operator execution:
 ```py
 import torch
 import autort
 
 device = autort.device()
-
-#### Create kernels within Pytorch session:
-# autort.export(name='cuda_kernel_example', source='''@DEF_FUNC: ...
-#   ... ...
-# ''')
 
 attn_logits = torch.ones([2, 2, 2, 2], dtype=torch.float32).to(device)
 attn_lse = torch.ones([2, 2, 2], dtype=torch.float32).to(device)
