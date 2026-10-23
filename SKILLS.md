@@ -5,7 +5,7 @@
 - CUDA >= 12.0 for NVIDIA GPU, or HIP ROCm == 7.2.4 for AMD GPU;
 - Setup:
 ```sh
-python3.12 -m pip install --no-build-isolation -U https://github.com/microsoft/antares/releases/download/v0.9.6/autort-0.9.6.6.0+cuda.zip
+python3.12 -m pip install --no-build-isolation -U https://github.com/microsoft/antares/releases/download/v0.9.6/autort-0.9.6.6.2+cuda.zip
 ```
 
 ## Agent SKILL:
